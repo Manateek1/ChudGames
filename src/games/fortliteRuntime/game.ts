@@ -3436,28 +3436,50 @@ export class FortLiteGame {
 
   private createHarvestToolMesh(): THREE.Group {
     const tool = new THREE.Group();
-    const shaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.04, 0.05, 1.2, 10),
-      new THREE.MeshStandardMaterial({ color: 0x7d5632, roughness: 0.88 })
-    );
-    shaft.rotation.z = 0.68;
-    shaft.position.set(0.18, -0.16, -0.34);
+    const handleMaterial = new THREE.MeshStandardMaterial({ color: 0x77512d, roughness: 0.9 });
+    const gripMaterial = new THREE.MeshStandardMaterial({ color: 0x1e242d, roughness: 0.72, metalness: 0.12 });
+    const headMaterial = new THREE.MeshStandardMaterial({ color: 0xaebdcb, roughness: 0.26, metalness: 0.84 });
+    const accentMaterial = new THREE.MeshStandardMaterial({ color: 0x4fd1ff, emissive: 0x16485c, emissiveIntensity: 0.28, roughness: 0.34, metalness: 0.32 });
 
-    const head = new THREE.Mesh(
-      new THREE.BoxGeometry(0.58, 0.12, 0.16),
-      new THREE.MeshStandardMaterial({ color: 0xced9e3, roughness: 0.3, metalness: 0.78 })
-    );
-    head.position.set(0.42, 0.18, -0.52);
-    head.rotation.z = -0.22;
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.048, 1.28, 12), handleMaterial);
+    shaft.rotation.z = 0.8;
+    shaft.position.set(0.18, -0.12, -0.34);
 
-    const spike = new THREE.Mesh(
-      new THREE.ConeGeometry(0.08, 0.32, 8),
-      new THREE.MeshStandardMaterial({ color: 0xa0b1c2, roughness: 0.28, metalness: 0.8 })
-    );
-    spike.position.set(0.12, 0.12, -0.5);
-    spike.rotation.z = Math.PI * 0.5;
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.34, 12), gripMaterial);
+    grip.rotation.z = shaft.rotation.z;
+    grip.position.set(-0.03, -0.34, -0.18);
 
-    tool.add(shaft, head, spike);
+    const pommel = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 10, 10),
+      new THREE.MeshStandardMaterial({ color: 0xadb6c1, roughness: 0.34, metalness: 0.76 })
+    );
+    pommel.position.set(-0.15, -0.47, -0.08);
+
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.075, 0.12, 10), gripMaterial);
+    collar.rotation.z = shaft.rotation.z;
+    collar.position.set(0.37, 0.08, -0.46);
+
+    const headCore = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.18), headMaterial);
+    headCore.position.set(0.45, 0.18, -0.5);
+    headCore.rotation.z = -0.12;
+
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.09, 0.08), headMaterial);
+    blade.position.set(0.56, 0.24, -0.53);
+    blade.rotation.z = -0.24;
+
+    const bladeTip = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.22, 10), headMaterial);
+    bladeTip.position.set(0.83, 0.3, -0.56);
+    bladeTip.rotation.z = -Math.PI * 0.5 - 0.24;
+
+    const rearSpike = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.34, 10), headMaterial);
+    rearSpike.position.set(0.18, 0.15, -0.47);
+    rearSpike.rotation.z = Math.PI * 0.5 - 0.08;
+
+    const accentStrip = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.04), accentMaterial);
+    accentStrip.position.set(0.46, 0.29, -0.5);
+    accentStrip.rotation.z = -0.24;
+
+    tool.add(shaft, grip, pommel, collar, headCore, blade, bladeTip, rearSpike, accentStrip);
     return tool;
   }
 
