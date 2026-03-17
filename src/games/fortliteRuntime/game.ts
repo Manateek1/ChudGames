@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { GraphicsQuality } from '../../types/arcade';
+import { RollingFps } from '../../engine/fps';
 import {
   ACTOR_RADIUS,
   BOT_COUNT,
@@ -144,6 +146,8 @@ export interface FortLiteMatchResult {
 }
 
 interface FortLiteGameOptions {
+  graphicsQuality?: GraphicsQuality;
+  onFpsChange?: (fps: number) => void;
   seedBase?: number;
   onPlacementChange?: (placement: number) => void;
   onMatchEnd?: (result: FortLiteMatchResult) => void;
@@ -164,6 +168,7 @@ export class FortLiteGame {
   private readonly tempVectorB = new THREE.Vector3();
   private readonly tempVectorC = new THREE.Vector3();
   private readonly tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private readonly fpsMeter = new RollingFps();
 
   private animationFrame = 0;
   private lastFrameTime = 0;
@@ -172,6 +177,8 @@ export class FortLiteGame {
   private rng = new SeededRandom(1337);
   private state: MatchState = 'boot';
   private matchTime = 0;
+  private graphicsQuality: GraphicsQuality;
+  private maxShotEffects = 72;
 
   private matchRoot = new THREE.Group();
   private environmentGroup = new THREE.Group();
@@ -285,15 +292,21 @@ export class FortLiteGame {
   constructor(root: HTMLDivElement, options: FortLiteGameOptions = {}) {
     this.root = root;
     this.options = options;
+    this.graphicsQuality = options.graphicsQuality ?? 'high';
     this.root.innerHTML = '';
 
     this.shell = document.createElement('div');
     this.shell.className = 'fortlite-shell';
     this.root.append(this.shell);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(this.root.clientWidth, this.root.clientHeight);
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: false,
+      alpha: false,
+      powerPreference: 'high-performance',
+      stencil: false,
+    });
+    this.renderer.setPixelRatio(this.getPixelRatioForQuality(this.graphicsQuality));
+    this.renderer.setSize(this.root.clientWidth, this.root.clientHeight, false);
     this.renderer.domElement.className = 'fortlite-canvas';
     this.shell.append(this.renderer.domElement);
 
@@ -312,6 +325,7 @@ export class FortLiteGame {
 
     this.hud = new FortLiteHud(this.shell, HELP_TEXT);
     this.hud.setRestartHandler(() => this.resetMatch());
+    this.applyGraphicsQuality(this.graphicsQuality);
 
     this.installLighting();
     this.installEvents();
@@ -335,6 +349,7 @@ export class FortLiteGame {
     this.lastFrameTime = performance.now();
 
     if (paused) {
+      this.options.onFpsChange?.(0);
       this.releasePointerLock();
       this.pendingLookDeltaX = 0;
       this.pendingLookDeltaY = 0;
@@ -359,6 +374,7 @@ export class FortLiteGame {
     }
     this.disposeObject(this.viewModelItem);
     this.viewModelItem = new THREE.Group();
+    this.options.onFpsChange?.(0);
 
     if (this.viewModelRoot.parent) {
       this.camera.remove(this.viewModelRoot);
@@ -388,6 +404,10 @@ export class FortLiteGame {
     }
 
     const deltaSeconds = Math.min(0.1, (time - this.lastFrameTime) / 1000);
+    const fps = this.fpsMeter.next(time);
+    if (fps > 0) {
+      this.options.onFpsChange?.(fps);
+    }
     this.lastFrameTime = time;
     this.accumulator += deltaSeconds;
 
@@ -3394,7 +3414,7 @@ export class FortLiteGame {
   }
 
   private createShotEffect(origin: THREE.Vector3, impactPoint: THREE.Vector3, color: number): void {
-    if (this.shotEffects.length >= 120) {
+    if (this.shotEffects.length >= this.maxShotEffects) {
       const oldest = this.shotEffects.shift();
       if (oldest) {
         this.effectsGroup.remove(oldest.group);
@@ -3631,6 +3651,23 @@ export class FortLiteGame {
     const height = this.root.clientHeight;
     this.camera.aspect = Math.max(1, width / Math.max(1, height));
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height);
+    this.renderer.setPixelRatio(this.getPixelRatioForQuality(this.graphicsQuality));
+    this.renderer.setSize(width, height, false);
   };
+
+  setGraphicsQuality(quality: GraphicsQuality): void {
+    this.graphicsQuality = quality;
+    this.applyGraphicsQuality(quality);
+  }
+
+  private applyGraphicsQuality(quality: GraphicsQuality): void {
+    this.maxShotEffects = quality === 'low' ? 28 : quality === 'medium' ? 52 : 72;
+    this.renderer.setPixelRatio(this.getPixelRatioForQuality(quality));
+    this.renderer.setSize(this.root.clientWidth, this.root.clientHeight, false);
+  }
+
+  private getPixelRatioForQuality(quality: GraphicsQuality): number {
+    const limit = quality === 'low' ? 0.85 : quality === 'medium' ? 1 : 1.25;
+    return Math.min(window.devicePixelRatio || 1, limit);
+  }
 }

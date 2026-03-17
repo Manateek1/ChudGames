@@ -39,6 +39,12 @@ export class FortLiteHud {
   private readonly restartButton: HTMLButtonElement;
   private readonly crosshair: HTMLDivElement;
   private readonly help: HTMLDivElement;
+  private lastTopLeftKey = '';
+  private lastTopRightKey = '';
+  private lastBannerText = '';
+  private lastHotbarKey = '';
+  private lastCrosshairVisible: boolean | null = null;
+  private lastHelpVisible: boolean | null = null;
 
   constructor(parent: HTMLElement, helpText: string) {
     this.root = document.createElement('div');
@@ -87,31 +93,66 @@ export class FortLiteHud {
   }
 
   render(snapshot: HudSnapshot): void {
-    this.topLeft.innerHTML = `
-      <div class="hud-title">Operator</div>
-      <div class="hud-value">${Math.max(0, Math.ceil(snapshot.health))} HP</div>
-      <div class="hud-line hud-accent">${snapshot.weaponName}</div>
-      <div class="hud-line">Ammo ${snapshot.ammoInMag} / ${snapshot.ammoReserve}</div>
-      <div class="hud-line">${snapshot.statusText}</div>
-      <div class="hud-line">Wood ${snapshot.materials.wood} | Stone ${snapshot.materials.stone} | Metal ${snapshot.materials.metal}</div>
-    `;
+    const topLeftKey = [
+      Math.max(0, Math.ceil(snapshot.health)),
+      snapshot.weaponName,
+      snapshot.ammoInMag,
+      snapshot.ammoReserve,
+      snapshot.statusText,
+      snapshot.materials.wood,
+      snapshot.materials.stone,
+      snapshot.materials.metal,
+    ].join('|');
+    if (topLeftKey !== this.lastTopLeftKey) {
+      this.lastTopLeftKey = topLeftKey;
+      this.topLeft.innerHTML = `
+        <div class="hud-title">Operator</div>
+        <div class="hud-value">${Math.max(0, Math.ceil(snapshot.health))} HP</div>
+        <div class="hud-line hud-accent">${snapshot.weaponName}</div>
+        <div class="hud-line">Ammo ${snapshot.ammoInMag} / ${snapshot.ammoReserve}</div>
+        <div class="hud-line">${snapshot.statusText}</div>
+        <div class="hud-line">Wood ${snapshot.materials.wood} | Stone ${snapshot.materials.stone} | Metal ${snapshot.materials.metal}</div>
+      `;
+    }
 
-    this.topRight.innerHTML = `
-      <div class="hud-value">${snapshot.aliveCount} Players Left</div>
-      <div class="hud-line hud-strong">Elims ${snapshot.eliminationCount}</div>
-      <div class="hud-line hud-accent">${snapshot.stormText}</div>
-    `;
+    const topRightKey = [snapshot.aliveCount, snapshot.eliminationCount, snapshot.stormText].join('|');
+    if (topRightKey !== this.lastTopRightKey) {
+      this.lastTopRightKey = topRightKey;
+      this.topRight.innerHTML = `
+        <div class="hud-value">${snapshot.aliveCount} Players Left</div>
+        <div class="hud-line hud-strong">Elims ${snapshot.eliminationCount}</div>
+        <div class="hud-line hud-accent">${snapshot.stormText}</div>
+      `;
+    }
 
-    this.banner.textContent = snapshot.bannerText;
-    this.hotbar.innerHTML = snapshot.hotbarItems.map((item) => `
-      <div class="hud-slot${item.active ? ' active' : ''}">
-        <div class="hud-slot-key">${item.key}</div>
-        <div class="hud-slot-label">${item.label}</div>
-        <div class="hud-slot-detail">${item.detail}</div>
-      </div>
-    `).join('');
-    this.crosshair.style.display = snapshot.pointerLocked ? 'block' : 'none';
-    this.help.classList.toggle('visible', snapshot.showHelp);
+    if (snapshot.bannerText !== this.lastBannerText) {
+      this.lastBannerText = snapshot.bannerText;
+      this.banner.textContent = snapshot.bannerText;
+    }
+
+    const hotbarKey = snapshot.hotbarItems
+      .map((item) => `${item.key}:${item.label}:${item.detail}:${item.active ? 1 : 0}`)
+      .join('|');
+    if (hotbarKey !== this.lastHotbarKey) {
+      this.lastHotbarKey = hotbarKey;
+      this.hotbar.innerHTML = snapshot.hotbarItems.map((item) => `
+        <div class="hud-slot${item.active ? ' active' : ''}">
+          <div class="hud-slot-key">${item.key}</div>
+          <div class="hud-slot-label">${item.label}</div>
+          <div class="hud-slot-detail">${item.detail}</div>
+        </div>
+      `).join('');
+    }
+
+    if (snapshot.pointerLocked !== this.lastCrosshairVisible) {
+      this.lastCrosshairVisible = snapshot.pointerLocked;
+      this.crosshair.style.display = snapshot.pointerLocked ? 'block' : 'none';
+    }
+
+    if (snapshot.showHelp !== this.lastHelpVisible) {
+      this.lastHelpVisible = snapshot.showHelp;
+      this.help.classList.toggle('visible', snapshot.showHelp);
+    }
   }
 
   showEndScreen(title: string, body: string): void {

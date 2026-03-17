@@ -5,6 +5,7 @@ import "./fortlite.css";
 
 export const FortLite = ({
   seed,
+  settings,
   paused,
   onScore,
   onFps,
@@ -14,14 +15,24 @@ export const FortLite = ({
   const mountRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<FortLiteGame | null>(null);
   const scoreRef = useRef(onScore);
+  const fpsRef = useRef(onFps);
+  const fpsVisibleRef = useRef(settings.showFps);
   const gameOverRef = useRef(onGameOver);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const fullscreenSupported = typeof document !== "undefined" && document.fullscreenEnabled;
 
   useEffect(() => {
     scoreRef.current = onScore;
+    fpsRef.current = onFps;
     gameOverRef.current = onGameOver;
-  }, [onScore, onGameOver]);
+  }, [onScore, onFps, onGameOver]);
+
+  useEffect(() => {
+    fpsVisibleRef.current = settings.showFps;
+    if (!settings.showFps) {
+      onFps(0);
+    }
+  }, [settings.showFps, onFps]);
 
   useEffect(() => {
     const onFullscreenChange = (): void => {
@@ -87,7 +98,13 @@ export const FortLite = ({
 
     const game = new FortLiteGame(mount, {
       seedBase: seed,
+      graphicsQuality: settings.graphicsQuality,
       showEndScreen: false,
+      onFpsChange: (fps) => {
+        if (fpsVisibleRef.current) {
+          fpsRef.current(fps);
+        }
+      },
       onPlacementChange: (placement) => {
         scoreRef.current(placement);
       },
@@ -119,8 +136,14 @@ export const FortLite = ({
 
   useEffect(() => {
     gameRef.current?.setPaused(paused);
-    onFps(paused ? 0 : 60);
+    if (paused) {
+      onFps(0);
+    }
   }, [paused, onFps]);
+
+  useEffect(() => {
+    gameRef.current?.setGraphicsQuality(settings.graphicsQuality);
+  }, [settings.graphicsQuality]);
 
   const toggleFullscreen = async (): Promise<void> => {
     const viewport = viewportRef.current;
