@@ -26,7 +26,7 @@ export const GameDetail = ({
   onStart,
   onBack,
 }: GameDetailProps): React.JSX.Element => {
-  const isFortlite = game.id === "fortlite";
+  const isFortLite = game.id === "fortlite";
 
   return (
     <section className="grid gap-6 lg:grid-cols-[1.1fr,1fr]">
@@ -86,7 +86,7 @@ export const GameDetail = ({
           )}
 
           <div className="rounded-xl border border-sky-300/55 bg-white/85 p-3">
-            <p className="arcade-kicker">{isFortlite ? "Wins" : "Personal Best"}</p>
+            <p className="arcade-kicker">{isFortLite ? "Wins" : "Personal Best"}</p>
             <p className="font-display text-4xl text-sky-950">{bestScore}</p>
           </div>
         </div>

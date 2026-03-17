@@ -1,13 +1,13 @@
 ﻿# ChudGames
 
-ChudGames is a React + Vite + TypeScript game launcher with a neon UI, shared game engine utilities, and 10 playable games including Fortlite.
+ChudGames is a React + Vite + TypeScript game launcher with a neon UI, shared game engine utilities, and 10 playable games including FortLite.
 
 ## Included Games
 
 - Neon Dodger
 - Asteroids Pulse
 - Brick Breaker Blitz
-- Fortlite
+- FortLite
 - Void Survival
 - Rhythm Tap
 - Precision Runner

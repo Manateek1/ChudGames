@@ -7,8 +7,11 @@ import {
   FIXED_TIMESTEP,
   HELP_TEXT,
   MAP_RADIUS,
+  MAP_SCALE,
   MATERIAL_DISPLAY_NAMES,
   MATERIAL_PRIORITY,
+  PATHFINDING_CELL_SIZE,
+  PATHFINDING_GRID_SIZE,
   PLAYER_EYE_HEIGHT,
   RESOURCE_COLORS,
   RESOURCE_RESPAWN_COUNT,
@@ -29,7 +32,7 @@ import type {
   WeaponDefinition,
   WeaponInstance
 } from './types';
-import { FortliteHud } from './ui';
+import { FortLiteHud } from './ui';
 
 type MatchState = 'boot' | 'inProgress' | 'ended';
 type StormMode = 'pause' | 'shrink' | 'done';
@@ -90,6 +93,14 @@ interface TimedMessage {
   timeRemaining: number;
 }
 
+interface WaterZone {
+  center: THREE.Vector3;
+  radiusX: number;
+  radiusZ: number;
+  rotation: number;
+  moveMultiplier: number;
+}
+
 interface ShotEffect {
   group: THREE.Group;
   lineMaterial: THREE.LineBasicMaterial;
@@ -99,13 +110,17 @@ interface ShotEffect {
 }
 
 const GRAVITY = 22;
+const DEFAULT_CAMERA_FOV = 76;
+const ZOOMED_CAMERA_FOV = 52;
+const CAMERA_FOV_LERP = 0.18;
 const PLAYER_MOVE_SPEED = 8;
 const PLAYER_SPRINT_SPEED = 12;
-const BOT_MOVE_SPEED = 5.8;
-const BOT_SPRINT_SPEED = 7.1;
+const BOT_MOVE_SPEED = 5.8 * 0.9;
+const BOT_SPRINT_SPEED = 7.1 * 0.9;
 const JUMP_SPEED = 8;
 const INTERACT_DISTANCE = 3;
 const HARVEST_DISTANCE = 4.6;
+const WATER_MOVE_MULTIPLIER = 0.58;
 const WALL_WIDTH = 4;
 const WALL_HEIGHT = 4;
 const WALL_THICKNESS = 0.35;
@@ -121,29 +136,29 @@ const PLAYER_SPAWN_SEPARATION = 34;
 const PLAYER_STARTER_LOOT_OFFSET = 4.2;
 const WORLD_CENTER = new THREE.Vector3(0, 0, 0);
 
-export interface FortliteMatchResult {
+export interface FortLiteMatchResult {
   won: boolean;
   placement: number;
   eliminations: number;
   survivalTime: number;
 }
 
-interface FortliteGameOptions {
+interface FortLiteGameOptions {
   seedBase?: number;
   onPlacementChange?: (placement: number) => void;
-  onMatchEnd?: (result: FortliteMatchResult) => void;
+  onMatchEnd?: (result: FortLiteMatchResult) => void;
   showEndScreen?: boolean;
 }
 
-export class FortliteGame {
+export class FortLiteGame {
   private readonly root: HTMLDivElement;
-  private readonly options: FortliteGameOptions;
+  private readonly options: FortLiteGameOptions;
   private readonly shell: HTMLDivElement;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
-  private readonly hud: FortliteHud;
-  private readonly pathfinder = new GridPathfinder(64, BUILD_GRID_SIZE);
+  private readonly hud: FortLiteHud;
+  private readonly pathfinder = new GridPathfinder(PATHFINDING_GRID_SIZE, PATHFINDING_CELL_SIZE);
   private readonly raycaster = new THREE.Raycaster();
   private readonly tempVectorA = new THREE.Vector3();
   private readonly tempVectorB = new THREE.Vector3();
@@ -178,6 +193,7 @@ export class FortliteGame {
   private buildPieces: BuildPiece[] = [];
   private shotEffects: ShotEffect[] = [];
   private staticObstacles: ObstacleBox[] = [];
+  private waterZones: WaterZone[] = [];
   private lootSpawnPoints: THREE.Vector3[] = [];
   private participantSpawns: THREE.Vector3[] = [];
   private raycastTargets: THREE.Object3D[] = [];
@@ -212,8 +228,17 @@ export class FortliteGame {
   private disposed = false;
   private externallyPaused = false;
   private matchResultSent = false;
+  private helpVisible = false;
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (event.code === 'Tab') {
+      event.preventDefault();
+      if (!event.repeat) {
+        this.helpVisible = !this.helpVisible;
+      }
+      return;
+    }
+
     if (!this.keysDown.has(event.code)) {
       this.justPressedKeys.add(event.code);
     }
@@ -257,7 +282,7 @@ export class FortliteGame {
     event.preventDefault();
   };
 
-  constructor(root: HTMLDivElement, options: FortliteGameOptions = {}) {
+  constructor(root: HTMLDivElement, options: FortLiteGameOptions = {}) {
     this.root = root;
     this.options = options;
     this.root.innerHTML = '';
@@ -274,9 +299,9 @@ export class FortliteGame {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xaed7ff);
-    this.scene.fog = new THREE.Fog(0xaed7ff, 105, 220);
+    this.scene.fog = new THREE.Fog(0xaed7ff, MAP_RADIUS * 0.42, MAP_RADIUS * 1.35);
 
-    this.camera = new THREE.PerspectiveCamera(76, Math.max(1, this.root.clientWidth / Math.max(1, this.root.clientHeight)), 0.05, 400);
+    this.camera = new THREE.PerspectiveCamera(DEFAULT_CAMERA_FOV, Math.max(1, this.root.clientWidth / Math.max(1, this.root.clientHeight)), 0.05, MAP_RADIUS * 2.2);
     this.camera.rotation.order = 'YXZ';
     this.camera.position.set(0, 9, 12);
     this.scene.add(this.camera);
@@ -285,7 +310,7 @@ export class FortliteGame {
     this.viewModelRoot.position.set(0.52, -0.52, -0.88);
     this.camera.add(this.viewModelRoot);
 
-    this.hud = new FortliteHud(this.shell, HELP_TEXT);
+    this.hud = new FortLiteHud(this.shell, HELP_TEXT);
     this.hud.setRestartHandler(() => this.resetMatch());
 
     this.installLighting();
@@ -435,6 +460,7 @@ export class FortliteGame {
     this.buildMode = false;
     this.cameraYaw = Math.PI;
     this.cameraPitch = 0.06;
+    this.helpVisible = false;
     this.participantSpawns = [];
     this.viewModelBobTime = 0;
     this.viewModelMoveBlend = 0;
@@ -465,6 +491,7 @@ export class FortliteGame {
     this.shotEffects = [];
     this.raycastTargets = [];
     this.cameraObstacles = [];
+    this.waterZones = [];
 
     this.buildWorld();
     this.spawnParticipants();
@@ -473,7 +500,7 @@ export class FortliteGame {
     this.ensurePreviewMesh();
     this.syncViewModel(true);
     this.hud.hideEndScreen();
-    this.showMessage('First-person drop is live. Click into the arena, grab your loadout, and rotate with the mouse.', 3.5);
+    this.showMessage('First-person drop is live. Click into the arena, press F for fullscreen, grab your loadout, and rotate with the mouse.', 4);
     this.refreshNavigation();
     this.options.onPlacementChange?.(this.calculatePlacement());
   }
@@ -506,8 +533,8 @@ export class FortliteGame {
   }
 
   private buildWorld(): void {
-    const perimeterWallCount = 52;
-    const randomObstacleCount = 42;
+    const perimeterWallCount = 52 * MAP_SCALE;
+    const randomObstacleCount = 42 * MAP_SCALE;
 
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(MAP_RADIUS, 96),
@@ -518,17 +545,41 @@ export class FortliteGame {
     this.environmentGroup.add(ground);
     this.addGroundDisc(MAP_RADIUS * 0.88, 0x6d8c47, -0.015, 0.92);
     this.addGroundDisc(MAP_RADIUS * 0.58, 0x385f35, -0.01, 0.85);
-    this.addTerrainPatch(new THREE.Vector3(-44, 0, -8), 30, 18, 0x8b6a45, 0.68, 0.32);
-    this.addTerrainPatch(new THREE.Vector3(36, 0, -42), 22, 12, 0x806244, 0.7, -0.48);
-    this.addTerrainPatch(new THREE.Vector3(46, 0, 34), 26, 15, 0x6f8a4f, 0.48, 0.22);
-    this.addTerrainPatch(new THREE.Vector3(-34, 0, 44), 24, 13, 0x867350, 0.66, -0.2);
-    this.addTerrainPatch(new THREE.Vector3(0, 0, 0), 18, 18, 0x7b5b3d, 0.55, 0);
-    this.addTerrainPatch(new THREE.Vector3(-122, 0, -72), 44, 26, 0x8a6c4f, 0.54, 0.18);
-    this.addTerrainPatch(new THREE.Vector3(132, 0, -112), 38, 22, 0x7d6d4e, 0.58, -0.34);
-    this.addTerrainPatch(new THREE.Vector3(152, 0, 108), 42, 24, 0x6b8750, 0.52, 0.26);
-    this.addTerrainPatch(new THREE.Vector3(-136, 0, 126), 40, 24, 0x8d7456, 0.56, -0.16);
-    this.addTerrainPatch(new THREE.Vector3(0, 0, -154), 54, 20, 0x5f7c47, 0.42, 0.08);
-    this.addTerrainPatch(new THREE.Vector3(0, 0, 164), 56, 24, 0x6e8a4b, 0.4, -0.12);
+
+    const terrainPatches = [
+      { position: new THREE.Vector3(-44, 0, -8), radiusX: 30, radiusZ: 18, color: 0x8b6a45, opacity: 0.68, rotation: 0.32 },
+      { position: new THREE.Vector3(36, 0, -42), radiusX: 22, radiusZ: 12, color: 0x806244, opacity: 0.7, rotation: -0.48 },
+      { position: new THREE.Vector3(46, 0, 34), radiusX: 26, radiusZ: 15, color: 0x6f8a4f, opacity: 0.48, rotation: 0.22 },
+      { position: new THREE.Vector3(-34, 0, 44), radiusX: 24, radiusZ: 13, color: 0x867350, opacity: 0.66, rotation: -0.2 },
+      { position: new THREE.Vector3(0, 0, 0), radiusX: 18, radiusZ: 18, color: 0x7b5b3d, opacity: 0.55, rotation: 0 },
+      { position: new THREE.Vector3(-122, 0, -72), radiusX: 44, radiusZ: 26, color: 0x8a6c4f, opacity: 0.54, rotation: 0.18 },
+      { position: new THREE.Vector3(132, 0, -112), radiusX: 38, radiusZ: 22, color: 0x7d6d4e, opacity: 0.58, rotation: -0.34 },
+      { position: new THREE.Vector3(152, 0, 108), radiusX: 42, radiusZ: 24, color: 0x6b8750, opacity: 0.52, rotation: 0.26 },
+      { position: new THREE.Vector3(-136, 0, 126), radiusX: 40, radiusZ: 24, color: 0x8d7456, opacity: 0.56, rotation: -0.16 },
+      { position: new THREE.Vector3(0, 0, -154), radiusX: 54, radiusZ: 20, color: 0x5f7c47, opacity: 0.42, rotation: 0.08 },
+      { position: new THREE.Vector3(0, 0, 164), radiusX: 56, radiusZ: 24, color: 0x6e8a4b, opacity: 0.4, rotation: -0.12 },
+      { position: new THREE.Vector3(-284, 0, -228), radiusX: 74, radiusZ: 34, color: 0x856a4d, opacity: 0.48, rotation: 0.24 },
+      { position: new THREE.Vector3(292, 0, -248), radiusX: 70, radiusZ: 36, color: 0x736246, opacity: 0.5, rotation: -0.2 },
+      { position: new THREE.Vector3(336, 0, 234), radiusX: 78, radiusZ: 34, color: 0x6a8450, opacity: 0.44, rotation: 0.18 },
+      { position: new THREE.Vector3(-318, 0, 254), radiusX: 72, radiusZ: 38, color: 0x846d51, opacity: 0.48, rotation: -0.12 },
+      { position: new THREE.Vector3(0, 0, -352), radiusX: 88, radiusZ: 32, color: 0x6a7f49, opacity: 0.4, rotation: 0.06 },
+      { position: new THREE.Vector3(0, 0, 372), radiusX: 92, radiusZ: 38, color: 0x728a51, opacity: 0.38, rotation: -0.08 },
+      { position: new THREE.Vector3(-446, 0, 42), radiusX: 68, radiusZ: 30, color: 0x7c6a4e, opacity: 0.46, rotation: 0.3 },
+      { position: new THREE.Vector3(462, 0, -24), radiusX: 72, radiusZ: 28, color: 0x6f624a, opacity: 0.44, rotation: -0.18 },
+      { position: new THREE.Vector3(-232, 0, 424), radiusX: 66, radiusZ: 28, color: 0x807053, opacity: 0.42, rotation: 0.22 },
+      { position: new THREE.Vector3(246, 0, 438), radiusX: 70, radiusZ: 32, color: 0x738a54, opacity: 0.42, rotation: -0.16 }
+    ];
+
+    for (const patch of terrainPatches) {
+      this.addTerrainPatch(patch.position, patch.radiusX, patch.radiusZ, patch.color, patch.opacity, patch.rotation);
+    }
+
+    this.addWaterZone(new THREE.Vector3(-252, 0, 142), 46, 28, 0.28);
+    this.addWaterZone(new THREE.Vector3(286, 0, 168), 40, 30, -0.42);
+    this.addWaterZone(new THREE.Vector3(12, 0, -284), 54, 34, 0.1);
+    this.addWaterZone(new THREE.Vector3(-374, 0, -78), 38, 26, -0.34);
+    this.addWaterZone(new THREE.Vector3(418, 0, -188), 46, 30, 0.46);
+    this.addWaterZone(new THREE.Vector3(-88, 0, 354), 44, 28, -0.18);
 
     const innerRing = new THREE.LineLoop(
       new THREE.BufferGeometry().setFromPoints(this.makeCirclePoints(MAP_RADIUS, 90)),
@@ -553,67 +604,229 @@ export class FortliteGame {
       this.environmentGroup.add(wall);
     }
 
-    this.addRoad(new THREE.Vector3(-6, 0, 0), new THREE.Vector3(-42, 0, -32), 7, 0x7b6549);
-    this.addRoad(new THREE.Vector3(4, 0, -4), new THREE.Vector3(32, 0, -26), 6, 0x746149);
-    this.addRoad(new THREE.Vector3(5, 0, 5), new THREE.Vector3(42, 0, 40), 7, 0x6e5d45);
-    this.addRoad(new THREE.Vector3(-4, 0, 6), new THREE.Vector3(-28, 0, 38), 6.5, 0x7b684d);
-    this.addRoad(new THREE.Vector3(-18, 0, -10), new THREE.Vector3(-126, 0, -92), 8, 0x735f46);
-    this.addRoad(new THREE.Vector3(22, 0, -16), new THREE.Vector3(126, 0, -108), 7.5, 0x6d5b43);
-    this.addRoad(new THREE.Vector3(26, 0, 20), new THREE.Vector3(142, 0, 114), 8, 0x685944);
-    this.addRoad(new THREE.Vector3(-20, 0, 22), new THREE.Vector3(-132, 0, 128), 7.5, 0x74644c);
+    const roads = [
+      { start: new THREE.Vector3(-6, 0, 0), end: new THREE.Vector3(-42, 0, -32), width: 7, color: 0x7b6549 },
+      { start: new THREE.Vector3(4, 0, -4), end: new THREE.Vector3(32, 0, -26), width: 6, color: 0x746149 },
+      { start: new THREE.Vector3(5, 0, 5), end: new THREE.Vector3(42, 0, 40), width: 7, color: 0x6e5d45 },
+      { start: new THREE.Vector3(-4, 0, 6), end: new THREE.Vector3(-28, 0, 38), width: 6.5, color: 0x7b684d },
+      { start: new THREE.Vector3(-18, 0, -10), end: new THREE.Vector3(-126, 0, -92), width: 8, color: 0x735f46 },
+      { start: new THREE.Vector3(22, 0, -16), end: new THREE.Vector3(126, 0, -108), width: 7.5, color: 0x6d5b43 },
+      { start: new THREE.Vector3(26, 0, 20), end: new THREE.Vector3(142, 0, 114), width: 8, color: 0x685944 },
+      { start: new THREE.Vector3(-20, 0, 22), end: new THREE.Vector3(-132, 0, 128), width: 7.5, color: 0x74644c },
+      { start: new THREE.Vector3(-126, 0, -92), end: new THREE.Vector3(-278, 0, -214), width: 8.5, color: 0x735f46 },
+      { start: new THREE.Vector3(126, 0, -108), end: new THREE.Vector3(284, 0, -236), width: 8.5, color: 0x6d5b43 },
+      { start: new THREE.Vector3(142, 0, 114), end: new THREE.Vector3(336, 0, 218), width: 8.5, color: 0x685944 },
+      { start: new THREE.Vector3(-132, 0, 128), end: new THREE.Vector3(-324, 0, 248), width: 8.5, color: 0x74644c },
+      { start: new THREE.Vector3(0, 0, -154), end: new THREE.Vector3(0, 0, -338), width: 9, color: 0x705d42 },
+      { start: new THREE.Vector3(0, 0, 164), end: new THREE.Vector3(0, 0, 356), width: 9, color: 0x6d6047 },
+      { start: new THREE.Vector3(-136, 0, 128), end: new THREE.Vector3(-446, 0, 42), width: 8.2, color: 0x7a654a },
+      { start: new THREE.Vector3(146, 0, 116), end: new THREE.Vector3(458, 0, -18), width: 8.2, color: 0x715f47 },
+      { start: new THREE.Vector3(-136, 0, 128), end: new THREE.Vector3(-236, 0, 420), width: 8, color: 0x73644b },
+      { start: new THREE.Vector3(146, 0, 116), end: new THREE.Vector3(232, 0, 432), width: 8, color: 0x6c6148 }
+    ];
+
+    for (const road of roads) {
+      this.addRoad(road.start, road.end, road.width, road.color);
+    }
+
     this.createCentralArena();
 
-    this.createCompound(new THREE.Vector3(-44, 0, -36), 0x9a8062, [
-      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(12, 10), height: 6 },
-      { offset: new THREE.Vector3(14, 0, 6), size: new THREE.Vector2(7, 7), height: 4.5 },
-      { offset: new THREE.Vector3(-15, 0, 10), size: new THREE.Vector2(8, 4), height: 3.5 }
-    ]);
-    this.createCompound(new THREE.Vector3(32, 0, -28), 0x8e7454, [
-      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(14, 9), height: 5.6 },
-      { offset: new THREE.Vector3(-13, 0, -10), size: new THREE.Vector2(8, 8), height: 4.8 },
-      { offset: new THREE.Vector3(16, 0, -8), size: new THREE.Vector2(6, 12), height: 5.2 }
-    ]);
-    this.createCompound(new THREE.Vector3(42, 0, 44), 0x7c6d61, [
-      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(10, 14), height: 5.6 },
-      { offset: new THREE.Vector3(-12, 0, 10), size: new THREE.Vector2(9, 7), height: 4.4 },
-      { offset: new THREE.Vector3(14, 0, -12), size: new THREE.Vector2(7, 7), height: 4.4 }
-    ]);
-    this.createCompound(new THREE.Vector3(-30, 0, 38), 0x8b8b79, [
-      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(13, 9), height: 5.2 },
-      { offset: new THREE.Vector3(-15, 0, -8), size: new THREE.Vector2(7, 7), height: 4.2 },
-      { offset: new THREE.Vector3(12, 0, 11), size: new THREE.Vector2(8, 6), height: 3.6 }
-    ]);
-    this.createCompound(new THREE.Vector3(-2, 0, 4), 0x9f917d, [
-      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(12, 12), height: 5.4 },
-      { offset: new THREE.Vector3(14, 0, -10), size: new THREE.Vector2(6, 6), height: 4 },
-      { offset: new THREE.Vector3(-16, 0, 8), size: new THREE.Vector2(6, 10), height: 4 }
-    ]);
-    this.createCompound(new THREE.Vector3(-122, 0, -96), 0x8f7c61, [
-      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 10), height: 5.8 },
-      { offset: new THREE.Vector3(18, 0, 12), size: new THREE.Vector2(8, 8), height: 4.6 },
-      { offset: new THREE.Vector3(-18, 0, -10), size: new THREE.Vector2(9, 7), height: 4.2 }
-    ]);
-    this.createCompound(new THREE.Vector3(126, 0, -112), 0x7c7467, [
-      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(15, 11), height: 5.8 },
-      { offset: new THREE.Vector3(-16, 0, 10), size: new THREE.Vector2(8, 7), height: 4.4 },
-      { offset: new THREE.Vector3(18, 0, -8), size: new THREE.Vector2(7, 12), height: 5 }
-    ]);
-    this.createCompound(new THREE.Vector3(146, 0, 116), 0x8a7b66, [
-      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(14, 12), height: 5.6 },
-      { offset: new THREE.Vector3(-18, 0, -10), size: new THREE.Vector2(8, 6), height: 4.4 },
-      { offset: new THREE.Vector3(16, 0, 12), size: new THREE.Vector2(8, 8), height: 4.6 }
-    ]);
-    this.createCompound(new THREE.Vector3(-136, 0, 128), 0x7f8171, [
-      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 10), height: 5.4 },
-      { offset: new THREE.Vector3(16, 0, -12), size: new THREE.Vector2(7, 7), height: 4.2 },
-      { offset: new THREE.Vector3(-18, 0, 10), size: new THREE.Vector2(9, 8), height: 4.4 }
-    ]);
+    const compounds = [
+      {
+        center: new THREE.Vector3(-44, 0, -36),
+        color: 0x9a8062,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(12, 10), height: 6 },
+          { offset: new THREE.Vector3(14, 0, 6), size: new THREE.Vector2(7, 7), height: 4.5 },
+          { offset: new THREE.Vector3(-15, 0, 10), size: new THREE.Vector2(8, 4), height: 3.5 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(32, 0, -28),
+        color: 0x8e7454,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(14, 9), height: 5.6 },
+          { offset: new THREE.Vector3(-13, 0, -10), size: new THREE.Vector2(8, 8), height: 4.8 },
+          { offset: new THREE.Vector3(16, 0, -8), size: new THREE.Vector2(6, 12), height: 5.2 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(42, 0, 44),
+        color: 0x7c6d61,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(10, 14), height: 5.6 },
+          { offset: new THREE.Vector3(-12, 0, 10), size: new THREE.Vector2(9, 7), height: 4.4 },
+          { offset: new THREE.Vector3(14, 0, -12), size: new THREE.Vector2(7, 7), height: 4.4 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(-30, 0, 38),
+        color: 0x8b8b79,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(13, 9), height: 5.2 },
+          { offset: new THREE.Vector3(-15, 0, -8), size: new THREE.Vector2(7, 7), height: 4.2 },
+          { offset: new THREE.Vector3(12, 0, 11), size: new THREE.Vector2(8, 6), height: 3.6 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(-2, 0, 4),
+        color: 0x9f917d,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(12, 12), height: 5.4 },
+          { offset: new THREE.Vector3(14, 0, -10), size: new THREE.Vector2(6, 6), height: 4 },
+          { offset: new THREE.Vector3(-16, 0, 8), size: new THREE.Vector2(6, 10), height: 4 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(-122, 0, -96),
+        color: 0x8f7c61,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 10), height: 5.8 },
+          { offset: new THREE.Vector3(18, 0, 12), size: new THREE.Vector2(8, 8), height: 4.6 },
+          { offset: new THREE.Vector3(-18, 0, -10), size: new THREE.Vector2(9, 7), height: 4.2 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(126, 0, -112),
+        color: 0x7c7467,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(15, 11), height: 5.8 },
+          { offset: new THREE.Vector3(-16, 0, 10), size: new THREE.Vector2(8, 7), height: 4.4 },
+          { offset: new THREE.Vector3(18, 0, -8), size: new THREE.Vector2(7, 12), height: 5 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(146, 0, 116),
+        color: 0x8a7b66,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(14, 12), height: 5.6 },
+          { offset: new THREE.Vector3(-18, 0, -10), size: new THREE.Vector2(8, 6), height: 4.4 },
+          { offset: new THREE.Vector3(16, 0, 12), size: new THREE.Vector2(8, 8), height: 4.6 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(-136, 0, 128),
+        color: 0x7f8171,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 10), height: 5.4 },
+          { offset: new THREE.Vector3(16, 0, -12), size: new THREE.Vector2(7, 7), height: 4.2 },
+          { offset: new THREE.Vector3(-18, 0, 10), size: new THREE.Vector2(9, 8), height: 4.4 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(-278, 0, -214),
+        color: 0x8a7357,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(18, 11), height: 6 },
+          { offset: new THREE.Vector3(20, 0, 10), size: new THREE.Vector2(9, 8), height: 4.6 },
+          { offset: new THREE.Vector3(-18, 0, -12), size: new THREE.Vector2(10, 8), height: 4.4 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(284, 0, -236),
+        color: 0x7f7265,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(17, 12), height: 5.8 },
+          { offset: new THREE.Vector3(-18, 0, 10), size: new THREE.Vector2(8, 7), height: 4.5 },
+          { offset: new THREE.Vector3(20, 0, -10), size: new THREE.Vector2(8, 12), height: 5.1 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(336, 0, 218),
+        color: 0x8b7d67,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(18, 12), height: 5.9 },
+          { offset: new THREE.Vector3(-20, 0, -12), size: new THREE.Vector2(10, 8), height: 4.5 },
+          { offset: new THREE.Vector3(18, 0, 12), size: new THREE.Vector2(8, 8), height: 4.5 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(-324, 0, 248),
+        color: 0x808474,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(17, 10), height: 5.6 },
+          { offset: new THREE.Vector3(18, 0, -10), size: new THREE.Vector2(8, 8), height: 4.2 },
+          { offset: new THREE.Vector3(-20, 0, 12), size: new THREE.Vector2(10, 8), height: 4.4 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(0, 0, -338),
+        color: 0x8f7b5f,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 12), height: 5.8 },
+          { offset: new THREE.Vector3(18, 0, 12), size: new THREE.Vector2(8, 8), height: 4.5 },
+          { offset: new THREE.Vector3(-18, 0, -12), size: new THREE.Vector2(9, 9), height: 4.5 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(0, 0, 356),
+        color: 0x7f7e6c,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 11), height: 5.5 },
+          { offset: new THREE.Vector3(-18, 0, 10), size: new THREE.Vector2(8, 8), height: 4.4 },
+          { offset: new THREE.Vector3(18, 0, -10), size: new THREE.Vector2(8, 10), height: 4.7 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(-446, 0, 42),
+        color: 0x8b7760,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(17, 11), height: 5.7 },
+          { offset: new THREE.Vector3(20, 0, 10), size: new THREE.Vector2(9, 8), height: 4.6 },
+          { offset: new THREE.Vector3(-18, 0, -10), size: new THREE.Vector2(8, 10), height: 4.8 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(458, 0, -18),
+        color: 0x7c7265,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(18, 10), height: 5.6 },
+          { offset: new THREE.Vector3(-18, 0, 10), size: new THREE.Vector2(8, 8), height: 4.2 },
+          { offset: new THREE.Vector3(18, 0, -12), size: new THREE.Vector2(9, 9), height: 4.5 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(-236, 0, 420),
+        color: 0x867a64,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 11), height: 5.6 },
+          { offset: new THREE.Vector3(18, 0, -10), size: new THREE.Vector2(8, 8), height: 4.3 },
+          { offset: new THREE.Vector3(-18, 0, 12), size: new THREE.Vector2(10, 8), height: 4.5 }
+        ]
+      },
+      {
+        center: new THREE.Vector3(232, 0, 432),
+        color: 0x7f866d,
+        boxes: [
+          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(17, 12), height: 5.8 },
+          { offset: new THREE.Vector3(-20, 0, -10), size: new THREE.Vector2(8, 8), height: 4.4 },
+          { offset: new THREE.Vector3(18, 0, 12), size: new THREE.Vector2(9, 8), height: 4.6 }
+        ]
+      }
+    ];
+
+    for (const compound of compounds) {
+      this.createCompound(compound.center, compound.color, compound.boxes);
+    }
+
+    this.createRockCluster(new THREE.Vector3(-356, 0, -146), 6, 24);
+    this.createRockCluster(new THREE.Vector3(382, 0, -126), 5, 20);
+    this.createRockCluster(new THREE.Vector3(-398, 0, 102), 5, 22);
+    this.createRockCluster(new THREE.Vector3(354, 0, 286), 6, 26);
+    this.createRockCluster(new THREE.Vector3(-212, 0, 338), 5, 18);
+    this.createRockCluster(new THREE.Vector3(104, 0, -412), 6, 22);
+    this.createRockCluster(new THREE.Vector3(-82, 0, -468), 7, 28);
+    this.createRockCluster(new THREE.Vector3(468, 0, 114), 5, 18);
 
     for (let i = 0; i < randomObstacleCount; i += 1) {
-      const point = this.findFreePoint(MAP_RADIUS - 14, 5);
-      const size = new THREE.Vector2(this.rng.range(2.4, 5.4), this.rng.range(2.4, 5.4));
-      const height = this.rng.range(1.6, 3.4);
-      this.addStaticObstacle(point, size, height, this.rng.pick([0x73837f, 0x7d7869, 0x587169]), false);
+      const point = this.findFreePoint(MAP_RADIUS - 18, 6);
+      const size = new THREE.Vector2(this.rng.range(2.4, 5.8), this.rng.range(2.4, 5.8));
+      const height = this.rng.range(1.8, 3.8);
+      if (this.rng.next() > 0.45) {
+        this.addStaticObstacle(point, size, height, this.rng.pick([0x73837f, 0x7d7869, 0x587169]), false);
+      } else {
+        this.addRockObstacle(point, size, height);
+      }
       this.lootSpawnPoints.push(point.clone().add(new THREE.Vector3(0, 0, this.rng.range(2, 4))));
     }
 
@@ -727,6 +940,44 @@ export class FortliteGame {
     this.environmentGroup.add(patch);
   }
 
+  private addWaterZone(position: THREE.Vector3, radiusX: number, radiusZ: number, rotation: number): void {
+    this.addTerrainPatch(position, radiusX * 1.18, radiusZ * 1.18, 0x5f7a52, 0.28, rotation);
+
+    const water = new THREE.Mesh(
+      new THREE.CircleGeometry(1, 64),
+      new THREE.MeshStandardMaterial({
+        color: 0x2b6d90,
+        emissive: 0x16394e,
+        emissiveIntensity: 0.35,
+        roughness: 0.2,
+        metalness: 0.08,
+        transparent: true,
+        opacity: 0.82
+      })
+    );
+    water.rotation.set(-Math.PI / 2, 0, rotation);
+    water.position.set(position.x, 0, position.z);
+    water.scale.set(radiusX, radiusZ, 1);
+    this.environmentGroup.add(water);
+
+    const shoreline = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(this.makeCirclePoints(1, 64)),
+      new THREE.LineBasicMaterial({ color: 0xbde8ff, transparent: true, opacity: 0.42 })
+    );
+    shoreline.rotation.set(-Math.PI / 2, 0, rotation);
+    shoreline.position.set(position.x, 0.05, position.z);
+    shoreline.scale.set(radiusX, radiusZ, 1);
+    this.environmentGroup.add(shoreline);
+
+    this.waterZones.push({
+      center: position.clone(),
+      radiusX,
+      radiusZ,
+      rotation,
+      moveMultiplier: WATER_MOVE_MULTIPLIER
+    });
+  }
+
   private addRoad(start: THREE.Vector3, end: THREE.Vector3, width: number, color: number): void {
     const delta = end.clone().sub(start);
     const length = Math.max(2, delta.length());
@@ -738,6 +989,21 @@ export class FortliteGame {
     road.position.y = 0.02;
     road.rotation.y = Math.atan2(delta.x, delta.z);
     this.environmentGroup.add(road);
+  }
+
+  private createRockCluster(center: THREE.Vector3, count: number, radius: number): void {
+    for (let i = 0; i < count; i += 1) {
+      const offset = randomPointInCircle(this.rng, radius);
+      const point = center.clone().add(offset);
+      if (!this.isPointClear(point, 5.5)) {
+        continue;
+      }
+
+      const size = new THREE.Vector2(this.rng.range(3.2, 6.8), this.rng.range(3, 6.2));
+      const height = this.rng.range(2.4, 5.6);
+      this.addRockObstacle(point, size, height);
+      this.lootSpawnPoints.push(point.clone().add(new THREE.Vector3(this.rng.range(-2.4, 2.4), 0, this.rng.range(-2.4, 2.4))));
+    }
   }
 
   private createCentralArena(): void {
@@ -795,6 +1061,31 @@ export class FortliteGame {
     );
     trim.position.set(position.x, height * 0.6, position.z + size.y * 0.52);
     this.environmentGroup.add(trim);
+  }
+
+  private addRockObstacle(position: THREE.Vector3, size: THREE.Vector2, height: number): void {
+    const mesh = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(1, 0),
+      new THREE.MeshStandardMaterial({ color: 0x6f7a80, roughness: 0.92, metalness: 0.06 })
+    );
+    mesh.position.set(position.x, height * 0.42, position.z);
+    mesh.scale.set(size.x * 0.4, height * 0.34, size.y * 0.4);
+    mesh.rotation.set(this.rng.range(-0.24, 0.24), this.rng.range(0, Math.PI * 2), this.rng.range(-0.2, 0.2));
+    this.environmentGroup.add(mesh);
+    this.tagTarget(mesh, 'static', null);
+
+    const obstacle: ObstacleBox = {
+      minX: position.x - size.x * 0.5,
+      maxX: position.x + size.x * 0.5,
+      minZ: position.z - size.y * 0.5,
+      maxZ: position.z + size.y * 0.5,
+      height,
+      mesh
+    };
+
+    this.staticObstacles.push(obstacle);
+    this.raycastTargets.push(mesh);
+    this.cameraObstacles.push(mesh);
   }
 
   private spawnResourceNodes(): void {
@@ -1293,19 +1584,19 @@ export class FortliteGame {
       this.tryPlaceBuild(actor);
     }
 
-    if (this.justPressedMouseButtons.has(2) && this.isBuildMode()) {
-      this.buildMode = false;
-    }
   }
 
   private handlePlayerLoadoutInput(): void {
     const actor = this.player;
+    const wallPressed = this.justPressedKeys.has('Digit1') || this.justPressedKeys.has('KeyZ');
+    const floorPressed = this.justPressedKeys.has('Digit2') || this.justPressedKeys.has('KeyY');
+    const rampPressed = this.justPressedKeys.has('Digit3') || this.justPressedKeys.has('KeyX');
 
     if (this.justPressedKeys.has('KeyQ')) {
       this.buildMode = !this.buildMode;
     }
 
-    if (this.justPressedKeys.has('Digit1')) {
+    if (wallPressed) {
       if (this.isBuildMode()) {
         this.setBuildPieceType('wall');
       } else {
@@ -1313,7 +1604,7 @@ export class FortliteGame {
       }
     }
 
-    if (this.justPressedKeys.has('Digit2')) {
+    if (floorPressed) {
       if (this.isBuildMode()) {
         this.setBuildPieceType('floor');
       } else if (actor.inventory.weapons.length > 0) {
@@ -1322,7 +1613,7 @@ export class FortliteGame {
       }
     }
 
-    if (this.justPressedKeys.has('Digit3')) {
+    if (rampPressed) {
       if (this.isBuildMode()) {
         this.setBuildPieceType('ramp');
       } else if (actor.inventory.weapons.length > 1) {
@@ -2078,8 +2369,9 @@ export class FortliteGame {
   }
 
   private moveActor(actor: Actor, velocity: THREE.Vector3, dt: number): void {
-    const moveX = velocity.x * dt;
-    const moveZ = velocity.z * dt;
+    const speedMultiplier = this.getMovementMultiplier(actor.position);
+    const moveX = velocity.x * speedMultiplier * dt;
+    const moveZ = velocity.z * speedMultiplier * dt;
 
     const tryPosition = actor.position.clone();
     tryPosition.x += moveX;
@@ -2418,6 +2710,8 @@ export class FortliteGame {
       ? `Reloading ${weapon.definition.name}`
       : this.isBuildMode()
         ? `Ready to place ${this.selectedBuildPiece}`
+        : this.isPointInWater(this.player.position)
+          ? 'Wading through water'
         : this.player.inventory.mode === 'harvest'
           ? 'Harvest tool ready'
           : weapon
@@ -2440,6 +2734,7 @@ export class FortliteGame {
       pointerLocked: this.isPointerLocked(),
       compassText: this.getCompassText(),
       statusText,
+      showHelp: this.helpVisible,
       hotbarItems: this.getHotbarItems()
     });
     this.options.onPlacementChange?.(this.calculatePlacement());
@@ -2455,6 +2750,13 @@ export class FortliteGame {
   private updateCamera(): void {
     if (!this.player) {
       return;
+    }
+
+    const zoomTarget = this.mouseDown.has(2) && !this.isBuildMode() ? ZOOMED_CAMERA_FOV : DEFAULT_CAMERA_FOV;
+    const nextFov = THREE.MathUtils.lerp(this.camera.fov, zoomTarget, CAMERA_FOV_LERP);
+    if (Math.abs(nextFov - this.camera.fov) > 0.01) {
+      this.camera.fov = nextFov;
+      this.camera.updateProjectionMatrix();
     }
 
     const pivot = this.player.position.clone().add(new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0));
@@ -2483,9 +2785,9 @@ export class FortliteGame {
   private getHotbarItems(): Array<{ key: string; label: string; detail: string; active: boolean }> {
     if (this.isBuildMode()) {
       return [
-        { key: '1', label: 'Wall', detail: '20 mats', active: this.selectedBuildPiece === 'wall' },
-        { key: '2', label: 'Floor', detail: '20 mats', active: this.selectedBuildPiece === 'floor' },
-        { key: '3', label: 'Ramp', detail: '20 mats', active: this.selectedBuildPiece === 'ramp' }
+        { key: 'Z', label: 'Wall', detail: '20 mats', active: this.selectedBuildPiece === 'wall' },
+        { key: 'Y', label: 'Floor', detail: '20 mats', active: this.selectedBuildPiece === 'floor' },
+        { key: 'X', label: 'Ramp', detail: '20 mats', active: this.selectedBuildPiece === 'ramp' }
       ];
     }
 
@@ -2524,7 +2826,7 @@ export class FortliteGame {
     }
 
     if (!this.isPointerLocked()) {
-      return 'Click once to capture the mouse for unlimited 360 look.';
+      return 'Click once to capture the mouse for unlimited 360 look. Press F for fullscreen.';
     }
 
     if (nearbyPickup) {
@@ -2536,7 +2838,7 @@ export class FortliteGame {
     if (this.isBuildMode()) {
       const material = this.getAvailableBuildMaterial(this.player);
       return material
-        ? `Build mode: ${this.selectedBuildPiece}. Left click to place, R to rotate, right click or Q to exit.`
+        ? `Build mode: ${this.selectedBuildPiece}. Left click to place, R to rotate, Q to exit.`
         : 'Build mode active, but you need at least 20 materials to place a piece.';
     }
 
@@ -2545,7 +2847,7 @@ export class FortliteGame {
     }
 
     if (this.player.inventory.mode === 'harvest') {
-      return 'Harvest trees, rocks, and metal nodes or switch to a weapon with 2 or 3.';
+      return 'Harvest trees, rocks, and metal nodes, or switch to a weapon with 2 or 3.';
     }
 
     return 'Stay armed, keep moving, and be the last survivor standing.';
@@ -2577,7 +2879,7 @@ export class FortliteGame {
   }
 
   private shouldAutoPickupForPlayer(actor: Actor, pickup: LootPickup): boolean {
-    if (pickup.kind === 'ammo') {
+    if (pickup.kind === 'ammo' || pickup.kind === 'material') {
       return true;
     }
 
@@ -2789,6 +3091,36 @@ export class FortliteGame {
 
   private totalMaterials(materials: Record<MaterialType, number>): number {
     return materials.wood + materials.stone + materials.metal;
+  }
+
+  private getMovementMultiplier(position: THREE.Vector3): number {
+    for (const zone of this.waterZones) {
+      if (this.isPointInWater(position, 0, zone)) {
+        return zone.moveMultiplier;
+      }
+    }
+
+    return 1;
+  }
+
+  private isPointInWater(point: THREE.Vector3, padding = 0, zoneOverride?: WaterZone): boolean {
+    const zones = zoneOverride ? [zoneOverride] : this.waterZones;
+    for (const zone of zones) {
+      const dx = point.x - zone.center.x;
+      const dz = point.z - zone.center.z;
+      const cos = Math.cos(-zone.rotation);
+      const sin = Math.sin(-zone.rotation);
+      const localX = dx * cos - dz * sin;
+      const localZ = dx * sin + dz * cos;
+      const radiusX = zone.radiusX + padding;
+      const radiusZ = zone.radiusZ + padding;
+      const ellipse = ((localX * localX) / (radiusX * radiusX)) + ((localZ * localZ) / (radiusZ * radiusZ));
+      if (ellipse <= 1) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private createBuildMesh(pieceType: BuildPieceType, color: number, transparent: boolean): THREE.Mesh {
@@ -3246,6 +3578,10 @@ export class FortliteGame {
   }
 
   private isPointClear(point: THREE.Vector3, padding: number): boolean {
+    if (this.isPointInWater(point, padding * 0.4)) {
+      return false;
+    }
+
     for (const obstacle of this.staticObstacles) {
       if (
         point.x > obstacle.minX - padding &&

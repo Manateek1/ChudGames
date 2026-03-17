@@ -1,7 +1,7 @@
 ﻿import type { GameDefinition, ThumbnailRenderer } from "../types/arcade";
 import { AsteroidsPulse } from "./asteroidsPulse";
 import { BrickBreakerBlitz } from "./brickBreakerBlitz";
-import { Fortlite } from "./fortlite";
+import { FortLite } from "./fortlite";
 import { Game2048 } from "./game2048";
 import { MemoryMatch } from "./memoryMatch";
 import { NeonDodger } from "./neonDodger";
@@ -161,7 +161,7 @@ const pongThumb = createThumbnail((ctx, elapsed, width, height) => {
   ctx.fill();
 });
 
-const fortliteThumb = createThumbnail((ctx, elapsed, width, height) => {
+const fortLiteThumb = createThumbnail((ctx, elapsed, width, height) => {
   const t = elapsed * 0.0016;
   const horizon = height * 0.62;
 
@@ -264,16 +264,17 @@ export const gameRegistry: GameDefinition[] = [
   },
   {
     id: "fortlite",
-    title: "Fortlite",
+    title: "FortLite",
     genre: "action",
     shortDescription: "Offline first-person battle royale with bots and building.",
-    description: "Drop into the existing Fortlite prototype inside ChudGames, loot weapons, harvest materials, build cover, and outlast the bot lobby.",
+    description: "Drop into the existing FortLite prototype inside ChudGames, loot weapons, harvest materials, build cover, and outlast the bot lobby.",
     controls: [
       "Move: WASD",
       "Look / Aim: Mouse after clicking the arena",
       "Shoot / Harvest: Left Mouse",
-      "Sprint: Left Shift, Jump: Space, Interact: E",
-      "Build: Q to toggle, 1/2/3 to swap pieces, R to rotate",
+      "Sprint: Left Shift, Jump: Space, Interact: E, Zoom: Hold Right Mouse",
+      "Fullscreen: F",
+      "Build: Q to enter/exit, Z wall, Y floor, X ramp, R to rotate",
     ],
     tutorial: [
       "Click into the arena to capture the mouse and enter first-person control.",
@@ -284,8 +285,8 @@ export const gameRegistry: GameDefinition[] = [
     difficulties: ["normal"],
     usesCanvas: false,
     isNew: true,
-    thumbnail: fortliteThumb,
-    component: Fortlite,
+    thumbnail: fortLiteThumb,
+    component: FortLite,
   },
   {
     id: "void-survival",

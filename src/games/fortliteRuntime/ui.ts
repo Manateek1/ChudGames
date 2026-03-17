@@ -23,10 +23,11 @@ export interface HudSnapshot {
   pointerLocked: boolean;
   compassText: string;
   statusText: string;
+  showHelp: boolean;
   hotbarItems: HudHotbarItem[];
 }
 
-export class FortliteHud {
+export class FortLiteHud {
   private readonly root: HTMLDivElement;
   private readonly topLeft: HTMLDivElement;
   private readonly topRight: HTMLDivElement;
@@ -117,6 +118,7 @@ export class FortliteHud {
       </div>
     `).join('');
     this.crosshair.style.display = snapshot.pointerLocked ? 'block' : 'none';
+    this.help.classList.toggle('visible', snapshot.showHelp);
   }
 
   showEndScreen(title: string, body: string): void {

@@ -81,6 +81,31 @@ export const GamePlayer = ({
     onComplete(finalResult);
   }, [finalResult, onComplete]);
 
+  useEffect(() => {
+    if (!finalResult) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.repeat || event.code !== "Enter") {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
+        return;
+      }
+
+      event.preventDefault();
+      restart();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [finalResult]);
+
   const effectivePause = paused || tutorialOpen || Boolean(finalResult);
 
   const restart = (): void => {
@@ -114,7 +139,7 @@ export const GamePlayer = ({
 
   const componentKey = `${game.id}-${difficulty}-${mode}-${seed}-${runId}`;
   const GameComponent = game.component;
-  const isFortlite = game.id === "fortlite";
+  const isFortLite = game.id === "fortlite";
   const placementText = score > 0 ? `#${score}` : "--";
   const finalPlacement = finalResult?.stats?.placement ?? 0;
 
@@ -134,7 +159,7 @@ export const GamePlayer = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-sm text-sky-900">
-          {isFortlite ? (
+          {isFortLite ? (
             <>
               <span>Placement: <strong className="text-sky-950">{placementText}</strong></span>
               <span>Wins: <strong className="text-sky-950">{bestScore}</strong></span>
@@ -232,7 +257,7 @@ export const GamePlayer = ({
             <div className="w-[min(460px,90%)] space-y-3 rounded-2xl border border-sky-300/65 bg-white/95 p-6 text-center">
               <p className="arcade-kicker">Run Complete</p>
               <h3 className="font-display text-4xl text-sky-950">{finalResult.won ? "Victory" : "Game Over"}</h3>
-              {isFortlite ? (
+              {isFortLite ? (
                 <div className="space-y-1 text-sky-900">
                   <p>Placement: <strong className="text-sky-950">{finalPlacement > 0 ? `#${finalPlacement}` : "--"}</strong></p>
                   <p>Elims: <strong className="text-sky-950">{finalResult.stats?.eliminations ?? 0}</strong></p>
@@ -240,6 +265,7 @@ export const GamePlayer = ({
               ) : (
                 <p className="text-sky-900">Score: <strong className="text-sky-950">{finalResult.score}</strong></p>
               )}
+              <p className="text-sm text-sky-800/80">Press Enter to start a new round.</p>
               <div className="flex flex-wrap justify-center gap-2 pt-2">
                 <button type="button" className="arcade-btn-primary" onClick={restart}>
                   Play Again

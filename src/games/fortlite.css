@@ -270,6 +270,11 @@
   font-size: 13px;
   line-height: 1.5;
   color: #dfe6ef;
+  display: none;
+}
+
+.hud-help.visible {
+  display: block;
 }
 
 @media (max-width: 900px) {

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { GameComponentProps } from "../types/arcade";
-import { FortliteGame } from "./fortliteRuntime/game";
+import { FortLiteGame } from "./fortliteRuntime/game";
 import "./fortlite.css";
 
-export const Fortlite = ({
+export const FortLite = ({
   seed,
   paused,
   onScore,
@@ -12,10 +12,11 @@ export const Fortlite = ({
 }: GameComponentProps): React.JSX.Element => {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const gameRef = useRef<FortliteGame | null>(null);
+  const gameRef = useRef<FortLiteGame | null>(null);
   const scoreRef = useRef(onScore);
   const gameOverRef = useRef(onGameOver);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const fullscreenSupported = typeof document !== "undefined" && document.fullscreenEnabled;
 
   useEffect(() => {
     scoreRef.current = onScore;
@@ -37,12 +38,54 @@ export const Fortlite = ({
   }, []);
 
   useEffect(() => {
+    if (!fullscreenSupported) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.repeat || event.code !== "KeyF") {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
+        return;
+      }
+
+      const viewport = viewportRef.current;
+      if (!viewport) {
+        return;
+      }
+
+      event.preventDefault();
+
+      void (async () => {
+        try {
+          if (document.fullscreenElement === viewport) {
+            await document.exitFullscreen();
+            return;
+          }
+
+          await viewport.requestFullscreen();
+        } catch {
+          setIsFullscreen(document.fullscreenElement === viewport);
+        }
+      })();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [fullscreenSupported]);
+
+  useEffect(() => {
     const mount = mountRef.current;
     if (!mount) {
       return;
     }
 
-    const game = new FortliteGame(mount, {
+    const game = new FortLiteGame(mount, {
       seedBase: seed,
       showEndScreen: false,
       onPlacementChange: (placement) => {
@@ -79,8 +122,6 @@ export const Fortlite = ({
     onFps(paused ? 0 : 60);
   }, [paused, onFps]);
 
-  const fullscreenSupported = typeof document !== "undefined" && document.fullscreenEnabled;
-
   const toggleFullscreen = async (): Promise<void> => {
     const viewport = viewportRef.current;
     if (!viewport || !fullscreenSupported) {
@@ -108,7 +149,7 @@ export const Fortlite = ({
           onClick={() => void toggleFullscreen()}
           aria-pressed={isFullscreen}
         >
-          {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+          {isFullscreen ? "Exit Fullscreen (F)" : "Fullscreen (F)"}
         </button>
       )}
       <div ref={mountRef} className="fortlite-mount" />
