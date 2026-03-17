@@ -96,17 +96,10 @@ export class FortLiteHud {
       <div class="hud-line">Wood ${snapshot.materials.wood} | Stone ${snapshot.materials.stone} | Metal ${snapshot.materials.metal}</div>
     `;
 
-    const buildLabel = snapshot.buildMode ? `Build: ${snapshot.buildPieceType}` : 'Build: off';
-    const lockLabel = snapshot.pointerLocked ? '360 look active' : 'Click once for 360 look';
-
     this.topRight.innerHTML = `
-      <div class="hud-title">Match</div>
-      <div class="hud-value">${snapshot.aliveCount} Alive</div>
-      <div class="hud-line">Elims ${snapshot.eliminationCount}</div>
-      <div class="hud-line">${snapshot.stormText}</div>
-      <div class="hud-line">${snapshot.compassText}</div>
-      <div class="hud-line">${buildLabel}</div>
-      <div class="hud-line">${lockLabel}</div>
+      <div class="hud-value">${snapshot.aliveCount} Players Left</div>
+      <div class="hud-line hud-strong">Elims ${snapshot.eliminationCount}</div>
+      <div class="hud-line hud-accent">${snapshot.stormText}</div>
     `;
 
     this.banner.textContent = snapshot.bannerText;

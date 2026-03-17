@@ -2694,17 +2694,17 @@ export class FortLiteGame {
     const weapon = this.getEquippedWeapon(this.player);
     const aliveCount = this.actors.filter((actor) => actor.alive).length;
     const pickupPrompt = this.findNearestLoot(this.player.position, INTERACT_DISTANCE);
-
-    const stormPhase = STORM_PHASES[Math.min(this.storm.phaseIndex, STORM_PHASES.length - 1)];
-    let stormText = this.storm.mode === 'done'
-      ? `Final storm ${this.storm.currentRadius.toFixed(0)}m | ${stormPhase.damagePerSecond}/s`
-      : this.storm.mode === 'pause'
-        ? `Storm closes in ${(stormPhase.pauseDuration - this.storm.timer).toFixed(0)}s | ${stormPhase.damagePerSecond}/s outside`
-        : `Storm shrinking ${(stormPhase.shrinkDuration - this.storm.timer).toFixed(0)}s | ${stormPhase.damagePerSecond}/s outside`;
-
-    if (this.isOutsideStorm(this.player.position)) {
-      stormText = `Outside storm | ${stormPhase.damagePerSecond}/s`;
-    }
+    const initialStormRadius = MAP_RADIUS - 3;
+    const finalStormRadius = STORM_PHASES[STORM_PHASES.length - 1]?.targetRadius ?? 1;
+    const initialStormArea = Math.PI * initialStormRadius * initialStormRadius;
+    const finalStormArea = Math.PI * finalStormRadius * finalStormRadius;
+    const currentStormArea = Math.PI * this.storm.currentRadius * this.storm.currentRadius;
+    const stormProgress = clamp(
+      ((initialStormArea - currentStormArea) / Math.max(1, initialStormArea - finalStormArea)) * 100,
+      0,
+      100
+    );
+    const stormText = `Storm Phase ${stormProgress.toFixed(0)}%`;
 
     const statusText = this.player.reloadTimer > 0 && weapon
       ? `Reloading ${weapon.definition.name}`
