@@ -85,4 +85,4 @@ export const MATERIAL_DISPLAY_NAMES: Record<MaterialType, string> = {
 export const MATERIAL_PRIORITY: readonly MaterialType[] = ['wood', 'stone', 'metal'];
 
 export const HELP_TEXT =
-  'W forward, A left, S back, D right. Mouse aim, Shift sprint, Space jump, F fullscreen. Hold right click to zoom. Walk over ammo and materials to auto-pick them up, use E for nearby loot, Q enters or exits build mode, Z wall, Y floor, X ramp, 1/2/3 regular hotbar, R reload or rotate, Enter restarts.';
+  'W forward, A left, S back, D right. Mouse aim, Shift sprint, Space jump, F fullscreen. Hold right click to zoom. Walk over ammo and materials to auto-pick them up, use E to pick up guns, Q enters or exits build mode, Z wall, Y floor, X ramp, 1/2/3 regular hotbar, R reload or rotate, Enter restarts.';

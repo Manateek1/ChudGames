@@ -2164,7 +2164,7 @@ export class FortLiteGame {
     mesh.position.copy(position);
     mesh.rotation.y = yaw;
     if (pieceType === 'ramp') {
-      mesh.rotation.x = -RAMP_ANGLE;
+      mesh.rotation.x = RAMP_ANGLE;
     }
     this.buildGroup.add(mesh);
 
@@ -2231,7 +2231,7 @@ export class FortLiteGame {
 
     this.previewMesh.visible = true;
     this.previewMesh.position.copy(placement.position);
-    this.previewMesh.rotation.set(this.selectedBuildPiece === 'ramp' ? -RAMP_ANGLE : 0, placement.yaw, 0);
+    this.previewMesh.rotation.set(this.selectedBuildPiece === 'ramp' ? RAMP_ANGLE : 0, placement.yaw, 0);
   }
 
   private computeBuildPlacement(actor: Actor, pieceType: BuildPieceType, forcedWorldPosition?: THREE.Vector3, forcedYaw?: number): { position: THREE.Vector3; yaw: number; valid: boolean } {
@@ -2426,7 +2426,7 @@ export class FortLiteGame {
         const localZ = dx * sin + dz * cos;
 
         if (Math.abs(localX) <= RAMP_WIDTH * 0.5 && localZ >= -RAMP_LENGTH * 0.5 && localZ <= RAMP_LENGTH * 0.5) {
-          const t = clamp((localZ + RAMP_LENGTH * 0.5) / RAMP_LENGTH, 0, 1);
+          const t = clamp((RAMP_LENGTH * 0.5 - localZ) / RAMP_LENGTH, 0, 1);
           const baseY = piece.position.y - RAMP_HEIGHT * 0.5;
           const surface = baseY + t * RAMP_HEIGHT + 0.15;
           if (surface <= currentY + 2.5) {
@@ -2883,11 +2883,7 @@ export class FortLiteGame {
       return true;
     }
 
-    if (pickup.kind !== 'weapon' || !pickup.weapon) {
-      return false;
-    }
-
-    return actor.inventory.weapons.length < 2 || actor.inventory.weapons.some((weapon) => weapon.definition.id === pickup.weapon!.id);
+    return false;
   }
 
   private findNearestLoot(position: THREE.Vector3, maxDistance: number): LootPickup | null {

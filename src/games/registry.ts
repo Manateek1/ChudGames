@@ -272,7 +272,7 @@ export const gameRegistry: GameDefinition[] = [
       "Move: WASD",
       "Look / Aim: Mouse after clicking the arena",
       "Shoot / Harvest: Left Mouse",
-      "Sprint: Left Shift, Jump: Space, Interact: E, Zoom: Hold Right Mouse",
+      "Sprint: Left Shift, Jump: Space, Pick Up Gun: E, Zoom: Hold Right Mouse",
       "Fullscreen: F",
       "Build: Q to enter/exit, Z wall, Y floor, X ramp, R to rotate",
     ],
