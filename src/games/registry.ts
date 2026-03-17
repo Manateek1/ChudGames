@@ -1,6 +1,7 @@
 ﻿import type { GameDefinition, ThumbnailRenderer } from "../types/arcade";
 import { AsteroidsPulse } from "./asteroidsPulse";
 import { BrickBreakerBlitz } from "./brickBreakerBlitz";
+import { Fortlite } from "./fortlite";
 import { Game2048 } from "./game2048";
 import { MemoryMatch } from "./memoryMatch";
 import { NeonDodger } from "./neonDodger";
@@ -160,6 +161,51 @@ const pongThumb = createThumbnail((ctx, elapsed, width, height) => {
   ctx.fill();
 });
 
+const fortliteThumb = createThumbnail((ctx, elapsed, width, height) => {
+  const t = elapsed * 0.0016;
+  const horizon = height * 0.62;
+
+  const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+  sky.addColorStop(0, "#86d7ff");
+  sky.addColorStop(1, "#1d3d5d");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, width, horizon);
+
+  const ground = ctx.createLinearGradient(0, horizon, 0, height);
+  ground.addColorStop(0, "#446f3b");
+  ground.addColorStop(1, "#20341f");
+  ctx.fillStyle = ground;
+  ctx.fillRect(0, horizon, width, height - horizon);
+
+  ctx.fillStyle = "rgba(255, 202, 120, 0.18)";
+  ctx.beginPath();
+  ctx.arc(width * 0.16, height * 0.18, 44, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(81, 224, 255, 0.75)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(width * 0.7, horizon + 12, 42 + Math.sin(t) * 6, Math.PI, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = "#7f6b54";
+  ctx.fillRect(width * 0.28, horizon - 28, 54, 28);
+  ctx.fillRect(width * 0.62, horizon - 40, 42, 40);
+
+  ctx.fillStyle = "#b49a7d";
+  ctx.fillRect(width * 0.52, horizon - 56, 14, 56);
+  ctx.fillRect(width * 0.48, horizon - 12, 72, 12);
+
+  ctx.strokeStyle = "rgba(255, 246, 234, 0.9)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(width * 0.5 - 12, height * 0.48);
+  ctx.lineTo(width * 0.5 + 12, height * 0.48);
+  ctx.moveTo(width * 0.5, height * 0.48 - 12);
+  ctx.lineTo(width * 0.5, height * 0.48 + 12);
+  ctx.stroke();
+});
+
 export const gameRegistry: GameDefinition[] = [
   {
     id: "neon-dodger",
@@ -215,6 +261,31 @@ export const gameRegistry: GameDefinition[] = [
     usesCanvas: true,
     thumbnail: brickThumb,
     component: BrickBreakerBlitz,
+  },
+  {
+    id: "fortlite",
+    title: "Fortlite",
+    genre: "action",
+    shortDescription: "Offline first-person battle royale with bots and building.",
+    description: "Drop into the existing Fortlite prototype inside ChudGames, loot weapons, harvest materials, build cover, and outlast the bot lobby.",
+    controls: [
+      "Move: WASD",
+      "Look / Aim: Mouse after clicking the arena",
+      "Shoot / Harvest: Left Mouse",
+      "Sprint: Left Shift, Jump: Space, Interact: E",
+      "Build: Q to toggle, 1/2/3 to swap pieces, R to rotate",
+    ],
+    tutorial: [
+      "Click into the arena to capture the mouse and enter first-person control.",
+      "Loot weapons and ammo fast, then harvest materials so you can build under pressure.",
+      "Stay ahead of the storm and be the last player alive to win the match.",
+    ],
+    tags: ["battle-royale", "fps", "building"],
+    difficulties: ["normal"],
+    usesCanvas: false,
+    isNew: true,
+    thumbnail: fortliteThumb,
+    component: Fortlite,
   },
   {
     id: "void-survival",
