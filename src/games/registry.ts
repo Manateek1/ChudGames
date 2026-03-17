@@ -293,7 +293,7 @@ export const gameRegistry: GameDefinition[] = [
       {
         id: "duos",
         label: "Duos",
-        description: "25 teams of two with double floor-loot spawns."
+        description: "50 teams of two with double floor-loot spawns."
       }
     ],
     defaultMode: "solo",

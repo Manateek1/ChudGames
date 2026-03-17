@@ -107,6 +107,14 @@ interface WaterZone {
   moveMultiplier: number;
 }
 
+interface WalkableSurface {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  height: number;
+}
+
 interface ShotEffect {
   group: THREE.Group;
   lineMaterial: THREE.LineBasicMaterial;
@@ -143,7 +151,7 @@ const RAMP_LENGTH = 5.2;
 const RAMP_HEIGHT = 3;
 const RAMP_THICKNESS = 0.28;
 const RAMP_ANGLE = Math.atan2(RAMP_HEIGHT, RAMP_LENGTH);
-const DUOS_TEAM_COUNT = 25;
+const DUOS_TEAM_COUNT = 50;
 const DUOS_TEAM_SIZE = 2;
 const FLOOR_MATERIAL_PICKUP_AMOUNT = 200;
 const PLAYER_SPAWN_PADDING = 7;
@@ -215,6 +223,7 @@ export class FortLiteGame {
   private buildPieces: BuildPiece[] = [];
   private shotEffects: ShotEffect[] = [];
   private staticObstacles: ObstacleBox[] = [];
+  private walkableSurfaces: WalkableSurface[] = [];
   private waterZones: WaterZone[] = [];
   private lootSpawnPoints: THREE.Vector3[] = [];
   private participantSpawns: THREE.Vector3[] = [];
@@ -519,6 +528,7 @@ export class FortLiteGame {
     this.scene.add(this.matchRoot);
 
     this.staticObstacles = [];
+    this.walkableSurfaces = [];
     this.lootSpawnPoints = [];
     this.actors = [];
     this.loot = [];
@@ -538,7 +548,7 @@ export class FortLiteGame {
     this.hud.hideEndScreen();
     this.showMessage(
       this.isDuosMode()
-        ? 'FortLite Duos is live. Click into the arena, press F for fullscreen, and fight as a 25-team duo lobby.'
+        ? 'FortLite Duos is live. Click into the arena, press F for fullscreen, and fight as a 50-team duo lobby.'
         : 'First-person drop is live. Click into the arena, press F for fullscreen, grab your loadout, and rotate with the mouse.',
       4
     );
@@ -890,7 +900,6 @@ export class FortLiteGame {
       } else {
         this.addRockObstacle(point, size, height);
       }
-      this.lootSpawnPoints.push(point.clone().add(new THREE.Vector3(0, 0, this.rng.range(2, 4))));
     }
 
     this.spawnResourceNodes();
@@ -903,7 +912,7 @@ export class FortLiteGame {
   ): void {
     for (const box of boxes) {
       const position = center.clone().add(box.offset);
-      this.addStaticObstacle(position, box.size, box.height, color, true);
+      this.createStructureShell(position, box.size, box.height, color, true);
       this.addCompoundDecor(position, box.size, box.height, color);
     }
 
@@ -1135,17 +1144,104 @@ export class FortLiteGame {
     this.environmentGroup.add(road);
   }
 
+  private createStructureShell(position: THREE.Vector3, size: THREE.Vector2, height: number, color: number, addLootSpots: boolean): void {
+    const wallThickness = 0.46;
+    const doorwayWidth = clamp(Math.min(size.x, size.y) * 0.34, 2.8, 4.6);
+    const roofThickness = 0.3;
+    const roofColor = new THREE.Color(color).offsetHSL(0, 0.04, 0.08).getHex();
+    const towardCenter = WORLD_CENTER.clone().sub(position);
+    const doorwayAxis = Math.abs(towardCenter.x) > Math.abs(towardCenter.z) ? 'x' : 'z';
+    const doorwaySign = doorwayAxis === 'x'
+      ? (towardCenter.x >= 0 ? 1 : -1)
+      : (towardCenter.z >= 0 ? 1 : -1);
+
+    if (doorwayAxis === 'z') {
+      const sideWidth = Math.max(0.7, (size.x - doorwayWidth) * 0.5);
+      this.addStaticObstacle(
+        new THREE.Vector3(position.x - (doorwayWidth * 0.5 + sideWidth * 0.5), 0, position.z + doorwaySign * size.y * 0.5),
+        new THREE.Vector2(sideWidth, wallThickness),
+        height,
+        color,
+        false
+      );
+      this.addStaticObstacle(
+        new THREE.Vector3(position.x + (doorwayWidth * 0.5 + sideWidth * 0.5), 0, position.z + doorwaySign * size.y * 0.5),
+        new THREE.Vector2(sideWidth, wallThickness),
+        height,
+        color,
+        false
+      );
+      this.addStaticObstacle(new THREE.Vector3(position.x, 0, position.z - doorwaySign * size.y * 0.5), new THREE.Vector2(size.x, wallThickness), height, color, false);
+      this.addStaticObstacle(new THREE.Vector3(position.x - size.x * 0.5, 0, position.z), new THREE.Vector2(wallThickness, size.y), height, color, false);
+      this.addStaticObstacle(new THREE.Vector3(position.x + size.x * 0.5, 0, position.z), new THREE.Vector2(wallThickness, size.y), height, color, false);
+    } else {
+      const sideDepth = Math.max(0.7, (size.y - doorwayWidth) * 0.5);
+      this.addStaticObstacle(
+        new THREE.Vector3(position.x + doorwaySign * size.x * 0.5, 0, position.z - (doorwayWidth * 0.5 + sideDepth * 0.5)),
+        new THREE.Vector2(wallThickness, sideDepth),
+        height,
+        color,
+        false
+      );
+      this.addStaticObstacle(
+        new THREE.Vector3(position.x + doorwaySign * size.x * 0.5, 0, position.z + (doorwayWidth * 0.5 + sideDepth * 0.5)),
+        new THREE.Vector2(wallThickness, sideDepth),
+        height,
+        color,
+        false
+      );
+      this.addStaticObstacle(new THREE.Vector3(position.x - doorwaySign * size.x * 0.5, 0, position.z), new THREE.Vector2(wallThickness, size.y), height, color, false);
+      this.addStaticObstacle(new THREE.Vector3(position.x, 0, position.z - size.y * 0.5), new THREE.Vector2(size.x, wallThickness), height, color, false);
+      this.addStaticObstacle(new THREE.Vector3(position.x, 0, position.z + size.y * 0.5), new THREE.Vector2(size.x, wallThickness), height, color, false);
+    }
+
+    const roof = new THREE.Mesh(
+      new THREE.BoxGeometry(size.x * 1.04, roofThickness, size.y * 1.04),
+      new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.78, metalness: 0.04 })
+    );
+    roof.position.set(position.x, height + roofThickness * 0.5, position.z);
+    this.environmentGroup.add(roof);
+    this.tagTarget(roof, 'static', null);
+    this.raycastTargets.push(roof);
+    this.cameraObstacles.push(roof);
+    this.walkableSurfaces.push({
+      minX: position.x - size.x * 0.52,
+      maxX: position.x + size.x * 0.52,
+      minZ: position.z - size.y * 0.52,
+      maxZ: position.z + size.y * 0.52,
+      height: roof.position.y + roofThickness * 0.5
+    });
+
+    if (!addLootSpots) {
+      return;
+    }
+
+    const lootOffsets = [
+      new THREE.Vector3(size.x * 0.22, 0, size.y * 0.22),
+      new THREE.Vector3(-size.x * 0.22, 0, size.y * 0.22),
+      new THREE.Vector3(size.x * 0.22, 0, -size.y * 0.22),
+      new THREE.Vector3(-size.x * 0.22, 0, -size.y * 0.22)
+    ];
+
+    for (const offset of lootOffsets) {
+      const point = position.clone().add(offset);
+      if (point.length() < MAP_RADIUS - 8) {
+        this.lootSpawnPoints.push(point);
+      }
+    }
+  }
+
   private createTallStructure(center: THREE.Vector3, baseColor: number, accentColor: number, towerHeight: number): void {
     const footprint = new THREE.Vector2(this.rng.range(9, 12), this.rng.range(9, 12));
     const annexSize = new THREE.Vector2(this.rng.range(6, 8), this.rng.range(5, 7));
     const annexOffset = new THREE.Vector3(footprint.x * 0.7, 0, -footprint.y * 0.55);
     this.addTerrainPatch(center, footprint.x * 1.6, footprint.y * 1.5, new THREE.Color(baseColor).offsetHSL(0, 0.02, -0.08).getHex(), 0.22, 0);
 
-    this.addStaticObstacle(center, footprint, towerHeight, baseColor, true);
+    this.createStructureShell(center, footprint, towerHeight, baseColor, true);
     this.addCompoundDecor(center, footprint, towerHeight, baseColor);
 
     const annexPosition = center.clone().add(annexOffset);
-    this.addStaticObstacle(annexPosition, annexSize, towerHeight * 0.48, new THREE.Color(baseColor).offsetHSL(0.01, 0.04, 0.06).getHex(), true);
+    this.createStructureShell(annexPosition, annexSize, towerHeight * 0.48, new THREE.Color(baseColor).offsetHSL(0.01, 0.04, 0.06).getHex(), true);
     this.addCompoundDecor(annexPosition, annexSize, towerHeight * 0.48, accentColor);
 
     const crown = new THREE.Mesh(
@@ -1199,7 +1295,6 @@ export class FortLiteGame {
       const size = new THREE.Vector2(this.rng.range(3.2, 6.8), this.rng.range(3, 6.2));
       const height = this.rng.range(2.4, 5.6);
       this.addRockObstacle(point, size, height);
-      this.lootSpawnPoints.push(point.clone().add(new THREE.Vector3(this.rng.range(-2.4, 2.4), 0, this.rng.range(-2.4, 2.4))));
     }
   }
 
@@ -1242,15 +1337,7 @@ export class FortLiteGame {
   }
 
   private addCompoundDecor(position: THREE.Vector3, size: THREE.Vector2, height: number, color: number): void {
-    const roofColor = new THREE.Color(color).offsetHSL(0, 0.04, 0.08);
     const trimColor = new THREE.Color(color).offsetHSL(0.02, 0.08, 0.16);
-
-    const roof = new THREE.Mesh(
-      new THREE.BoxGeometry(size.x * 1.08, 0.28, size.y * 1.08),
-      new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.8 })
-    );
-    roof.position.set(position.x, height + 0.2, position.z);
-    this.environmentGroup.add(roof);
 
     const trim = new THREE.Mesh(
       new THREE.BoxGeometry(size.x * 0.28, 0.22, size.y * 0.18),
@@ -1258,6 +1345,13 @@ export class FortLiteGame {
     );
     trim.position.set(position.x, height * 0.6, position.z + size.y * 0.52);
     this.environmentGroup.add(trim);
+
+    const vent = new THREE.Mesh(
+      new THREE.BoxGeometry(size.x * 0.18, 0.18, size.y * 0.18),
+      new THREE.MeshStandardMaterial({ color: 0x4a5764, roughness: 0.66, metalness: 0.16 })
+    );
+    vent.position.set(position.x - size.x * 0.14, height + 0.46, position.z - size.y * 0.1);
+    this.environmentGroup.add(vent);
   }
 
   private addRockObstacle(position: THREE.Vector3, size: THREE.Vector2, height: number): void {
@@ -2545,6 +2639,15 @@ export class FortLiteGame {
   private getBuildAimPoint(actor: Actor, forward: THREE.Vector3): THREE.Vector3 {
     const direction = this.getAimDirection();
     this.raycaster.set(this.camera.position, direction);
+    this.raycaster.far = 20;
+    const hits = this.raycaster.intersectObjects(this.raycastTargets, true);
+    for (const hit of hits) {
+      const kind = hit.object.userData.kind as string | undefined;
+      if (kind === 'static' || kind === 'build') {
+        return hit.point.clone();
+      }
+    }
+
     const hit = this.raycaster.ray.intersectPlane(this.tempPlane, this.tempVectorA);
     const fallback = actor.position.clone().addScaledVector(forward, 6.5);
     if (!hit) {
@@ -2688,6 +2791,14 @@ export class FortLiteGame {
 
   private sampleGroundHeight(x: number, z: number, currentY: number): number {
     let height = 0;
+
+    for (const surface of this.walkableSurfaces) {
+      if (x >= surface.minX && x <= surface.maxX && z >= surface.minZ && z <= surface.maxZ) {
+        if (surface.height <= currentY + 2.5) {
+          height = Math.max(height, surface.height);
+        }
+      }
+    }
 
     for (const piece of this.buildPieces) {
       if (piece.pieceType === 'floor') {
@@ -4034,6 +4145,17 @@ export class FortLiteGame {
   private isPointClear(point: THREE.Vector3, padding: number): boolean {
     if (this.isPointInWater(point, padding * 0.4)) {
       return false;
+    }
+
+    for (const surface of this.walkableSurfaces) {
+      if (
+        point.x > surface.minX - padding &&
+        point.x < surface.maxX + padding &&
+        point.z > surface.minZ - padding &&
+        point.z < surface.maxZ + padding
+      ) {
+        return false;
+      }
     }
 
     for (const obstacle of this.staticObstacles) {

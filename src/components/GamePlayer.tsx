@@ -254,26 +254,47 @@ export const GamePlayer = ({
 
         {finalResult && (
           <div className="absolute inset-0 z-20 grid place-items-center bg-[rgba(194,242,255,0.86)]">
-            <div className="w-[min(460px,90%)] space-y-3 rounded-2xl border border-sky-300/65 bg-white/95 p-6 text-center">
+            <div className="w-[min(460px,90%)] space-y-4 rounded-2xl border border-sky-300/65 bg-white/95 p-6 text-center">
               <p className="arcade-kicker">Run Complete</p>
               <h3 className="font-display text-4xl text-sky-950">{finalResult.won ? "Victory" : "Game Over"}</h3>
               {isFortLite ? (
-                <div className="space-y-1 text-sky-900">
-                  <p>Placement: <strong className="text-sky-950">{finalPlacement > 0 ? `#${finalPlacement}` : "--"}</strong></p>
-                  <p>Elims: <strong className="text-sky-950">{finalResult.stats?.eliminations ?? 0}</strong></p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-sky-300/55 bg-sky-50/90 px-4 py-4">
+                    <p className="arcade-kicker">Placement</p>
+                    <p className="font-display text-4xl text-sky-950">{finalPlacement > 0 ? `#${finalPlacement}` : "--"}</p>
+                  </div>
+                  <div className="rounded-2xl border border-sky-300/55 bg-sky-50/90 px-4 py-4">
+                    <p className="arcade-kicker">Elims</p>
+                    <p className="font-display text-4xl text-sky-950">{finalResult.stats?.eliminations ?? 0}</p>
+                  </div>
                 </div>
               ) : (
                 <p className="text-sky-900">Score: <strong className="text-sky-950">{finalResult.score}</strong></p>
               )}
               <p className="text-sm text-sky-800/80">Press Enter to start a new round.</p>
-              <div className="flex flex-wrap justify-center gap-2 pt-2">
-                <button type="button" className="arcade-btn-primary" onClick={restart}>
-                  Play Again
-                </button>
-                <button type="button" className="arcade-btn-secondary" onClick={onQuit}>
-                  Back to Library
-                </button>
-              </div>
+              {isFortLite ? (
+                <div className="space-y-3 pt-1">
+                  <div className="flex justify-center">
+                    <button type="button" className="arcade-btn-primary min-w-[220px]" onClick={restart}>
+                      Play Again
+                    </button>
+                  </div>
+                  <div className="flex justify-center">
+                    <button type="button" className="text-sm font-semibold text-sky-800 transition hover:text-sky-950" onClick={onQuit}>
+                      Back to Library
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap justify-center gap-2 pt-2">
+                  <button type="button" className="arcade-btn-primary" onClick={restart}>
+                    Play Again
+                  </button>
+                  <button type="button" className="arcade-btn-secondary" onClick={onQuit}>
+                    Back to Library
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
