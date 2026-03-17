@@ -1109,7 +1109,7 @@ export class FortLiteGame {
   }
 
   private spawnResourceNodes(): void {
-    const materialTypes: MaterialType[] = ['wood', 'wood', 'wood', 'stone', 'stone', 'metal'];
+    const materialTypes: MaterialType[] = ['wood', 'wood', 'wood', 'wood', 'wood', 'stone', 'stone', 'metal'];
 
     for (let i = 0; i < RESOURCE_RESPAWN_COUNT; i += 1) {
       const materialType = this.rng.pick(materialTypes);
