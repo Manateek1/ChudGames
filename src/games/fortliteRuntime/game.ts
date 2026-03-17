@@ -38,6 +38,7 @@ import { FortLiteHud } from './ui';
 
 type MatchState = 'boot' | 'inProgress' | 'ended';
 type StormMode = 'pause' | 'shrink' | 'done';
+type Biome = 'regular' | 'forest' | 'desert';
 
 interface Actor {
   id: string;
@@ -112,6 +113,11 @@ interface ShotEffect {
 }
 
 const GRAVITY = 22;
+const DESERT_BIOME_THETA_START = 0;
+const FOREST_BIOME_THETA_START = Math.PI * 0.5;
+const QUARTER_BIOME_THETA_LENGTH = Math.PI * 0.5;
+const REGULAR_BIOME_THETA_START = Math.PI;
+const REGULAR_BIOME_THETA_LENGTH = Math.PI;
 const DEFAULT_CAMERA_FOV = 76;
 const ZOOMED_CAMERA_FOV = 52;
 const CAMERA_FOV_LERP = 0.18;
@@ -557,14 +563,18 @@ export class FortLiteGame {
     const randomObstacleCount = 42 * MAP_SCALE;
 
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(MAP_RADIUS, 96),
-      new THREE.MeshStandardMaterial({ color: 0x456d3d, roughness: 1 })
+      new THREE.CircleGeometry(MAP_RADIUS, 128),
+      new THREE.MeshStandardMaterial({ color: 0x5c7650, roughness: 1 })
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.02;
     this.environmentGroup.add(ground);
-    this.addGroundDisc(MAP_RADIUS * 0.88, 0x6d8c47, -0.015, 0.92);
-    this.addGroundDisc(MAP_RADIUS * 0.58, 0x385f35, -0.01, 0.85);
+    this.addGroundSector(MAP_RADIUS, 0xd0aa66, -0.018, 0.98, DESERT_BIOME_THETA_START, QUARTER_BIOME_THETA_LENGTH);
+    this.addGroundSector(MAP_RADIUS, 0x446f3b, -0.017, 0.98, FOREST_BIOME_THETA_START, QUARTER_BIOME_THETA_LENGTH);
+    this.addGroundSector(MAP_RADIUS, 0x657d4f, -0.016, 0.92, REGULAR_BIOME_THETA_START, REGULAR_BIOME_THETA_LENGTH);
+    this.addGroundSector(MAP_RADIUS * 0.82, 0xe0bd76, -0.012, 0.34, DESERT_BIOME_THETA_START, QUARTER_BIOME_THETA_LENGTH);
+    this.addGroundSector(MAP_RADIUS * 0.82, 0x335d32, -0.011, 0.3, FOREST_BIOME_THETA_START, QUARTER_BIOME_THETA_LENGTH);
+    this.addGroundSector(MAP_RADIUS * 0.72, 0x728757, -0.01, 0.24, REGULAR_BIOME_THETA_START, REGULAR_BIOME_THETA_LENGTH);
 
     const terrainPatches = [
       { position: new THREE.Vector3(-44, 0, -8), radiusX: 30, radiusZ: 18, color: 0x8b6a45, opacity: 0.68, rotation: 0.32 },
@@ -593,6 +603,10 @@ export class FortLiteGame {
     for (const patch of terrainPatches) {
       this.addTerrainPatch(patch.position, patch.radiusX, patch.radiusZ, patch.color, patch.opacity, patch.rotation);
     }
+
+    this.scatterBiomeTerrainPatches('forest', 14, [0x2f5d2f, 0x446f3b, 0x577b43, 0x5a6f34], MAP_RADIUS * 0.16, MAP_RADIUS * 0.92);
+    this.scatterBiomeTerrainPatches('desert', 14, [0xc19a59, 0xd6b36c, 0xb88e4c, 0xe1c98d], MAP_RADIUS * 0.16, MAP_RADIUS * 0.92);
+    this.scatterBiomeTerrainPatches('regular', 20, [0x6a7f49, 0x7c6a4e, 0x6f8451, 0x8a7453], MAP_RADIUS * 0.12, MAP_RADIUS * 0.94);
 
     this.addWaterZone(new THREE.Vector3(-252, 0, 142), 46, 28, 0.28);
     this.addWaterZone(new THREE.Vector3(286, 0, 168), 40, 30, -0.42);
@@ -837,13 +851,27 @@ export class FortLiteGame {
     this.createRockCluster(new THREE.Vector3(104, 0, -412), 6, 22);
     this.createRockCluster(new THREE.Vector3(-82, 0, -468), 7, 28);
     this.createRockCluster(new THREE.Vector3(468, 0, 114), 5, 18);
+    this.createTallStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.32, MAP_RADIUS * 0.78, 18), 0x52684e, 0xa5c995, 13.5);
+    this.createTallStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.38, MAP_RADIUS * 0.88, 18), 0x4d5b46, 0x87b57a, 15.2);
+    this.createTallStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.32, MAP_RADIUS * 0.78, 18), 0x9d7c4e, 0xe2c483, 13.2);
+    this.createTallStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.4, MAP_RADIUS * 0.88, 18), 0x8d6f46, 0xf0d296, 15);
+    this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.28, MAP_RADIUS * 0.7, 18), 0x6e706e, 0xc6d5cf, 14.2);
+    this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.34, MAP_RADIUS * 0.82, 18), 0x767566, 0xf1e2b6, 15.8);
+    this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.42, MAP_RADIUS * 0.9, 18), 0x657168, 0xb6d7e5, 17.2);
 
     for (let i = 0; i < randomObstacleCount; i += 1) {
       const point = this.findFreePoint(MAP_RADIUS - 18, 6);
       const size = new THREE.Vector2(this.rng.range(2.4, 5.8), this.rng.range(2.4, 5.8));
       const height = this.rng.range(1.8, 3.8);
+      const biome = this.getBiomeAtPosition(point);
+      const palette =
+        biome === 'forest'
+          ? [0x4d6949, 0x61775d, 0x5b6844]
+          : biome === 'desert'
+            ? [0x9e865c, 0xa49169, 0x8c7551]
+            : [0x73837f, 0x7d7869, 0x587169];
       if (this.rng.next() > 0.45) {
-        this.addStaticObstacle(point, size, height, this.rng.pick([0x73837f, 0x7d7869, 0x587169]), false);
+        this.addStaticObstacle(point, size, height, this.rng.pick(palette), false);
       } else {
         this.addRockObstacle(point, size, height);
       }
@@ -942,6 +970,87 @@ export class FortLiteGame {
     this.environmentGroup.add(disc);
   }
 
+  private addGroundSector(
+    radius: number,
+    color: number,
+    y: number,
+    opacity: number,
+    thetaStart: number,
+    thetaLength: number
+  ): void {
+    const sector = new THREE.Mesh(
+      new THREE.CircleGeometry(radius, 96, thetaStart, thetaLength),
+      new THREE.MeshStandardMaterial({ color, roughness: 1, transparent: true, opacity, side: THREE.DoubleSide })
+    );
+    sector.rotation.x = -Math.PI / 2;
+    sector.position.y = y;
+    this.environmentGroup.add(sector);
+  }
+
+  private getBiomeAtPosition(position: THREE.Vector3): Biome {
+    const angle = (Math.atan2(position.z, position.x) + Math.PI * 2) % (Math.PI * 2);
+    if (angle >= DESERT_BIOME_THETA_START && angle < DESERT_BIOME_THETA_START + QUARTER_BIOME_THETA_LENGTH) {
+      return 'desert';
+    }
+
+    if (angle >= FOREST_BIOME_THETA_START && angle < FOREST_BIOME_THETA_START + QUARTER_BIOME_THETA_LENGTH) {
+      return 'forest';
+    }
+
+    return 'regular';
+  }
+
+  private randomPointInBiome(biome: Biome, minRadius: number, maxRadius: number): THREE.Vector3 {
+    let thetaStart = REGULAR_BIOME_THETA_START;
+    let thetaLength = REGULAR_BIOME_THETA_LENGTH;
+    if (biome === 'forest') {
+      thetaStart = FOREST_BIOME_THETA_START;
+      thetaLength = QUARTER_BIOME_THETA_LENGTH;
+    } else if (biome === 'desert') {
+      thetaStart = DESERT_BIOME_THETA_START;
+      thetaLength = QUARTER_BIOME_THETA_LENGTH;
+    }
+
+    const angle = thetaStart + (this.rng.next() * thetaLength);
+    const radius = Math.sqrt(this.rng.range(minRadius * minRadius, maxRadius * maxRadius));
+    return new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+  }
+
+  private findBiomeFreePoint(biome: Biome, minRadius: number, maxRadius: number, padding: number): THREE.Vector3 {
+    for (let attempt = 0; attempt < 140; attempt += 1) {
+      const point = this.randomPointInBiome(biome, minRadius, maxRadius);
+      if (this.isPointClear(point, padding)) {
+        return point;
+      }
+    }
+
+    return this.findFreePoint(maxRadius, padding);
+  }
+
+  private scatterBiomeTerrainPatches(
+    biome: Biome,
+    count: number,
+    colors: number[],
+    minRadius: number,
+    maxRadius: number
+  ): void {
+    for (let i = 0; i < count; i += 1) {
+      const point = this.randomPointInBiome(biome, minRadius, maxRadius);
+      if (this.isPointInWater(point, 12)) {
+        continue;
+      }
+
+      this.addTerrainPatch(
+        point,
+        this.rng.range(18, 42),
+        this.rng.range(16, 38),
+        this.rng.pick(colors),
+        this.rng.range(0.22, 0.48),
+        this.rng.range(-Math.PI, Math.PI)
+      );
+    }
+  }
+
   private addTerrainPatch(
     position: THREE.Vector3,
     radiusX: number,
@@ -1009,6 +1118,59 @@ export class FortLiteGame {
     road.position.y = 0.02;
     road.rotation.y = Math.atan2(delta.x, delta.z);
     this.environmentGroup.add(road);
+  }
+
+  private createTallStructure(center: THREE.Vector3, baseColor: number, accentColor: number, towerHeight: number): void {
+    const footprint = new THREE.Vector2(this.rng.range(9, 12), this.rng.range(9, 12));
+    const annexSize = new THREE.Vector2(this.rng.range(6, 8), this.rng.range(5, 7));
+    const annexOffset = new THREE.Vector3(footprint.x * 0.7, 0, -footprint.y * 0.55);
+    this.addTerrainPatch(center, footprint.x * 1.6, footprint.y * 1.5, new THREE.Color(baseColor).offsetHSL(0, 0.02, -0.08).getHex(), 0.22, 0);
+
+    this.addStaticObstacle(center, footprint, towerHeight, baseColor, true);
+    this.addCompoundDecor(center, footprint, towerHeight, baseColor);
+
+    const annexPosition = center.clone().add(annexOffset);
+    this.addStaticObstacle(annexPosition, annexSize, towerHeight * 0.48, new THREE.Color(baseColor).offsetHSL(0.01, 0.04, 0.06).getHex(), true);
+    this.addCompoundDecor(annexPosition, annexSize, towerHeight * 0.48, accentColor);
+
+    const crown = new THREE.Mesh(
+      new THREE.BoxGeometry(footprint.x * 1.12, 0.45, footprint.y * 1.12),
+      new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.58, metalness: 0.16 })
+    );
+    crown.position.set(center.x, towerHeight + 0.55, center.z);
+    this.environmentGroup.add(crown);
+
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.28, towerHeight * 0.26, 10),
+      new THREE.MeshStandardMaterial({ color: 0x394552, roughness: 0.55, metalness: 0.45 })
+    );
+    mast.position.set(center.x, towerHeight + 1.5 + (towerHeight * 0.13), center.z);
+    this.environmentGroup.add(mast);
+
+    const beacon = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffd385, emissive: 0xffb251, emissiveIntensity: 0.65, roughness: 0.3 })
+    );
+    beacon.position.set(center.x, towerHeight + 3.2, center.z);
+    this.environmentGroup.add(beacon);
+
+    const windowMaterial = new THREE.MeshStandardMaterial({
+      color: 0xeef7ff,
+      emissive: 0x92b9d5,
+      emissiveIntensity: 0.16,
+      roughness: 0.35,
+      metalness: 0.08
+    });
+    const windowHeights = [towerHeight * 0.28, towerHeight * 0.46, towerHeight * 0.64];
+    for (const bandHeight of windowHeights) {
+      const frontBand = new THREE.Mesh(new THREE.BoxGeometry(footprint.x * 0.72, 0.28, 0.16), windowMaterial);
+      frontBand.position.set(center.x, bandHeight, center.z + (footprint.y * 0.51));
+      this.environmentGroup.add(frontBand);
+
+      const sideBand = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.28, footprint.y * 0.62), windowMaterial);
+      sideBand.position.set(center.x - (footprint.x * 0.51), bandHeight + 0.34, center.z);
+      this.environmentGroup.add(sideBand);
+    }
   }
 
   private createRockCluster(center: THREE.Vector3, count: number, radius: number): void {
@@ -1109,11 +1271,9 @@ export class FortLiteGame {
   }
 
   private spawnResourceNodes(): void {
-    const materialTypes: MaterialType[] = ['wood', 'wood', 'wood', 'wood', 'wood', 'stone', 'stone', 'metal'];
-
     for (let i = 0; i < RESOURCE_RESPAWN_COUNT; i += 1) {
-      const materialType = this.rng.pick(materialTypes);
       const position = this.findFreePoint(MAP_RADIUS - 10, 4.5);
+      const materialType = this.pickResourceMaterialForBiome(position);
       const node = this.createResourceNode(position, materialType, i);
       this.resourceNodes.push(node);
       this.environmentGroup.add(node.mesh);
@@ -1122,22 +1282,37 @@ export class FortLiteGame {
     }
   }
 
+  private pickResourceMaterialForBiome(position: THREE.Vector3): MaterialType {
+    const biome = this.getBiomeAtPosition(position);
+    const materialTypes: MaterialType[] =
+      biome === 'forest'
+        ? ['wood', 'wood', 'wood', 'wood', 'wood', 'wood', 'stone', 'stone', 'metal']
+        : biome === 'desert'
+          ? ['wood', 'stone', 'stone', 'stone', 'stone', 'metal', 'metal']
+          : ['wood', 'wood', 'wood', 'wood', 'stone', 'stone', 'metal'];
+    return this.rng.pick(materialTypes);
+  }
+
   private createResourceNode(position: THREE.Vector3, materialType: MaterialType, index: number): ResourceNode {
     const mesh = new THREE.Group();
     const color = RESOURCE_COLORS[materialType];
+    const biome = this.getBiomeAtPosition(position);
 
     if (materialType === 'wood') {
+      const trunkHeight = biome === 'forest' ? 3.6 : biome === 'desert' ? 2.8 : 3.1;
+      const canopySize = biome === 'forest' ? 2.25 : biome === 'desert' ? 1.45 : 1.9;
+      const canopyColor = biome === 'forest' ? 0x4d8e37 : biome === 'desert' ? 0x8a9550 : 0x5f8f43;
       const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.45, 0.6, 3.1, 8),
+        new THREE.CylinderGeometry(0.42, 0.6, trunkHeight, 8),
         new THREE.MeshStandardMaterial({ color: 0x6d4c2e, roughness: 1 })
       );
-      trunk.position.y = 1.55;
+      trunk.position.y = trunkHeight * 0.5;
 
       const canopy = new THREE.Mesh(
-        new THREE.SphereGeometry(1.9, 10, 10),
-        new THREE.MeshStandardMaterial({ color: 0x5f8f43, roughness: 1 })
+        new THREE.SphereGeometry(canopySize, 10, 10),
+        new THREE.MeshStandardMaterial({ color: canopyColor, roughness: 1 })
       );
-      canopy.position.y = 3.7;
+      canopy.position.y = trunkHeight + (canopySize * 0.92);
       mesh.add(trunk, canopy);
     } else {
       const base = new THREE.Mesh(
