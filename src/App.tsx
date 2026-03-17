@@ -87,7 +87,9 @@ function App(): React.JSX.Element {
     });
   }, [search, filter]);
 
-  const bestScore = getBestScore(progress, selectedGame.id, difficulty);
+  const bestScore = selectedGame.id === "fortlite"
+    ? (progress.stats[selectedGame.id]?.wins ?? 0)
+    : getBestScore(progress, selectedGame.id, difficulty);
 
   const openGame = (gameId: string): void => {
     const targetGame = gameMap.get(gameId) ?? gameRegistry[0];
@@ -120,10 +122,11 @@ function App(): React.JSX.Element {
 
   const handleRunComplete = (result: { score: number; won?: boolean; stats?: Record<string, number> }): void => {
     setProgress((prev) => {
+      const trackedScore = selectedGame.id === "fortlite" ? Number(Boolean(result.won)) : result.score;
       let next = withGameResult(prev, {
         gameId: selectedGame.id,
         difficulty,
-        score: result.score,
+        score: trackedScore,
         won: Boolean(result.won),
         combo: result.stats?.combo,
         tile: result.stats?.tile,
@@ -131,7 +134,7 @@ function App(): React.JSX.Element {
       });
 
       if (dailyRun) {
-        next = withDailyBest(next, daily.dateKey, selectedGame.id, result.score);
+        next = withDailyBest(next, daily.dateKey, selectedGame.id, trackedScore);
       }
 
       const unlocked = evaluateAchievements(next, selectedGame.id, mode, result);
@@ -149,14 +152,14 @@ function App(): React.JSX.Element {
   };
 
   const sharedHeader = (
-    <header className="mb-6 rounded-2xl border border-cyan-300/20 bg-[#050b1b]/80 px-4 py-3 backdrop-blur-sm">
+    <header className="mb-6 rounded-2xl border border-sky-300/55 bg-white/78 px-4 py-3 shadow-[0_22px_50px_-30px_rgba(42,157,208,0.45)] backdrop-blur-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => setScreen("home")}
-          className="font-display text-2xl tracking-wide text-white"
+          className="font-display text-2xl tracking-wide text-sky-950"
         >
-          Arcade Hub
+          ChudGames
         </button>
 
         <nav className="flex flex-wrap items-center gap-2 text-sm">
@@ -166,7 +169,7 @@ function App(): React.JSX.Element {
           <button type="button" className="arcade-btn-secondary" onClick={() => setShowSettings(true)}>Settings</button>
         </nav>
       </div>
-      <div className="mt-2 flex flex-wrap gap-3 text-xs uppercase tracking-[0.2em] text-cyan-100/70">
+      <div className="mt-2 flex flex-wrap gap-3 text-xs uppercase tracking-[0.2em] text-sky-700/80">
         <span>{daily.dateKey}</span>
         <span>Daily: {dailyGame?.title ?? "..."}</span>
         <span>Achievements: {progress.achievements.length}</span>
@@ -175,7 +178,7 @@ function App(): React.JSX.Element {
   );
 
   return (
-    <div className="min-h-screen text-cyan-100">
+    <div className="min-h-screen text-sky-950">
       <AnimatedBackground settings={settings} />
       <main className="relative mx-auto w-full max-w-[1260px] px-4 pb-16 pt-6 md:px-8">
         {sharedHeader}
@@ -246,7 +249,7 @@ function App(): React.JSX.Element {
       <SettingsModal open={showSettings} settings={settings} onChange={setSettings} onClose={() => setShowSettings(false)} />
 
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-lg border border-cyan-300/30 bg-[#08112c] px-4 py-3 text-sm text-cyan-100 shadow-[0_20px_40px_-20px_rgba(0,255,229,0.6)]">
+        <div className="fixed bottom-4 right-4 z-50 rounded-lg border border-lime-300/75 bg-white/90 px-4 py-3 text-sm text-sky-950 shadow-[0_20px_40px_-20px_rgba(122,213,76,0.45)]">
           {toast}
         </div>
       )}

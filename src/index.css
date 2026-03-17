@@ -5,27 +5,27 @@
 @tailwind utilities;
 
 :root {
-  --bg-0: #030811;
-  --bg-1: #060d22;
-  --bg-2: #0a1436;
-  --text-main: #def8ff;
-  --text-soft: #9bc8da;
+  --bg-0: #e6fbff;
+  --bg-1: #c9f2ff;
+  --bg-2: #f2ffe5;
+  --text-main: #12384f;
+  --text-soft: #46738a;
 }
 
 :root[data-theme="sunset"] {
-  --bg-0: #12080b;
-  --bg-1: #2a0f16;
-  --bg-2: #411726;
-  --text-main: #ffe9dc;
-  --text-soft: #f6bfa1;
+  --bg-0: #fff2dc;
+  --bg-1: #ffdcb8;
+  --bg-2: #fff7df;
+  --text-main: #64391f;
+  --text-soft: #946245;
 }
 
 :root[data-theme="matrix"] {
-  --bg-0: #050b08;
-  --bg-1: #0b1c15;
-  --bg-2: #133025;
-  --text-main: #d8ffe9;
-  --text-soft: #87e7b0;
+  --bg-0: #ecfff1;
+  --bg-1: #d6ffd8;
+  --bg-2: #f3ffe8;
+  --text-main: #1e4f33;
+  --text-soft: #4b7f5c;
 }
 
 * {
@@ -41,8 +41,9 @@ body,
 body {
   margin: 0;
   font-family: "Rajdhani", "Trebuchet MS", sans-serif;
-  background: radial-gradient(circle at 10% 0%, rgba(72, 255, 233, 0.12), transparent 40%),
-    radial-gradient(circle at 90% 0%, rgba(255, 137, 74, 0.12), transparent 42%),
+  background: radial-gradient(circle at 10% 0%, rgba(104, 222, 255, 0.28), transparent 40%),
+    radial-gradient(circle at 90% 0%, rgba(168, 255, 88, 0.2), transparent 42%),
+    radial-gradient(circle at 50% 100%, rgba(255, 245, 143, 0.22), transparent 46%),
     linear-gradient(180deg, var(--bg-0), var(--bg-1), var(--bg-2));
   color: var(--text-main);
 }
@@ -52,40 +53,40 @@ body {
 }
 
 .arcade-kicker {
-  @apply text-xs uppercase tracking-[0.34em] text-cyan-100/70;
+  @apply text-xs uppercase tracking-[0.34em] text-sky-700/80;
 }
 
 .arcade-card {
-  @apply rounded-2xl border border-cyan-300/20 bg-[#08102a]/90 p-4;
+  @apply rounded-2xl border border-sky-300/50 bg-white/75 p-4 shadow-[0_18px_40px_-24px_rgba(24,147,198,0.45)];
 }
 
 .arcade-btn-primary {
-  @apply rounded-lg bg-cyan-300 px-5 py-3 font-semibold text-[#03252c] transition hover:-translate-y-0.5 hover:bg-cyan-200;
+  @apply rounded-lg bg-lime-300 px-5 py-3 font-semibold text-sky-950 transition hover:-translate-y-0.5 hover:bg-lime-200;
 }
 
 .arcade-btn-secondary {
-  @apply rounded-lg border border-cyan-300/35 bg-transparent px-5 py-3 font-semibold text-cyan-100 transition hover:border-cyan-100 hover:bg-cyan-200/10;
+  @apply rounded-lg border border-sky-300/70 bg-white/60 px-5 py-3 font-semibold text-sky-900 transition hover:border-sky-500 hover:bg-sky-100;
 }
 
 .touch-btn {
-  @apply rounded-lg border border-cyan-300/35 bg-[#0c1534] px-3 py-3 text-center text-cyan-100 active:bg-cyan-300/20;
+  @apply rounded-lg border border-sky-300/70 bg-white/80 px-3 py-3 text-center text-sky-900 active:bg-sky-200;
 }
 
 .scanlines {
-  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 100% 3px;
-  mix-blend-mode: screen;
+  background-image: linear-gradient(to bottom, rgba(18, 56, 79, 0.06) 1px, transparent 1px);
+  background-size: 100% 4px;
+  mix-blend-mode: multiply;
 }
 
 .arcade-grid {
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(rgba(90, 250, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(90, 250, 255, 0.08) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(88, 173, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(131, 222, 101, 0.12) 1px, transparent 1px);
   background-size: 34px 34px;
   transform: perspective(620px) rotateX(54deg) translateY(50%);
   transform-origin: center;
-  opacity: 0.5;
+  opacity: 0.65;
 }
 
 .arcade-grid-motion {
@@ -99,7 +100,7 @@ body {
   border-radius: 999px;
   left: calc(50% - 210px);
   top: calc(50% - 200px);
-  background: radial-gradient(circle, rgba(88, 255, 237, 0.24) 0%, rgba(88, 255, 237, 0) 70%);
+  background: radial-gradient(circle, rgba(119, 207, 255, 0.32) 0%, rgba(163, 255, 119, 0.05) 70%);
   filter: blur(6px);
 }
 
@@ -112,7 +113,7 @@ body {
   top: -16px;
   width: 10px;
   height: 14px;
-  background: linear-gradient(180deg, #47fff1, #ff8f68);
+  background: linear-gradient(180deg, #7ed8ff, #b8ff5a);
   animation: confettiFall 1.4s linear forwards;
 }
 

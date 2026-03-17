@@ -1,12 +1,13 @@
-﻿# Arcade Hub
+﻿# ChudGames
 
-Arcade Hub is a React + Vite + TypeScript arcade product with a neon UI, shared game engine utilities, and 9 playable mini-games.
+ChudGames is a React + Vite + TypeScript game launcher with a neon UI, shared game engine utilities, and 10 playable games including Fortlite.
 
 ## Included Games
 
 - Neon Dodger
 - Asteroids Pulse
 - Brick Breaker Blitz
+- Fortlite
 - Void Survival
 - Rhythm Tap
 - Precision Runner
@@ -34,7 +35,7 @@ Arcade Hub is a React + Vite + TypeScript arcade product with a neon UI, shared 
 2. Add metadata + thumbnail + controls/tutorial copy in `src/games/registry.ts`.
 3. Use `onScore`, `onFps`, and `onGameOver` callbacks from `GameComponentProps`.
 4. Use shared engine utilities (`InputManager`, `AudioManager`, `ParticleSystem`) instead of duplicating game loop services.
-5. Verify it supports at least 2 difficulties and works on mobile (touch controls or tap/swipe interactions).
+5. Verify it works inside the shared launcher shell and supports the input model it needs on desktop/mobile.
 
 ## Local Development
 

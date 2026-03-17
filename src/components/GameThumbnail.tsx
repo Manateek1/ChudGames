@@ -45,5 +45,5 @@ export const GameThumbnail = ({ renderer, reducedMotion }: GameThumbnailProps): 
     };
   }, [renderer, reducedMotion]);
 
-  return <canvas ref={canvasRef} className="h-[180px] w-full rounded-xl border border-cyan-300/25 bg-[#040414]" aria-hidden />;
+  return <canvas ref={canvasRef} className="h-[180px] w-full rounded-xl border border-sky-300/55 bg-white/85 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)]" aria-hidden />;
 };

@@ -122,15 +122,15 @@ const PLAYER_STARTER_LOOT_OFFSET = 4.2;
 const WORLD_CENTER = new THREE.Vector3(0, 0, 0);
 
 export interface FortliteMatchResult {
-  score: number;
   won: boolean;
+  placement: number;
   eliminations: number;
   survivalTime: number;
 }
 
 interface FortliteGameOptions {
   seedBase?: number;
-  onScoreChange?: (score: number) => void;
+  onPlacementChange?: (placement: number) => void;
   onMatchEnd?: (result: FortliteMatchResult) => void;
   showEndScreen?: boolean;
 }
@@ -475,7 +475,7 @@ export class FortliteGame {
     this.hud.hideEndScreen();
     this.showMessage('First-person drop is live. Click into the arena, grab your loadout, and rotate with the mouse.', 3.5);
     this.refreshNavigation();
-    this.options.onScoreChange?.(0);
+    this.options.onPlacementChange?.(this.calculatePlacement());
   }
 
   private clearMatchRoot(): void {
@@ -506,6 +506,9 @@ export class FortliteGame {
   }
 
   private buildWorld(): void {
+    const perimeterWallCount = 52;
+    const randomObstacleCount = 42;
+
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(MAP_RADIUS, 96),
       new THREE.MeshStandardMaterial({ color: 0x456d3d, roughness: 1 })
@@ -520,6 +523,12 @@ export class FortliteGame {
     this.addTerrainPatch(new THREE.Vector3(46, 0, 34), 26, 15, 0x6f8a4f, 0.48, 0.22);
     this.addTerrainPatch(new THREE.Vector3(-34, 0, 44), 24, 13, 0x867350, 0.66, -0.2);
     this.addTerrainPatch(new THREE.Vector3(0, 0, 0), 18, 18, 0x7b5b3d, 0.55, 0);
+    this.addTerrainPatch(new THREE.Vector3(-122, 0, -72), 44, 26, 0x8a6c4f, 0.54, 0.18);
+    this.addTerrainPatch(new THREE.Vector3(132, 0, -112), 38, 22, 0x7d6d4e, 0.58, -0.34);
+    this.addTerrainPatch(new THREE.Vector3(152, 0, 108), 42, 24, 0x6b8750, 0.52, 0.26);
+    this.addTerrainPatch(new THREE.Vector3(-136, 0, 126), 40, 24, 0x8d7456, 0.56, -0.16);
+    this.addTerrainPatch(new THREE.Vector3(0, 0, -154), 54, 20, 0x5f7c47, 0.42, 0.08);
+    this.addTerrainPatch(new THREE.Vector3(0, 0, 164), 56, 24, 0x6e8a4b, 0.4, -0.12);
 
     const innerRing = new THREE.LineLoop(
       new THREE.BufferGeometry().setFromPoints(this.makeCirclePoints(MAP_RADIUS, 90)),
@@ -529,8 +538,8 @@ export class FortliteGame {
     innerRing.position.y = 0.04;
     this.environmentGroup.add(innerRing);
 
-    for (let i = 0; i < 34; i += 1) {
-      const angle = (i / 34) * Math.PI * 2;
+    for (let i = 0; i < perimeterWallCount; i += 1) {
+      const angle = (i / perimeterWallCount) * Math.PI * 2;
       const radius = MAP_RADIUS + this.rng.range(1.2, 3.8);
       const position = new THREE.Vector3(Math.cos(angle) * radius, 1.4, Math.sin(angle) * radius);
       const sizeX = this.rng.range(4, 9);
@@ -548,6 +557,10 @@ export class FortliteGame {
     this.addRoad(new THREE.Vector3(4, 0, -4), new THREE.Vector3(32, 0, -26), 6, 0x746149);
     this.addRoad(new THREE.Vector3(5, 0, 5), new THREE.Vector3(42, 0, 40), 7, 0x6e5d45);
     this.addRoad(new THREE.Vector3(-4, 0, 6), new THREE.Vector3(-28, 0, 38), 6.5, 0x7b684d);
+    this.addRoad(new THREE.Vector3(-18, 0, -10), new THREE.Vector3(-126, 0, -92), 8, 0x735f46);
+    this.addRoad(new THREE.Vector3(22, 0, -16), new THREE.Vector3(126, 0, -108), 7.5, 0x6d5b43);
+    this.addRoad(new THREE.Vector3(26, 0, 20), new THREE.Vector3(142, 0, 114), 8, 0x685944);
+    this.addRoad(new THREE.Vector3(-20, 0, 22), new THREE.Vector3(-132, 0, 128), 7.5, 0x74644c);
     this.createCentralArena();
 
     this.createCompound(new THREE.Vector3(-44, 0, -36), 0x9a8062, [
@@ -575,8 +588,28 @@ export class FortliteGame {
       { offset: new THREE.Vector3(14, 0, -10), size: new THREE.Vector2(6, 6), height: 4 },
       { offset: new THREE.Vector3(-16, 0, 8), size: new THREE.Vector2(6, 10), height: 4 }
     ]);
+    this.createCompound(new THREE.Vector3(-122, 0, -96), 0x8f7c61, [
+      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 10), height: 5.8 },
+      { offset: new THREE.Vector3(18, 0, 12), size: new THREE.Vector2(8, 8), height: 4.6 },
+      { offset: new THREE.Vector3(-18, 0, -10), size: new THREE.Vector2(9, 7), height: 4.2 }
+    ]);
+    this.createCompound(new THREE.Vector3(126, 0, -112), 0x7c7467, [
+      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(15, 11), height: 5.8 },
+      { offset: new THREE.Vector3(-16, 0, 10), size: new THREE.Vector2(8, 7), height: 4.4 },
+      { offset: new THREE.Vector3(18, 0, -8), size: new THREE.Vector2(7, 12), height: 5 }
+    ]);
+    this.createCompound(new THREE.Vector3(146, 0, 116), 0x8a7b66, [
+      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(14, 12), height: 5.6 },
+      { offset: new THREE.Vector3(-18, 0, -10), size: new THREE.Vector2(8, 6), height: 4.4 },
+      { offset: new THREE.Vector3(16, 0, 12), size: new THREE.Vector2(8, 8), height: 4.6 }
+    ]);
+    this.createCompound(new THREE.Vector3(-136, 0, 128), 0x7f8171, [
+      { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 10), height: 5.4 },
+      { offset: new THREE.Vector3(16, 0, -12), size: new THREE.Vector2(7, 7), height: 4.2 },
+      { offset: new THREE.Vector3(-18, 0, 10), size: new THREE.Vector2(9, 8), height: 4.4 }
+    ]);
 
-    for (let i = 0; i < 18; i += 1) {
+    for (let i = 0; i < randomObstacleCount; i += 1) {
       const point = this.findFreePoint(MAP_RADIUS - 14, 5);
       const size = new THREE.Vector2(this.rng.range(2.4, 5.4), this.rng.range(2.4, 5.4));
       const height = this.rng.range(1.6, 3.4);
@@ -923,7 +956,7 @@ export class FortliteGame {
       weapons: [],
       weaponIndex: 0,
       ammo: { light: 0, shells: 0 },
-      materials: { wood: kind === 'player' ? 40 : 28, stone: 0, metal: 0 }
+      materials: { wood: kind === 'player' ? 100 : 28, stone: 0, metal: 0 }
     };
 
     const actor: Actor = {
@@ -2183,8 +2216,10 @@ export class FortliteGame {
     }
 
     if (actor.kind === 'player') {
-      const nearbyAmmo = this.loot.filter((pickup) => pickup.kind === 'ammo' && horizontalDistance(actor.position, pickup.position) <= INTERACT_DISTANCE);
-      for (const pickup of nearbyAmmo) {
+      const nearbyAutoLoot = this.loot.filter((pickup) =>
+        this.shouldAutoPickupForPlayer(actor, pickup) && horizontalDistance(actor.position, pickup.position) <= INTERACT_DISTANCE
+      );
+      for (const pickup of nearbyAutoLoot) {
         this.collectPickup(actor, pickup);
       }
       return;
@@ -2347,22 +2382,20 @@ export class FortliteGame {
 
     this.matchResultSent = true;
     this.options.onMatchEnd?.({
-      score: this.calculateScore(won),
       won,
+      placement: this.calculatePlacement(),
       eliminations: this.player.eliminationCount,
       survivalTime: Math.round(this.matchTime),
     });
   }
 
-  private calculateScore(won = false): number {
+  private calculatePlacement(): number {
     if (!this.player) {
       return 0;
     }
 
-    const eliminationScore = this.player.eliminationCount * 250;
-    const survivalScore = Math.floor(this.matchTime * 10);
-    const victoryBonus = won ? 1000 : 0;
-    return eliminationScore + survivalScore + victoryBonus;
+    const aliveCount = this.actors.filter((actor) => actor.alive).length;
+    return this.player.alive ? aliveCount : aliveCount + 1;
   }
 
   private updateHud(): void {
@@ -2409,7 +2442,7 @@ export class FortliteGame {
       statusText,
       hotbarItems: this.getHotbarItems()
     });
-    this.options.onScoreChange?.(this.calculateScore(this.state === 'ended' && this.player.alive));
+    this.options.onPlacementChange?.(this.calculatePlacement());
   }
 
   private render(): void {
@@ -2495,7 +2528,9 @@ export class FortliteGame {
     }
 
     if (nearbyPickup) {
-      return `Press E to pick up ${this.describePickup(nearbyPickup)}.`;
+      return this.shouldAutoPickupForPlayer(this.player, nearbyPickup)
+        ? `Walk over ${this.describePickup(nearbyPickup)} to pick it up automatically.`
+        : `Press E to pick up ${this.describePickup(nearbyPickup)}.`;
     }
 
     if (this.isBuildMode()) {
@@ -2539,6 +2574,18 @@ export class FortliteGame {
       return `${pickup.amount} ${pickup.materialType}`;
     }
     return 'loot';
+  }
+
+  private shouldAutoPickupForPlayer(actor: Actor, pickup: LootPickup): boolean {
+    if (pickup.kind === 'ammo') {
+      return true;
+    }
+
+    if (pickup.kind !== 'weapon' || !pickup.weapon) {
+      return false;
+    }
+
+    return actor.inventory.weapons.length < 2 || actor.inventory.weapons.some((weapon) => weapon.definition.id === pickup.weapon!.id);
   }
 
   private findNearestLoot(position: THREE.Vector3, maxDistance: number): LootPickup | null {

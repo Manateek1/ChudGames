@@ -1,13 +1,13 @@
 import type { MaterialType, StormPhase, WeaponDefinition } from './types';
 
-export const MAP_RADIUS = 120;
+export const MAP_RADIUS = 240;
 export const PLAYER_EYE_HEIGHT = 1.7;
 export const ACTOR_RADIUS = 1;
-export const BOT_COUNT = 12;
+export const BOT_COUNT = 19;
 export const BUILD_GRID_SIZE = 4;
 export const BUILD_COST = 20;
 export const MAX_WEAPON_SLOTS = 2;
-export const RESOURCE_RESPAWN_COUNT = 30;
+export const RESOURCE_RESPAWN_COUNT = 64;
 export const FIXED_TIMESTEP = 1 / 60;
 
 export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
@@ -56,11 +56,11 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
 ];
 
 export const STORM_PHASES: readonly StormPhase[] = [
-  { pauseDuration: 18, shrinkDuration: 20, targetRadius: 92, damagePerSecond: 1 },
-  { pauseDuration: 14, shrinkDuration: 18, targetRadius: 68, damagePerSecond: 2 },
-  { pauseDuration: 12, shrinkDuration: 16, targetRadius: 42, damagePerSecond: 4 },
-  { pauseDuration: 10, shrinkDuration: 14, targetRadius: 20, damagePerSecond: 7 },
-  { pauseDuration: 6, shrinkDuration: 12, targetRadius: 6, damagePerSecond: 12 }
+  { pauseDuration: 24, shrinkDuration: 26, targetRadius: 184, damagePerSecond: 1 },
+  { pauseDuration: 20, shrinkDuration: 22, targetRadius: 136, damagePerSecond: 2 },
+  { pauseDuration: 16, shrinkDuration: 20, targetRadius: 84, damagePerSecond: 4 },
+  { pauseDuration: 12, shrinkDuration: 18, targetRadius: 40, damagePerSecond: 7 },
+  { pauseDuration: 8, shrinkDuration: 14, targetRadius: 12, damagePerSecond: 12 }
 ];
 
 export const RESOURCE_COLORS: Record<MaterialType, number> = {
@@ -78,4 +78,4 @@ export const MATERIAL_DISPLAY_NAMES: Record<MaterialType, string> = {
 export const MATERIAL_PRIORITY: readonly MaterialType[] = ['wood', 'stone', 'metal'];
 
 export const HELP_TEXT =
-  'W forward, A left, S back, D right. Mouse aim, Shift sprint, Space jump, left click fire/harvest, E loot, Q build, 1/2/3 switch hotbar slot, R reload or rotate, right click exits build mode, Enter restarts.';
+  'W forward, A left, S back, D right. Mouse aim, Shift sprint, Space jump. Walk over guns and ammo to auto-pick them up, use E for nearby materials, Q build, 1/2/3 swap wall floor ramp or hotbar slot, R reload or rotate, right click exits build mode, Enter restarts.';
