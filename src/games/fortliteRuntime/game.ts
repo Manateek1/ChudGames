@@ -10,6 +10,7 @@ import {
   HELP_TEXT,
   MAP_RADIUS,
   MAP_SCALE,
+  MAX_WEAPON_SLOTS,
   MATERIAL_DISPLAY_NAMES,
   MATERIAL_PRIORITY,
   PATHFINDING_CELL_SIZE,
@@ -39,10 +40,12 @@ import { FortLiteHud } from './ui';
 type MatchState = 'boot' | 'inProgress' | 'ended';
 type StormMode = 'pause' | 'shrink' | 'done';
 type Biome = 'regular' | 'forest' | 'desert';
+type FortLiteMode = 'solo' | 'duos';
 
 interface Actor {
   id: string;
   kind: ActorKind;
+  teamId: number;
   group: THREE.Group;
   bodyMesh: THREE.Mesh;
   ringMesh: THREE.Mesh;
@@ -123,8 +126,9 @@ const ZOOMED_CAMERA_FOV = 52;
 const CAMERA_FOV_LERP = 0.18;
 const PLAYER_MOVE_SPEED = 8;
 const PLAYER_SPRINT_SPEED = 12;
-const BOT_MOVE_SPEED = 5.8 * 0.9;
-const BOT_SPRINT_SPEED = 7.1 * 0.9;
+const BOT_BUFF_MULTIPLIER = 1.2;
+const BOT_MOVE_SPEED = 5.8 * 0.9 * BOT_BUFF_MULTIPLIER;
+const BOT_SPRINT_SPEED = 7.1 * 0.9 * BOT_BUFF_MULTIPLIER;
 const JUMP_SPEED = 8;
 const INTERACT_DISTANCE = 3;
 const HARVEST_DISTANCE = 4.6;
@@ -139,6 +143,9 @@ const RAMP_LENGTH = 5.2;
 const RAMP_HEIGHT = 3;
 const RAMP_THICKNESS = 0.28;
 const RAMP_ANGLE = Math.atan2(RAMP_HEIGHT, RAMP_LENGTH);
+const DUOS_TEAM_COUNT = 25;
+const DUOS_TEAM_SIZE = 2;
+const FLOOR_MATERIAL_PICKUP_AMOUNT = 200;
 const PLAYER_SPAWN_PADDING = 7;
 const PLAYER_SPAWN_SEPARATION = 34;
 const PLAYER_STARTER_LOOT_OFFSET = 4.2;
@@ -153,6 +160,7 @@ export interface FortLiteMatchResult {
 
 interface FortLiteGameOptions {
   graphicsQuality?: GraphicsQuality;
+  mode?: FortLiteMode;
   onFpsChange?: (fps: number) => void;
   seedBase?: number;
   onPlacementChange?: (placement: number) => void;
@@ -163,6 +171,7 @@ interface FortLiteGameOptions {
 export class FortLiteGame {
   private readonly root: HTMLDivElement;
   private readonly options: FortLiteGameOptions;
+  private readonly matchMode: FortLiteMode;
   private readonly shell: HTMLDivElement;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene: THREE.Scene;
@@ -298,6 +307,7 @@ export class FortLiteGame {
   constructor(root: HTMLDivElement, options: FortLiteGameOptions = {}) {
     this.root = root;
     this.options = options;
+    this.matchMode = options.mode === 'duos' ? 'duos' : 'solo';
     this.graphicsQuality = options.graphicsQuality ?? 'high';
     this.root.innerHTML = '';
 
@@ -526,7 +536,12 @@ export class FortLiteGame {
     this.ensurePreviewMesh();
     this.syncViewModel(true);
     this.hud.hideEndScreen();
-    this.showMessage('First-person drop is live. Click into the arena, press F for fullscreen, grab your loadout, and rotate with the mouse.', 4);
+    this.showMessage(
+      this.isDuosMode()
+        ? 'FortLite Duos is live. Click into the arena, press F for fullscreen, and fight as a 25-team duo lobby.'
+        : 'First-person drop is live. Click into the arena, press F for fullscreen, grab your loadout, and rotate with the mouse.',
+      4
+    );
     this.refreshNavigation();
     this.options.onPlacementChange?.(this.calculatePlacement());
   }
@@ -1355,18 +1370,21 @@ export class FortLiteGame {
   }
 
   private spawnParticipants(): void {
-    this.participantSpawns = this.generateParticipantSpawns(BOT_COUNT + 1);
-    this.player = this.createActor('player', this.participantSpawns[0], 0x2dd4bf, 0x4fd1ff);
+    const participantCount = this.getParticipantCount();
+    const botCount = this.getBotCount();
+    this.participantSpawns = this.generateParticipantSpawns(participantCount, this.getTeamSize());
+    this.player = this.createActor('player', this.participantSpawns[0], 0x2dd4bf, 0x4fd1ff, 0);
     this.player.yaw = Math.atan2(-this.player.position.x, -this.player.position.z);
     this.actors.push(this.player);
 
-    for (let i = 0; i < BOT_COUNT; i += 1) {
+    for (let i = 0; i < botCount; i += 1) {
       const spawn = this.participantSpawns[i + 1];
       const bot = this.createActor(
         'bot',
         spawn,
         new THREE.Color().setHSL(this.rng.next(), 0.45, 0.55).getHex(),
-        0xffffff
+        0xffffff,
+        this.getTeamIdForParticipant(i + 1)
       );
       bot.yaw = Math.atan2(-spawn.x, -spawn.z);
       bot.ai = {
@@ -1384,11 +1402,12 @@ export class FortLiteGame {
       this.actors.push(bot);
     }
 
+    this.refreshActorPresentations();
     this.cameraYaw = this.player.yaw;
     this.cameraPitch = 0.05;
   }
 
-  private createActor(kind: ActorKind, spawnPosition: THREE.Vector3, color: number, accent: number): Actor {
+  private createActor(kind: ActorKind, spawnPosition: THREE.Vector3, color: number, accent: number, teamId: number): Actor {
     const group = new THREE.Group();
 
     const shadow = new THREE.Mesh(
@@ -1448,6 +1467,7 @@ export class FortLiteGame {
     const actor: Actor = {
       id: `${kind}-${this.actors.length}`,
       kind,
+      teamId,
       group,
       bodyMesh: body,
       ringMesh: ring,
@@ -1474,38 +1494,97 @@ export class FortLiteGame {
     return actor;
   }
 
+  private refreshActorPresentations(): void {
+    const playerTeamId = this.player.teamId;
+
+    for (const actor of this.actors) {
+      actor.kind = actor === this.player ? 'player' : 'bot';
+      actor.group.traverse((child) => {
+        child.layers.set(actor === this.player ? 1 : 0);
+      });
+
+      const ringMaterial = actor.ringMesh.material as THREE.MeshBasicMaterial;
+      ringMaterial.color.setHex(
+        actor === this.player ? 0x3bdad6 : actor.teamId === playerTeamId ? 0x6cf0b2 : 0xff7c70
+      );
+    }
+  }
+
+  private getParticipantCount(): number {
+    return this.isDuosMode() ? DUOS_TEAM_COUNT * DUOS_TEAM_SIZE : BOT_COUNT + 1;
+  }
+
+  private getBotCount(): number {
+    return this.getParticipantCount() - 1;
+  }
+
+  private getTeamSize(): number {
+    return this.isDuosMode() ? DUOS_TEAM_SIZE : 1;
+  }
+
+  private getTeamIdForParticipant(participantIndex: number): number {
+    return this.isDuosMode() ? Math.floor(participantIndex / DUOS_TEAM_SIZE) : participantIndex;
+  }
+
+  private isDuosMode(): boolean {
+    return this.matchMode === 'duos';
+  }
+
   private spawnLoot(): void {
     const priorityWeapons = [WEAPON_DEFINITIONS[0], WEAPON_DEFINITIONS[2], WEAPON_DEFINITIONS[1]];
 
     for (let i = 0; i < this.lootSpawnPoints.length; i += 1) {
       const point = this.lootSpawnPoints[i];
-      const roll = this.rng.next();
-      if (roll < 0.18) {
-        continue;
-      }
-
       if (i < 18) {
         const weapon = priorityWeapons[i % priorityWeapons.length];
         this.createWeaponPickup(point, weapon, true);
-        continue;
+      } else {
+        this.spawnRandomFloorLoot(point, false);
       }
 
-      if (roll < 0.54) {
-        this.createWeaponPickup(point, this.rng.pick(WEAPON_DEFINITIONS), false);
-      } else if (roll < 0.82) {
-        const ammoType = this.rng.next() < 0.72 ? 'light' : 'shells';
-        const amount = ammoType === 'light' ? this.rng.int(16, 32) : this.rng.int(6, 14);
-        this.createAmmoPickup(point, ammoType, amount);
-      } else {
-        const materialType = this.rng.pick(['wood', 'wood', 'stone', 'metal'] as MaterialType[]);
-        const amount = materialType === 'wood' ? this.rng.int(20, 40) : this.rng.int(14, 28);
-        this.createMaterialPickup(point, materialType, amount);
+      if (this.isDuosMode()) {
+        this.spawnRandomFloorLoot(this.getNearbyLootPoint(point), true);
       }
     }
 
     for (let i = 0; i < this.participantSpawns.length; i += 1) {
       this.spawnStarterLoadout(this.participantSpawns[i], i);
     }
+  }
+
+  private spawnRandomFloorLoot(position: THREE.Vector3, guaranteedSpawn: boolean): void {
+    const roll = this.rng.next();
+    if (!guaranteedSpawn && roll < 0.18) {
+      return;
+    }
+
+    if (roll < 0.54) {
+      this.createWeaponPickup(position, this.rng.pick(WEAPON_DEFINITIONS), false);
+      return;
+    }
+
+    if (roll < 0.82) {
+      const ammoType = this.rng.next() < 0.72 ? 'light' : 'shells';
+      const amount = ammoType === 'light' ? this.rng.int(16, 32) : this.rng.int(6, 14);
+      this.createAmmoPickup(position, ammoType, amount);
+      return;
+    }
+
+    const materialType = this.rng.pick(['wood', 'wood', 'stone', 'metal'] as MaterialType[]);
+    const amount = materialType === 'wood' ? this.rng.int(20, 40) : this.rng.int(14, 28);
+    this.createMaterialPickup(position, materialType, amount);
+  }
+
+  private getNearbyLootPoint(origin: THREE.Vector3): THREE.Vector3 {
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const point = origin.clone().add(new THREE.Vector3(this.rng.range(-2.2, 2.2), 0, this.rng.range(-2.2, 2.2)));
+      if (horizontalDistance(WORLD_CENTER, point) > MAP_RADIUS - 6 || this.isPointInWater(point, 0.4)) {
+        continue;
+      }
+      return point;
+    }
+
+    return origin.clone();
   }
 
   private createWeaponPickup(position: THREE.Vector3, weapon: WeaponDefinition, guaranteed: boolean): void {
@@ -1567,9 +1646,10 @@ export class FortLiteGame {
     this.attachPickup(pickup);
   }
 
-  private createMaterialPickup(position: THREE.Vector3, materialType: MaterialType, amount: number): void {
+  private createMaterialPickup(position: THREE.Vector3, materialType: MaterialType, _amount: number): void {
     const mesh = new THREE.Group();
     const color = materialType === 'wood' ? 0xb97a3d : materialType === 'stone' ? 0xa1a9b2 : 0x9fb6c8;
+    const pickupAmount = FLOOR_MATERIAL_PICKUP_AMOUNT;
 
     const box = new THREE.Mesh(
       new THREE.BoxGeometry(1.05, 1.05, 1.05),
@@ -1584,7 +1664,7 @@ export class FortLiteGame {
       mesh,
       position: position.clone(),
       materialType,
-      amount,
+      amount: pickupAmount,
       bobOffset: this.rng.range(0, Math.PI * 2)
     };
 
@@ -1783,9 +1863,12 @@ export class FortLiteGame {
 
   private handlePlayerLoadoutInput(): void {
     const actor = this.player;
-    const wallPressed = this.justPressedKeys.has('Digit1') || this.justPressedKeys.has('KeyZ');
-    const floorPressed = this.justPressedKeys.has('Digit2') || this.justPressedKeys.has('KeyY');
-    const rampPressed = this.justPressedKeys.has('Digit3') || this.justPressedKeys.has('KeyX');
+    const riflePressed = this.justPressedKeys.has('Digit1');
+    const shotgunPressed = this.justPressedKeys.has('Digit2');
+    const smgPressed = this.justPressedKeys.has('Digit3');
+    const wallPressed = riflePressed || this.justPressedKeys.has('KeyZ');
+    const floorPressed = shotgunPressed || this.justPressedKeys.has('KeyY');
+    const rampPressed = smgPressed || this.justPressedKeys.has('KeyX');
 
     if (this.justPressedKeys.has('KeyQ')) {
       this.buildMode = !this.buildMode;
@@ -1794,42 +1877,41 @@ export class FortLiteGame {
     if (wallPressed) {
       if (this.isBuildMode()) {
         this.setBuildPieceType('wall');
-      } else {
-        actor.inventory.mode = 'harvest';
+      } else if (riflePressed) {
+        this.selectWeaponSlot(actor, 0);
       }
     }
 
     if (floorPressed) {
       if (this.isBuildMode()) {
         this.setBuildPieceType('floor');
-      } else if (actor.inventory.weapons.length > 0) {
-        actor.inventory.mode = 'weapon';
-        actor.inventory.weaponIndex = 0;
+      } else if (shotgunPressed) {
+        this.selectWeaponSlot(actor, 1);
       }
     }
 
     if (rampPressed) {
       if (this.isBuildMode()) {
         this.setBuildPieceType('ramp');
-      } else if (actor.inventory.weapons.length > 1) {
-        actor.inventory.mode = 'weapon';
-        actor.inventory.weaponIndex = 1;
+      } else if (smgPressed) {
+        this.selectWeaponSlot(actor, 2);
       }
     }
 
     if (this.wheelDirection !== 0 && !this.isBuildMode()) {
-      const selections = actor.inventory.weapons.length;
-      if (selections === 0) {
+      const ownedSlots = this.getOwnedWeaponSlots(actor);
+      if (ownedSlots.length === 0) {
         actor.inventory.mode = 'harvest';
       } else if (actor.inventory.mode === 'harvest') {
         actor.inventory.mode = 'weapon';
-        actor.inventory.weaponIndex = this.wheelDirection > 0 ? selections - 1 : 0;
+        actor.inventory.weaponIndex = this.wheelDirection > 0 ? ownedSlots[ownedSlots.length - 1] : ownedSlots[0];
       } else {
-        const next = actor.inventory.weaponIndex + (this.wheelDirection > 0 ? 1 : -1);
-        if (next < 0) {
+        const currentIndex = ownedSlots.indexOf(actor.inventory.weaponIndex);
+        const next = (currentIndex === -1 ? 0 : currentIndex) + (this.wheelDirection > 0 ? 1 : -1);
+        if (next < 0 || next >= ownedSlots.length) {
           actor.inventory.mode = 'harvest';
         } else {
-          actor.inventory.weaponIndex = next % selections;
+          actor.inventory.weaponIndex = ownedSlots[next];
         }
       }
     }
@@ -1855,7 +1937,13 @@ export class FortLiteGame {
     const visibleEnemy = this.findVisibleEnemy(actor, 52);
     if (visibleEnemy) {
       brain.targetActorId = visibleEnemy.id;
-    } else if (brain.targetActorId && !this.findActorById(brain.targetActorId)?.alive) {
+    } else if (
+      brain.targetActorId &&
+      (() => {
+        const target = this.findActorById(brain.targetActorId);
+        return !target || !target.alive || this.areTeammates(actor, target);
+      })()
+    ) {
       brain.targetActorId = undefined;
     }
 
@@ -1866,7 +1954,7 @@ export class FortLiteGame {
 
     if (brain.state === 'engage' && brain.targetActorId) {
       const target = this.findActorById(brain.targetActorId);
-      if (!target || !target.alive) {
+      if (!target || !target.alive || this.areTeammates(actor, target)) {
         brain.state = 'roam';
       } else {
         this.runBotCombat(actor, target, dt);
@@ -1990,7 +2078,7 @@ export class FortLiteGame {
 
     if (weapon) {
       actor.inventory.mode = 'weapon';
-      actor.inventory.weaponIndex = actor.inventory.weapons.indexOf(weapon);
+      actor.inventory.weaponIndex = this.getWeaponSlotIndexById(weapon.definition.id);
       if (distance <= weapon.definition.range * 0.82 && this.hasLineOfSight(actor, target) && this.rng.next() > 0.28) {
         const aimTarget = target.position.clone().add(new THREE.Vector3(
           this.rng.range(-0.65, 0.65),
@@ -2229,7 +2317,7 @@ export class FortLiteGame {
 
         if (kind === 'actor') {
           const target = ref as Actor;
-          if (!target.alive || target.id === actor.id) {
+          if (!target.alive || target.id === actor.id || this.areTeammates(actor, target)) {
             continue;
           }
           impactPoint = hit.point.clone();
@@ -2746,18 +2834,19 @@ export class FortLiteGame {
           magAmmo: pickup.weapon.magSize
         };
 
-        if (actor.inventory.weapons.length < 2) {
+        if (actor.inventory.weapons.length < MAX_WEAPON_SLOTS) {
           actor.inventory.weapons.push(instance);
-          actor.inventory.weaponIndex = actor.inventory.weapons.length - 1;
+          this.sortWeaponsByHotbarOrder(actor);
         } else {
           const replaceIndex = actor.kind === 'player'
             ? clamp(actor.inventory.weaponIndex, 0, actor.inventory.weapons.length - 1)
             : this.findWeakestWeaponIndex(actor.inventory.weapons);
           actor.inventory.weapons[replaceIndex] = instance;
-          actor.inventory.weaponIndex = replaceIndex;
+          this.sortWeaponsByHotbarOrder(actor);
         }
 
         actor.inventory.mode = 'weapon';
+        actor.inventory.weaponIndex = this.getWeaponSlotIndexById(pickup.weapon.id);
         actor.inventory.ammo[pickup.weapon.ammoType] += pickup.weapon.reservePickup;
         if (actor.kind === 'player') {
           this.showMessage(`Picked up ${pickup.weapon.name}.`, 1.4);
@@ -2781,7 +2870,7 @@ export class FortLiteGame {
   }
 
   private applyDamage(target: Actor, amount: number, attacker: Actor | null, reason: 'weapon' | 'storm'): void {
-    if (!target.alive) {
+    if (!target.alive || (attacker && this.areTeammates(attacker, target))) {
       return;
     }
 
@@ -2805,6 +2894,12 @@ export class FortLiteGame {
     this.dropActorLoot(target);
 
     if (target.kind === 'player') {
+      const livingTeammate = this.isDuosMode() ? this.findLivingTeammate(target) : null;
+      if (livingTeammate) {
+        this.transferPlayerControl(livingTeammate);
+        return;
+      }
+
       this.endMatch('Defeat', 'You were eliminated. Press Enter or use the button to drop into a new match.', false);
       if (reason === 'storm') {
         this.showMessage('The storm got you.', 2.5);
@@ -2842,13 +2937,19 @@ export class FortLiteGame {
       return;
     }
 
-    const alive = this.actors.filter((actor) => actor.alive);
-    if (alive.length > 1) {
+    const aliveTeams = this.getAliveTeamCount();
+    if (aliveTeams > 1) {
       return;
     }
 
     if (this.player.alive) {
-      this.endMatch('Victory Royale', 'You outlasted every bot and survived the storm. Press Enter or use the button to queue another offline match.', true);
+      this.endMatch(
+        'Victory Royale',
+        this.isDuosMode()
+          ? 'Your duo outlasted every other team. Press Enter or use the button to queue another match.'
+          : 'You outlasted every bot and survived the storm. Press Enter or use the button to queue another offline match.',
+        true
+      );
     } else {
       this.endMatch('Defeat', 'Another bot won the match. Press Enter or use the button to try again.', false);
     }
@@ -2871,7 +2972,7 @@ export class FortLiteGame {
     this.options.onMatchEnd?.({
       won,
       placement: this.calculatePlacement(),
-      eliminations: this.player.eliminationCount,
+      eliminations: this.getDisplayedEliminationCount(),
       survivalTime: Math.round(this.matchTime),
     });
   }
@@ -2881,13 +2982,14 @@ export class FortLiteGame {
       return 0;
     }
 
-    const aliveCount = this.actors.filter((actor) => actor.alive).length;
+    const aliveCount = this.isDuosMode() ? this.getAliveTeamCount() : this.actors.filter((actor) => actor.alive).length;
     return this.player.alive ? aliveCount : aliveCount + 1;
   }
 
   private updateHud(): void {
     const weapon = this.getEquippedWeapon(this.player);
     const aliveCount = this.actors.filter((actor) => actor.alive).length;
+    const teammate = this.findLivingTeammate(this.player);
     const pickupPrompt = this.findNearestLoot(this.player.position, INTERACT_DISTANCE);
     const initialStormRadius = MAP_RADIUS - 3;
     const finalStormRadius = STORM_PHASES[STORM_PHASES.length - 1]?.targetRadius ?? 1;
@@ -2920,7 +3022,7 @@ export class FortLiteGame {
       ammoInMag: this.isBuildMode() || !weapon ? 0 : weapon.magAmmo,
       ammoReserve: this.isBuildMode() || !weapon ? 0 : this.player.inventory.ammo[weapon.definition.ammoType],
       aliveCount,
-      eliminationCount: this.player.eliminationCount,
+      eliminationCount: this.getDisplayedEliminationCount(),
       materials: this.player.inventory.materials,
       stormText,
       bannerText: this.getBannerText(pickupPrompt),
@@ -2930,7 +3032,18 @@ export class FortLiteGame {
       compassText: this.getCompassText(),
       statusText,
       showHelp: this.helpVisible,
-      hotbarItems: this.getHotbarItems()
+      hotbarItems: this.getHotbarItems(),
+      minimap: {
+        mapRadius: MAP_RADIUS,
+        playerX: this.player.position.x,
+        playerZ: this.player.position.z,
+        playerYaw: this.cameraYaw,
+        teammateX: teammate?.position.x ?? null,
+        teammateZ: teammate?.position.z ?? null,
+        stormCenterX: this.storm.currentCenter.x,
+        stormCenterZ: this.storm.currentCenter.z,
+        stormRadius: this.storm.currentRadius
+      }
     });
     this.options.onPlacementChange?.(this.calculatePlacement());
   }
@@ -2986,29 +3099,15 @@ export class FortLiteGame {
       ];
     }
 
-    const firstWeapon = this.player.inventory.weapons[0];
-    const secondWeapon = this.player.inventory.weapons[1];
-
-    return [
-      {
-        key: '1',
-        label: 'Harvest',
-        detail: 'Gather mats',
-        active: this.player.inventory.mode === 'harvest'
-      },
-      {
-        key: '2',
-        label: firstWeapon?.definition.name ?? 'Empty',
-        detail: firstWeapon ? `${firstWeapon.magAmmo}/${this.player.inventory.ammo[firstWeapon.definition.ammoType]}` : 'Pick up a gun',
-        active: this.player.inventory.mode === 'weapon' && this.player.inventory.weaponIndex === 0
-      },
-      {
-        key: '3',
-        label: secondWeapon?.definition.name ?? 'Empty',
-        detail: secondWeapon ? `${secondWeapon.magAmmo}/${this.player.inventory.ammo[secondWeapon.definition.ammoType]}` : 'Pick up a gun',
-        active: this.player.inventory.mode === 'weapon' && this.player.inventory.weaponIndex === 1
-      }
-    ];
+    return WEAPON_DEFINITIONS.map((definition, slotIndex) => {
+      const weapon = this.getWeaponForSlot(this.player, slotIndex);
+      return {
+        key: String(slotIndex + 1),
+        label: definition.name,
+        detail: weapon ? `${weapon.magAmmo}/${this.player.inventory.ammo[definition.ammoType]}` : 'Pick up gun',
+        active: this.player.inventory.mode === 'weapon' && this.player.inventory.weaponIndex === slotIndex
+      };
+    });
   }
 
   private getBannerText(nearbyPickup: LootPickup | null): string {
@@ -3042,10 +3141,12 @@ export class FortLiteGame {
     }
 
     if (this.player.inventory.mode === 'harvest') {
-      return 'Harvest trees, rocks, and metal nodes, or switch to a weapon with 2 or 3.';
+      return 'Harvest trees, rocks, and metal nodes, or switch to Rifle, Shotgun, or SMG with 1, 2, or 3.';
     }
 
-    return 'Stay armed, keep moving, and be the last survivor standing.';
+    return this.isDuosMode()
+      ? 'Stay armed, keep moving, and keep your duo alive.'
+      : 'Stay armed, keep moving, and be the last survivor standing.';
   }
 
   private showMessage(text: string, duration = 1.6): void {
@@ -3079,6 +3180,43 @@ export class FortLiteGame {
     }
 
     return false;
+  }
+
+  private getWeaponSlotIndexById(weaponId: string): number {
+    const index = WEAPON_DEFINITIONS.findIndex((weapon) => weapon.id === weaponId);
+    return index === -1 ? 0 : index;
+  }
+
+  private sortWeaponsByHotbarOrder(actor: Actor): void {
+    actor.inventory.weapons.sort(
+      (a, b) => this.getWeaponSlotIndexById(a.definition.id) - this.getWeaponSlotIndexById(b.definition.id)
+    );
+  }
+
+  private getWeaponForSlot(actor: Actor, slotIndex: number): WeaponInstance | null {
+    const definition = WEAPON_DEFINITIONS[slotIndex];
+    if (!definition) {
+      return null;
+    }
+
+    return actor.inventory.weapons.find((weapon) => weapon.definition.id === definition.id) ?? null;
+  }
+
+  private getOwnedWeaponSlots(actor: Actor): number[] {
+    return actor.inventory.weapons
+      .map((weapon) => this.getWeaponSlotIndexById(weapon.definition.id))
+      .sort((a, b) => a - b);
+  }
+
+  private selectWeaponSlot(actor: Actor, slotIndex: number): boolean {
+    const weapon = this.getWeaponForSlot(actor, slotIndex);
+    if (!weapon) {
+      return false;
+    }
+
+    actor.inventory.mode = 'weapon';
+    actor.inventory.weaponIndex = slotIndex;
+    return true;
   }
 
   private findNearestLoot(position: THREE.Vector3, maxDistance: number): LootPickup | null {
@@ -3134,12 +3272,58 @@ export class FortLiteGame {
     return best;
   }
 
+  private areTeammates(actor: Actor, other: Actor): boolean {
+    return actor.teamId === other.teamId;
+  }
+
+  private findLivingTeammate(actor: Actor): Actor | null {
+    if (!this.isDuosMode()) {
+      return null;
+    }
+
+    return this.actors.find((other) => other.id !== actor.id && other.alive && this.areTeammates(actor, other)) ?? null;
+  }
+
+  private transferPlayerControl(nextPlayer: Actor): void {
+    this.player = nextPlayer;
+    this.refreshActorPresentations();
+    this.cameraYaw = nextPlayer.yaw;
+    this.cameraPitch = 0.05;
+    this.pendingLookDeltaX = 0;
+    this.pendingLookDeltaY = 0;
+    this.viewModelKick = 0;
+    this.viewModelMoveBlend = 0;
+    this.viewModelSway.set(0, 0);
+    this.syncViewModel(true);
+    this.showMessage('Your duo partner is still alive. Control swapped to them.', 2.6);
+  }
+
+  private getAliveTeamCount(): number {
+    const aliveTeams = new Set<number>();
+    for (const actor of this.actors) {
+      if (actor.alive) {
+        aliveTeams.add(actor.teamId);
+      }
+    }
+    return aliveTeams.size;
+  }
+
+  private getDisplayedEliminationCount(): number {
+    if (!this.isDuosMode()) {
+      return this.player.eliminationCount;
+    }
+
+    return this.actors
+      .filter((actor) => actor.teamId === this.player.teamId)
+      .reduce((total, actor) => total + actor.eliminationCount, 0);
+  }
+
   private findVisibleEnemy(actor: Actor, range: number): Actor | null {
     let closest: Actor | null = null;
     let bestDistance = range;
 
     for (const other of this.actors) {
-      if (!other.alive || other.id === actor.id) {
+      if (!other.alive || other.id === actor.id || this.areTeammates(actor, other)) {
         continue;
       }
 
@@ -3196,9 +3380,9 @@ export class FortLiteGame {
     if (actor.inventory.mode !== 'weapon' || actor.inventory.weapons.length === 0) {
       return null;
     }
-    const index = clamp(actor.inventory.weaponIndex, 0, actor.inventory.weapons.length - 1);
+    const index = clamp(actor.inventory.weaponIndex, 0, WEAPON_DEFINITIONS.length - 1);
     actor.inventory.weaponIndex = index;
-    return actor.inventory.weapons[index] ?? null;
+    return this.getWeaponForSlot(actor, index);
   }
 
   private getAvailableBuildMaterial(actor: Actor): MaterialType | null {
@@ -3707,7 +3891,43 @@ export class FortLiteGame {
     );
   }
 
-  private generateParticipantSpawns(count: number): THREE.Vector3[] {
+  private generateParticipantSpawns(count: number, teamSize: number): THREE.Vector3[] {
+    if (teamSize <= 1) {
+      return this.generateSoloParticipantSpawns(count);
+    }
+
+    const teamCount = Math.ceil(count / teamSize);
+    const anchors = this.generateSoloParticipantSpawns(teamCount);
+    const spawns: THREE.Vector3[] = [];
+
+    for (let teamIndex = 0; teamIndex < anchors.length; teamIndex += 1) {
+      const anchor = anchors[teamIndex];
+      const towardCenter = WORLD_CENTER.clone().sub(anchor).setY(0);
+      if (towardCenter.lengthSq() < 0.01) {
+        towardCenter.set(0, 0, -1);
+      } else {
+        towardCenter.normalize();
+      }
+
+      const side = new THREE.Vector3(towardCenter.z, 0, -towardCenter.x);
+      const preferredOffsets = [-2.8, 2.8];
+
+      for (let memberIndex = 0; memberIndex < teamSize && spawns.length < count; memberIndex += 1) {
+        let candidate = anchor.clone().addScaledVector(side, preferredOffsets[memberIndex % preferredOffsets.length]);
+        candidate = clampToCircle(candidate, WORLD_CENTER, MAP_RADIUS - PLAYER_SPAWN_PADDING - 1);
+
+        if (!this.isSpawnPointClear(candidate, spawns, 3.2)) {
+          candidate = this.findTeammateSpawnPoint(anchor, spawns);
+        }
+
+        spawns.push(candidate);
+      }
+    }
+
+    return spawns;
+  }
+
+  private generateSoloParticipantSpawns(count: number): THREE.Vector3[] {
     const spawns: THREE.Vector3[] = [];
     const angleOffset = this.rng.range(0, Math.PI * 2);
 
@@ -3749,6 +3969,27 @@ export class FortLiteGame {
     }
 
     return spawns;
+  }
+
+  private findTeammateSpawnPoint(anchor: THREE.Vector3, existingSpawns: THREE.Vector3[]): THREE.Vector3 {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const angle = this.rng.range(0, Math.PI * 2);
+      const radius = this.rng.range(2.2, 5.2);
+      const candidate = clampToCircle(
+        anchor.clone().add(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius)),
+        WORLD_CENTER,
+        MAP_RADIUS - PLAYER_SPAWN_PADDING - 1
+      );
+      if (this.isSpawnPointClear(candidate, existingSpawns, 2.8)) {
+        return candidate;
+      }
+    }
+
+    return clampToCircle(
+      anchor.clone().add(new THREE.Vector3(this.rng.range(-3.2, 3.2), 0, this.rng.range(-3.2, 3.2))),
+      WORLD_CENTER,
+      MAP_RADIUS - PLAYER_SPAWN_PADDING - 1
+    );
   }
 
   private isSpawnPointClear(point: THREE.Vector3, existingSpawns: THREE.Vector3[], minDistance: number): boolean {

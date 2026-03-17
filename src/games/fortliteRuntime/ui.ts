@@ -7,6 +7,18 @@ export interface HudHotbarItem {
   active: boolean;
 }
 
+export interface HudMinimapSnapshot {
+  mapRadius: number;
+  playerX: number;
+  playerZ: number;
+  playerYaw: number;
+  teammateX: number | null;
+  teammateZ: number | null;
+  stormCenterX: number;
+  stormCenterZ: number;
+  stormRadius: number;
+}
+
 export interface HudSnapshot {
   health: number;
   maxHealth: number;
@@ -25,11 +37,16 @@ export interface HudSnapshot {
   statusText: string;
   showHelp: boolean;
   hotbarItems: HudHotbarItem[];
+  minimap: HudMinimapSnapshot;
 }
 
 export class FortLiteHud {
   private readonly root: HTMLDivElement;
+  private readonly topLeftStack: HTMLDivElement;
   private readonly topLeft: HTMLDivElement;
+  private readonly minimapCard: HTMLDivElement;
+  private readonly minimapCanvas: HTMLCanvasElement;
+  private readonly minimapContext: CanvasRenderingContext2D | null;
   private readonly topRight: HTMLDivElement;
   private readonly banner: HTMLDivElement;
   private readonly hotbar: HTMLDivElement;
@@ -50,8 +67,26 @@ export class FortLiteHud {
     this.root = document.createElement('div');
     this.root.className = 'hud-root';
 
+    this.topLeftStack = document.createElement('div');
+    this.topLeftStack.className = 'hud-top-left-stack';
+
     this.topLeft = document.createElement('div');
     this.topLeft.className = 'hud-card hud-top-left';
+
+    this.minimapCard = document.createElement('div');
+    this.minimapCard.className = 'hud-card hud-minimap-card';
+
+    const minimapTitle = document.createElement('div');
+    minimapTitle.className = 'hud-title';
+    minimapTitle.textContent = 'Minimap';
+
+    this.minimapCanvas = document.createElement('canvas');
+    this.minimapCanvas.className = 'hud-minimap';
+    this.minimapCanvas.width = 200;
+    this.minimapCanvas.height = 200;
+    this.minimapContext = this.minimapCanvas.getContext('2d');
+    this.minimapCard.append(minimapTitle, this.minimapCanvas);
+    this.topLeftStack.append(this.topLeft, this.minimapCard);
 
     this.topRight = document.createElement('div');
     this.topRight.className = 'hud-card hud-top-right';
@@ -84,7 +119,7 @@ export class FortLiteHud {
     endCard.append(this.endTitle, this.endBody, this.restartButton);
     this.endScreen.append(endCard);
 
-    this.root.append(this.topLeft, this.topRight, this.banner, this.hotbar, this.crosshair, this.help, this.endScreen);
+    this.root.append(this.topLeftStack, this.topRight, this.banner, this.hotbar, this.crosshair, this.help, this.endScreen);
     parent.append(this.root);
   }
 
@@ -153,6 +188,8 @@ export class FortLiteHud {
       this.lastHelpVisible = snapshot.showHelp;
       this.help.classList.toggle('visible', snapshot.showHelp);
     }
+
+    this.renderMinimap(snapshot.minimap);
   }
 
   showEndScreen(title: string, body: string): void {
@@ -163,5 +200,81 @@ export class FortLiteHud {
 
   hideEndScreen(): void {
     this.endScreen.classList.remove('visible');
+  }
+
+  private renderMinimap(snapshot: HudMinimapSnapshot): void {
+    if (!this.minimapContext) {
+      return;
+    }
+
+    const ctx = this.minimapContext;
+    const { width, height } = this.minimapCanvas;
+    const centerX = width * 0.5;
+    const centerY = height * 0.5;
+    const mapRenderRadius = Math.min(width, height) * 0.43;
+    const scale = mapRenderRadius / Math.max(1, snapshot.mapRadius);
+    const toCanvas = (x: number, z: number): [number, number] => [centerX + x * scale, centerY + z * scale];
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = '#071018';
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, mapRenderRadius, 0, Math.PI * 2);
+    ctx.clip();
+
+    ctx.fillStyle = '#122129';
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
+    for (let ringIndex = 1; ringIndex <= 3; ringIndex += 1) {
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, (mapRenderRadius * ringIndex) / 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    const [stormX, stormY] = toCanvas(snapshot.stormCenterX, snapshot.stormCenterZ);
+    ctx.beginPath();
+    ctx.arc(stormX, stormY, snapshot.stormRadius * scale, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(79, 209, 255, 0.12)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#d9f7ff';
+    ctx.stroke();
+
+    if (snapshot.teammateX !== null && snapshot.teammateZ !== null) {
+      const [teammateX, teammateY] = toCanvas(snapshot.teammateX, snapshot.teammateZ);
+      ctx.beginPath();
+      ctx.arc(teammateX, teammateY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#67f0b2';
+      ctx.shadowColor = 'rgba(103, 240, 178, 0.45)';
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    const [playerX, playerY] = toCanvas(snapshot.playerX, snapshot.playerZ);
+    ctx.save();
+    ctx.translate(playerX, playerY);
+    ctx.rotate(snapshot.playerYaw);
+    ctx.beginPath();
+    ctx.moveTo(0, -9);
+    ctx.lineTo(6.5, 7);
+    ctx.lineTo(-6.5, 7);
+    ctx.closePath();
+    ctx.fillStyle = '#fff6d8';
+    ctx.shadowColor = 'rgba(255, 236, 184, 0.4)';
+    ctx.shadowBlur = 12;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, mapRenderRadius, 0, Math.PI * 2);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255, 235, 196, 0.45)';
+    ctx.stroke();
   }
 }

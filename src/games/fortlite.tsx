@@ -5,6 +5,7 @@ import "./fortlite.css";
 
 export const FortLite = ({
   seed,
+  mode,
   settings,
   paused,
   onScore,
@@ -98,6 +99,7 @@ export const FortLite = ({
 
     const game = new FortLiteGame(mount, {
       seedBase: seed,
+      mode: mode === "duos" ? "duos" : "solo",
       graphicsQuality: settings.graphicsQuality,
       showEndScreen: false,
       onFpsChange: (fps) => {
@@ -132,7 +134,7 @@ export const FortLite = ({
       gameRef.current = null;
       game.dispose();
     };
-  }, [seed]);
+  }, [seed, mode]);
 
   useEffect(() => {
     gameRef.current?.setPaused(paused);
