@@ -23,7 +23,7 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     id: 'ranger-rifle',
     name: 'Rifle',
     ammoType: 'light',
-    damage: 25,
+    damage: 13,
     range: 86,
     fireInterval: 0.2,
     magSize: 24,
