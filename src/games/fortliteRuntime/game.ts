@@ -212,6 +212,12 @@ const PARACHUTE_STEER_SPEED = 32;
 const CAMERA_POSITION_LERP = 0.22;
 const CAMERA_LOOK_LERP = 0.3;
 const CAMERA_COLLISION_PADDING = 0.45;
+const DYNAMIC_RESOLUTION_DROP_FPS = 46;
+const DYNAMIC_RESOLUTION_RECOVER_FPS = 56;
+const DYNAMIC_RESOLUTION_DROP_DELAY = 0.45;
+const DYNAMIC_RESOLUTION_RECOVER_DELAY = 1.4;
+const DYNAMIC_RESOLUTION_DROP_STEP = 0.08;
+const DYNAMIC_RESOLUTION_RECOVER_STEP = 0.05;
 
 export interface FortLiteMatchResult {
   won: boolean;
@@ -325,6 +331,9 @@ export class FortLiteGame {
   private helpVisible = false;
   private playerDamageSoundCooldown = 0;
   private lastHudRenderTime = 0;
+  private currentPixelRatio = 1;
+  private lowFpsTime = 0;
+  private highFpsTime = 0;
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (event.code === 'Tab') {
@@ -408,7 +417,7 @@ export class FortLiteGame {
     this.root.append(this.shell);
 
     this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: false,
       alpha: false,
       powerPreference: 'high-performance',
       stencil: false,
@@ -416,8 +425,8 @@ export class FortLiteGame {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.04;
-    this.renderer.setPixelRatio(this.getPixelRatioForQuality(this.graphicsQuality));
-    this.renderer.setSize(this.root.clientWidth, this.root.clientHeight, false);
+    this.currentPixelRatio = this.getPixelRatioForQuality(this.graphicsQuality);
+    this.applyRendererResolution();
     this.renderer.domElement.className = 'fortlite-canvas';
     this.shell.append(this.renderer.domElement);
 
@@ -522,6 +531,7 @@ export class FortLiteGame {
     const fps = this.fpsMeter.next(time);
     if (fps > 0) {
       this.options.onFpsChange?.(fps);
+      this.updateDynamicResolution(fps, deltaSeconds);
     }
     this.lastFrameTime = time;
     this.accumulator += deltaSeconds;
@@ -5766,7 +5776,7 @@ export class FortLiteGame {
     const height = this.root.clientHeight;
     this.camera.aspect = Math.max(1, width / Math.max(1, height));
     this.camera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(this.getPixelRatioForQuality(this.graphicsQuality));
+    this.renderer.setPixelRatio(this.currentPixelRatio);
     this.renderer.setSize(width, height, false);
   };
 
@@ -5779,13 +5789,55 @@ export class FortLiteGame {
     this.maxShotEffects = quality === 'low' ? 3 : quality === 'medium' ? 5 : 8;
     this.renderer.toneMapping = quality === 'high' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
     this.renderer.toneMappingExposure = quality === 'high' ? 1.02 : 1;
-    this.renderer.setPixelRatio(this.getPixelRatioForQuality(quality));
-    this.renderer.setSize(this.root.clientWidth, this.root.clientHeight, false);
+    this.currentPixelRatio = this.getPixelRatioForQuality(quality);
+    this.lowFpsTime = 0;
+    this.highFpsTime = 0;
+    this.applyRendererResolution();
   }
 
   private getPixelRatioForQuality(quality: GraphicsQuality): number {
-    const limit = quality === 'low' ? 1 : quality === 'medium' ? 1.25 : 1.5;
-    return Math.min(window.devicePixelRatio || 1, limit);
+    const target = quality === 'low' ? 0.85 : quality === 'medium' ? 1 : 1.12;
+    return Math.min(window.devicePixelRatio || 1, target);
+  }
+
+  private getMinimumPixelRatioForQuality(quality: GraphicsQuality): number {
+    const minimum = quality === 'low' ? 0.68 : quality === 'medium' ? 0.8 : 0.92;
+    return Math.min(window.devicePixelRatio || 1, minimum);
+  }
+
+  private applyRendererResolution(): void {
+    this.renderer.setPixelRatio(this.currentPixelRatio);
+    this.renderer.setSize(this.root.clientWidth, this.root.clientHeight, false);
+  }
+
+  private updateDynamicResolution(fps: number, dt: number): void {
+    const minimumPixelRatio = this.getMinimumPixelRatioForQuality(this.graphicsQuality);
+    const targetPixelRatio = this.getPixelRatioForQuality(this.graphicsQuality);
+
+    if (fps <= DYNAMIC_RESOLUTION_DROP_FPS && this.currentPixelRatio > minimumPixelRatio + 0.01) {
+      this.lowFpsTime += dt;
+      this.highFpsTime = 0;
+      if (this.lowFpsTime >= DYNAMIC_RESOLUTION_DROP_DELAY) {
+        this.currentPixelRatio = Math.max(minimumPixelRatio, this.currentPixelRatio - DYNAMIC_RESOLUTION_DROP_STEP);
+        this.lowFpsTime = 0;
+        this.applyRendererResolution();
+      }
+      return;
+    }
+
+    if (fps >= DYNAMIC_RESOLUTION_RECOVER_FPS && this.currentPixelRatio < targetPixelRatio - 0.01) {
+      this.highFpsTime += dt;
+      this.lowFpsTime = 0;
+      if (this.highFpsTime >= DYNAMIC_RESOLUTION_RECOVER_DELAY) {
+        this.currentPixelRatio = Math.min(targetPixelRatio, this.currentPixelRatio + DYNAMIC_RESOLUTION_RECOVER_STEP);
+        this.highFpsTime = 0;
+        this.applyRendererResolution();
+      }
+      return;
+    }
+
+    this.lowFpsTime = 0;
+    this.highFpsTime = 0;
   }
 
   private getAdjustedCount(base: number, minimum: number): number {

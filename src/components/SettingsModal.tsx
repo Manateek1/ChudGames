@@ -71,7 +71,7 @@ export const SettingsModal = ({ open, settings, onChange, onClose }: SettingsMod
               ))}
             </div>
             <p className="mt-2 text-xs text-sky-50/70">
-              Higher quality sharpens the FortLite image and adds more world detail and effects. Medium is the default balance.
+              Higher quality sharpens FortLite but costs more GPU. Low is the safest setting, and the game will ease render resolution down if FPS drops.
             </p>
           </div>
         </div>
