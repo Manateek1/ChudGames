@@ -25,7 +25,7 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     ammoType: 'light',
     damage: 25,
     range: 86,
-    fireInterval: 0.16,
+    fireInterval: 0.2,
     magSize: 24,
     reloadDuration: 1.4 * RELOAD_TIME_MULTIPLIER,
     spread: 0.009,
