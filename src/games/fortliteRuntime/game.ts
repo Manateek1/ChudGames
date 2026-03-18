@@ -136,6 +136,7 @@ interface WalkableSurface {
   minZ: number;
   maxZ: number;
   height: number;
+  minApproachY: number;
 }
 
 interface TerrainMound {
@@ -200,7 +201,7 @@ const PARACHUTE_DURATION = 10;
 const STORM_START_DELAY = 20;
 const SKYDIVE_ALTITUDE = 92;
 const COVER_DENSITY_MULTIPLIER = 1.5;
-const RENDER_DISTANCE_MULTIPLIER = 0.5;
+const RENDER_DISTANCE_MULTIPLIER = 0.25;
 const LARGE_BUILDING_SCALE = 2;
 const THIRD_PERSON_CAMERA_DISTANCE = 6.8;
 const THIRD_PERSON_CAMERA_HEIGHT = 1.9;
@@ -1080,12 +1081,15 @@ export class FortLiteGame {
     this.cameraObstacles.push(mesh);
 
     if (walkable) {
+      const top = obstacle.height;
+      const bottom = position.y - size.y * 0.5;
       this.walkableSurfaces.push({
         minX: obstacle.minX,
         maxX: obstacle.maxX,
         minZ: obstacle.minZ,
         maxZ: obstacle.maxZ,
-        height: obstacle.height
+        height: top,
+        minApproachY: bottom - Math.max(0.7, size.y * 0.85)
       });
     }
 
@@ -1410,7 +1414,8 @@ export class FortLiteGame {
       maxX: position.x + size.x * 0.52,
       minZ: position.z - size.y * 0.52,
       maxZ: position.z + size.y * 0.52,
-      height: roof.position.y + roofThickness * 0.5
+      height: roof.position.y + roofThickness * 0.5,
+      minApproachY: height - 1.1
     });
 
     if (!addLootSpots) {
@@ -3972,7 +3977,7 @@ export class FortLiteGame {
 
     for (const surface of this.walkableSurfaces) {
       if (x >= surface.minX && x <= surface.maxX && z >= surface.minZ && z <= surface.maxZ) {
-        if (surface.height <= currentY + 2.5) {
+        if (currentY >= surface.minApproachY && surface.height <= currentY + 2.5) {
           height = Math.max(height, surface.height);
         }
       }
