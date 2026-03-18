@@ -2220,7 +2220,7 @@ export class FortLiteGame {
       rightArmPivot,
       leftLegPivot,
       rightLegPivot,
-      bodyParts: [visualRoot, shadow, parachute],
+      bodyParts: [visualRoot, shadow],
       parachuteGroup: parachute,
       position: group.position.clone(),
       lastPosition: group.position.clone(),
@@ -3984,6 +3984,7 @@ export class FortLiteGame {
     for (const part of this.player.bodyParts) {
       part.visible = !firstPerson;
     }
+    this.player.parachuteGroup.visible = !firstPerson && this.player.spawnState === 'parachuting';
     this.player.ringMesh.visible = false;
   }
 
