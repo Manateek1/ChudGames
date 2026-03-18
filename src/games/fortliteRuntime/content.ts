@@ -85,4 +85,4 @@ export const MATERIAL_DISPLAY_NAMES: Record<MaterialType, string> = {
 export const MATERIAL_PRIORITY: readonly MaterialType[] = ['wood', 'stone', 'metal'];
 
 export const HELP_TEXT =
-  'W forward, A left, S back, D right. Mouse aim, Shift sprint, Space jump. FortLite now starts in third-person and holding right click swaps to first-person aim. The match begins in the sky with a parachute, and you can steer your own landing with WASD before touchdown. Walk over ammo, materials, and medkits to auto-pick them up, use E to pick up guns, Q enters or exits build mode, Z wall, Y floor, X ramp, 1 pickaxe, 2 rifle, 3 shotgun, 4 SMG, R reload or rotate, Enter restarts.';
+  'W forward, A left, S back, D right. Mouse aim, Shift sprint, Space jump. FortLite now starts in third-person and holding right click swaps to first-person aim. The match begins in the sky with a parachute, and you can steer your own landing with WASD before touchdown. Walk over ammo, materials, and medkits to auto-pick them up, use E to pick up guns, Q enters or exits build mode, Z wall, X floor, C ramp, 1 pickaxe, 2 rifle, 3 shotgun, 4 SMG, R reload or rotate, Enter restarts.';

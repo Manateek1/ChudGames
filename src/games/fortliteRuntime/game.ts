@@ -136,6 +136,13 @@ interface WalkableSurface {
   height: number;
 }
 
+interface TerrainMound {
+  center: THREE.Vector3;
+  radiusX: number;
+  radiusZ: number;
+  height: number;
+}
+
 interface ShotEffect {
   group: THREE.Group;
   lineMaterial: THREE.LineBasicMaterial;
@@ -248,6 +255,7 @@ export class FortLiteGame {
   private stormGroup = new THREE.Group();
 
   private stormWall: THREE.Mesh | null = null;
+  private stormInnerWall: THREE.Mesh | null = null;
   private safeZoneRing: THREE.LineLoop | null = null;
   private safeZoneDisc: THREE.Mesh | null = null;
   private storm!: StormRuntime;
@@ -260,6 +268,7 @@ export class FortLiteGame {
   private shotEffects: ShotEffect[] = [];
   private staticObstacles: ObstacleBox[] = [];
   private walkableSurfaces: WalkableSurface[] = [];
+  private terrainMounds: TerrainMound[] = [];
   private waterZones: WaterZone[] = [];
   private lootSpawnPoints: THREE.Vector3[] = [];
   private participantSpawns: THREE.Vector3[] = [];
@@ -294,6 +303,8 @@ export class FortLiteGame {
   private pendingLookDeltaX = 0;
   private pendingLookDeltaY = 0;
   private wheelDirection = 0;
+  private wheelAccumulator = 0;
+  private wheelCooldown = 0;
 
   private timedMessage: TimedMessage | null = null;
   private disposed = false;
@@ -347,7 +358,14 @@ export class FortLiteGame {
   };
 
   private readonly handleWheel = (event: WheelEvent): void => {
-    this.wheelDirection = event.deltaY > 0 ? 1 : -1;
+    const deltaMultiplier = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? 120 : 1;
+    const normalizedDelta = event.deltaY * deltaMultiplier;
+    this.wheelAccumulator += normalizedDelta;
+    if (this.wheelCooldown <= 0 && Math.abs(this.wheelAccumulator) >= 90) {
+      this.wheelDirection = this.wheelAccumulator > 0 ? 1 : -1;
+      this.wheelAccumulator = 0;
+      this.wheelCooldown = 0.14;
+    }
     event.preventDefault();
   };
 
@@ -424,6 +442,8 @@ export class FortLiteGame {
       this.pendingLookDeltaX = 0;
       this.pendingLookDeltaY = 0;
       this.wheelDirection = 0;
+      this.wheelAccumulator = 0;
+      this.wheelCooldown = 0;
       this.justPressedKeys.clear();
       this.justPressedMouseButtons.clear();
     }
@@ -457,6 +477,8 @@ export class FortLiteGame {
     this.justPressedKeys.clear();
     this.mouseDown.clear();
     this.justPressedMouseButtons.clear();
+    this.wheelAccumulator = 0;
+    this.wheelCooldown = 0;
   }
 
   private readonly frame = (time: number): void => {
@@ -577,6 +599,7 @@ export class FortLiteGame {
 
     this.staticObstacles = [];
     this.walkableSurfaces = [];
+    this.terrainMounds = [];
     this.lootSpawnPoints = [];
     this.actors = [];
     this.loot = [];
@@ -954,6 +977,7 @@ export class FortLiteGame {
     this.scatterScatteredBuildings('regular', this.getAdjustedCount(7, 4), MAP_RADIUS * 0.2, MAP_RADIUS * 0.96, [0x5f6968, 0x6c6e62, 0x6a716b], [0xc8dce8, 0xf3deaf, 0xc9d9c9]);
     this.scatterScatteredBuildings('forest', this.getAdjustedCount(5, 3), MAP_RADIUS * 0.2, MAP_RADIUS * 0.94, [0x4a5e49, 0x55664d, 0x405847], [0x98cb8c, 0xcfe8c7, 0x84bc7e]);
     this.scatterScatteredBuildings('desert', this.getAdjustedCount(5, 3), MAP_RADIUS * 0.22, MAP_RADIUS * 0.94, [0x8b6f49, 0x9c7d54, 0x7f6844], [0xe8c57d, 0xf3dfb2, 0xd6b37a]);
+    this.populateTerrainRelief();
     this.populateForestBiomeCover();
     this.populateRegularBiomeCover();
 
@@ -1059,8 +1083,9 @@ export class FortLiteGame {
   }
 
   private addStaticObstacle(position: THREE.Vector3, size: THREE.Vector2, height: number, color: number, addLootSpots: boolean): void {
+    const terrainY = this.sampleBaseTerrainHeight(position.x, position.z);
     this.addRaisedStaticObstacle(
-      new THREE.Vector3(position.x, height * 0.5, position.z),
+      new THREE.Vector3(position.x, terrainY + height * 0.5, position.z),
       new THREE.Vector3(size.x, height, size.y),
       color,
       false
@@ -1848,6 +1873,48 @@ export class FortLiteGame {
     }
   }
 
+  private populateTerrainRelief(): void {
+    const moundCount = this.graphicsQuality === 'low' ? 8 : this.graphicsQuality === 'medium' ? 11 : 14;
+    const biomeOrder: Biome[] = ['regular', 'forest', 'desert'];
+    const biomeColors: Record<Biome, number[]> = {
+      regular: [0x6e8855, 0x748d5c, 0x5f774a],
+      forest: [0x3f693d, 0x477443, 0x355a35],
+      desert: [0xbea262, 0xc9ad6d, 0xaa8f56]
+    };
+
+    for (let i = 0; i < moundCount; i += 1) {
+      const biome = biomeOrder[i % biomeOrder.length];
+      const center = this.findBiomeFreePoint(biome, MAP_RADIUS * 0.18, MAP_RADIUS * 0.96, this.rng.range(34, 46));
+      if (this.isPointInWater(center, 20)) {
+        continue;
+      }
+
+      this.addTerrainMound(
+        center,
+        this.rng.range(26, 44),
+        this.rng.range(24, 42),
+        this.rng.range(1.4, 4.8),
+        this.rng.pick(biomeColors[biome])
+      );
+    }
+  }
+
+  private addTerrainMound(center: THREE.Vector3, radiusX: number, radiusZ: number, height: number, color: number): void {
+    const mound = new THREE.Mesh(
+      new THREE.SphereGeometry(1, this.graphicsQuality === 'low' ? 16 : 22, this.graphicsQuality === 'low' ? 8 : 12, 0, Math.PI * 2, 0, Math.PI * 0.5),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.98, metalness: 0.01 })
+    );
+    mound.position.set(center.x, height - 0.08, center.z);
+    mound.scale.set(radiusX, height, radiusZ);
+    this.environmentGroup.add(mound);
+    this.terrainMounds.push({
+      center: center.clone(),
+      radiusX,
+      radiusZ,
+      height
+    });
+  }
+
   private createRockCluster(center: THREE.Vector3, count: number, radius: number): void {
     for (let i = 0; i < count; i += 1) {
       const offset = randomPointInCircle(this.rng, radius);
@@ -1919,11 +1986,12 @@ export class FortLiteGame {
   }
 
   private addRockObstacle(position: THREE.Vector3, size: THREE.Vector2, height: number): void {
+    const terrainY = this.sampleBaseTerrainHeight(position.x, position.z);
     const mesh = new THREE.Mesh(
       new THREE.DodecahedronGeometry(1, 0),
       new THREE.MeshStandardMaterial({ color: 0x6f7a80, roughness: 0.92, metalness: 0.06 })
     );
-    mesh.position.set(position.x, height * 0.42, position.z);
+    mesh.position.set(position.x, terrainY + height * 0.42, position.z);
     mesh.scale.set(size.x * 0.4, height * 0.34, size.y * 0.4);
     mesh.rotation.set(this.rng.range(-0.24, 0.24), this.rng.range(0, Math.PI * 2), this.rng.range(-0.2, 0.2));
     this.environmentGroup.add(mesh);
@@ -1934,7 +2002,7 @@ export class FortLiteGame {
       maxX: position.x + size.x * 0.5,
       minZ: position.z - size.y * 0.5,
       maxZ: position.z + size.y * 0.5,
-      height,
+      height: terrainY + height,
       mesh
     };
 
@@ -1970,6 +2038,7 @@ export class FortLiteGame {
     const mesh = new THREE.Group();
     const color = RESOURCE_COLORS[materialType];
     const biome = this.getBiomeAtPosition(position);
+    const terrainY = this.sampleBaseTerrainHeight(position.x, position.z);
 
     if (materialType === 'wood') {
       const trunkHeight = biome === 'forest' ? 3.6 : biome === 'desert' ? 2.8 : 3.1;
@@ -2005,7 +2074,7 @@ export class FortLiteGame {
       }
     }
 
-    mesh.position.copy(position);
+    mesh.position.set(position.x, terrainY, position.z);
     this.tagTarget(mesh, 'resource', null);
 
     return {
@@ -2021,7 +2090,7 @@ export class FortLiteGame {
         maxX: position.x + 1.45,
         minZ: position.z - 1.45,
         maxZ: position.z + 1.45,
-        height: materialType === 'wood' ? 3.5 : 2.7,
+        height: terrainY + (materialType === 'wood' ? 3.5 : 2.7),
         mesh
       }
     };
@@ -2540,6 +2609,8 @@ export class FortLiteGame {
   }
 
   private attachPickup(pickup: LootPickup): void {
+    const terrainY = this.sampleBaseTerrainHeight(pickup.position.x, pickup.position.z);
+    pickup.position.y = Math.max(pickup.position.y, terrainY);
     pickup.mesh.position.copy(pickup.position);
     this.lootGroup.add(pickup.mesh);
     this.loot.push(pickup);
@@ -2562,9 +2633,9 @@ export class FortLiteGame {
     this.prepareNextStormTarget();
 
     const stormMaterial = new THREE.MeshBasicMaterial({
-      color: 0x8d4bff,
+      color: 0x6b34d8,
       transparent: true,
-      opacity: 0.24,
+      opacity: 0.38,
       depthWrite: false,
       side: THREE.DoubleSide
     });
@@ -2573,9 +2644,22 @@ export class FortLiteGame {
     this.stormWall.position.y = 14;
     this.stormGroup.add(this.stormWall);
 
+    this.stormInnerWall = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.04, 1.04, 34, 64, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: 0x16091f,
+        transparent: true,
+        opacity: 0.26,
+        depthWrite: false,
+        side: THREE.BackSide
+      })
+    );
+    this.stormInnerWall.position.y = 17;
+    this.stormGroup.add(this.stormInnerWall);
+
     this.safeZoneDisc = new THREE.Mesh(
       new THREE.CircleGeometry(1, 64),
-      new THREE.MeshBasicMaterial({ color: 0xffe8a8, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xffefba, transparent: true, opacity: 0.11, side: THREE.DoubleSide, depthWrite: false })
     );
     this.safeZoneDisc.rotation.x = -Math.PI / 2;
     this.safeZoneDisc.position.y = 0.03;
@@ -2611,6 +2695,8 @@ export class FortLiteGame {
         this.timedMessage = null;
       }
     }
+
+    this.wheelCooldown = Math.max(0, this.wheelCooldown - dt);
 
     if (this.state === 'ended') {
       if (this.options.showEndScreen !== false && this.justPressedKeys.has('Enter')) {
@@ -2813,8 +2899,8 @@ export class FortLiteGame {
     const shotgunPressed = this.justPressedKeys.has('Digit3');
     const smgPressed = this.justPressedKeys.has('Digit4');
     const wallPressed = riflePressed || this.justPressedKeys.has('KeyZ');
-    const floorPressed = shotgunPressed || this.justPressedKeys.has('KeyY');
-    const rampPressed = smgPressed || this.justPressedKeys.has('KeyX');
+    const floorPressed = shotgunPressed || this.justPressedKeys.has('KeyX');
+    const rampPressed = smgPressed || this.justPressedKeys.has('KeyC');
 
     if (this.justPressedKeys.has('KeyQ')) {
       this.buildMode = !this.buildMode;
@@ -3270,12 +3356,14 @@ export class FortLiteGame {
   }
 
   private updateStormVisuals(): void {
-    if (!this.stormWall || !this.safeZoneRing || !this.safeZoneDisc) {
+    if (!this.stormWall || !this.stormInnerWall || !this.safeZoneRing || !this.safeZoneDisc) {
       return;
     }
 
     this.stormWall.position.set(this.storm.currentCenter.x, 9, this.storm.currentCenter.z);
     this.stormWall.scale.set(this.storm.currentRadius, 1, this.storm.currentRadius);
+    this.stormInnerWall.position.set(this.storm.currentCenter.x, 17, this.storm.currentCenter.z);
+    this.stormInnerWall.scale.set(this.storm.currentRadius, 1, this.storm.currentRadius);
 
     this.safeZoneRing.position.set(this.storm.targetCenter.x, 0.05, this.storm.targetCenter.z);
     this.safeZoneRing.scale.set(this.storm.targetRadius, this.storm.targetRadius, this.storm.targetRadius);
@@ -3720,7 +3808,7 @@ export class FortLiteGame {
   }
 
   private sampleGroundHeight(x: number, z: number, currentY: number): number {
-    let height = 0;
+    let height = this.sampleBaseTerrainHeight(x, z);
 
     for (const surface of this.walkableSurfaces) {
       if (x >= surface.minX && x <= surface.maxX && z >= surface.minZ && z <= surface.maxZ) {
@@ -3758,6 +3846,24 @@ export class FortLiteGame {
           }
         }
       }
+    }
+
+    return height;
+  }
+
+  private sampleBaseTerrainHeight(x: number, z: number): number {
+    let height = 0;
+
+    for (const mound of this.terrainMounds) {
+      const normalizedX = (x - mound.center.x) / Math.max(1, mound.radiusX);
+      const normalizedZ = (z - mound.center.z) / Math.max(1, mound.radiusZ);
+      const distanceSquared = (normalizedX * normalizedX) + (normalizedZ * normalizedZ);
+      if (distanceSquared >= 1) {
+        continue;
+      }
+
+      const falloff = 1 - distanceSquared;
+      height = Math.max(height, mound.height * falloff * falloff);
     }
 
     return height;
@@ -4313,9 +4419,9 @@ export class FortLiteGame {
   private getHotbarItems(): Array<{ key: string; label: string; detail: string; active: boolean }> {
     if (this.isBuildMode()) {
       return [
-        { key: '2', label: 'Wall', detail: '20 mats', active: this.selectedBuildPiece === 'wall' },
-        { key: '3', label: 'Floor', detail: '20 mats', active: this.selectedBuildPiece === 'floor' },
-        { key: '4', label: 'Ramp', detail: '20 mats', active: this.selectedBuildPiece === 'ramp' }
+        { key: 'Z', label: 'Wall', detail: '20 mats', active: this.selectedBuildPiece === 'wall' },
+        { key: 'X', label: 'Floor', detail: '20 mats', active: this.selectedBuildPiece === 'floor' },
+        { key: 'C', label: 'Ramp', detail: '20 mats', active: this.selectedBuildPiece === 'ramp' }
       ];
     }
 
