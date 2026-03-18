@@ -198,7 +198,7 @@ const BOT_STARTER_STONE = 20;
 const MEDKIT_SPAWN_COUNT = 10;
 const WORLD_CENTER = new THREE.Vector3(0, 0, 0);
 const PARACHUTE_DURATION = 10;
-const STORM_START_DELAY = 20;
+const STORM_START_DELAY = 0;
 const SKYDIVE_ALTITUDE = 92;
 const COVER_DENSITY_MULTIPLIER = 1.5;
 const RENDER_DISTANCE_MULTIPLIER = 0.25;
@@ -641,8 +641,8 @@ export class FortLiteGame {
     this.hud.hideEndScreen();
     this.showMessage(
       this.isDuosMode()
-        ? 'FortLite Duos is live. You drop straight from the sky now, the storm waits 20 seconds, and right click snaps you into first-person aim.'
-        : 'You now drop straight from the sky with a steerable parachute. Land fast, loot up, and use right click to swap from third-person into first-person aim.',
+        ? 'FortLite Duos is live. You drop straight from the sky, the storm starts immediately, and right click snaps you into first-person aim.'
+        : 'You now drop straight from the sky with a steerable parachute. The storm starts right away, so land fast, loot up, and use right click to swap from third-person into first-person aim.',
       4
     );
     this.refreshNavigation();
