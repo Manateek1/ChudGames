@@ -357,11 +357,14 @@ export class FortLiteGame {
     this.root.append(this.shell);
 
     this.renderer = new THREE.WebGLRenderer({
-      antialias: false,
+      antialias: true,
       alpha: false,
       powerPreference: 'high-performance',
       stencil: false,
     });
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.04;
     this.renderer.setPixelRatio(this.getPixelRatioForQuality(this.graphicsQuality));
     this.renderer.setSize(this.root.clientWidth, this.root.clientHeight, false);
     this.renderer.domElement.className = 'fortlite-canvas';
@@ -483,14 +486,14 @@ export class FortLiteGame {
   };
 
   private installLighting(): void {
-    const hemi = new THREE.HemisphereLight(0xf6f3df, 0x2f3a28, 1.35);
+    const hemi = new THREE.HemisphereLight(0xf8f6e9, 0x31402a, 1.5);
     this.scene.add(hemi);
 
-    const sun = new THREE.DirectionalLight(0xfff0ce, 1.2);
+    const sun = new THREE.DirectionalLight(0xffefc8, 1.32);
     sun.position.set(-34, 44, 20);
     this.scene.add(sun);
 
-    const fill = new THREE.DirectionalLight(0x8fd6ff, 0.32);
+    const fill = new THREE.DirectionalLight(0x9fdcff, 0.42);
     fill.position.set(26, 18, -16);
     this.scene.add(fill);
   }
@@ -619,7 +622,7 @@ export class FortLiteGame {
 
   private buildWorld(): void {
     const perimeterWallCount = 44 * MAP_SCALE;
-    const randomObstacleCount = 28 * MAP_SCALE;
+    const randomObstacleCount = 22 * MAP_SCALE;
 
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(MAP_RADIUS, 128),
@@ -927,6 +930,10 @@ export class FortLiteGame {
     this.createCityDistrict(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.18, MAP_RADIUS * 0.46, 44), 0x5d6769, 0xcde1ea, 4);
     this.createCityDistrict(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.34, MAP_RADIUS * 0.68, 44), 0x6a6c61, 0xf0ddb0, 4);
     this.createCityDistrict(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.26, MAP_RADIUS * 0.62, 42), 0x8d7048, 0xe9c889, 3);
+    this.createCityDistrict(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.24, MAP_RADIUS * 0.58, 42), 0x435b48, 0xaad59c, 3);
+    this.scatterScatteredBuildings('regular', 7, MAP_RADIUS * 0.2, MAP_RADIUS * 0.96, [0x5f6968, 0x6c6e62, 0x6a716b], [0xc8dce8, 0xf3deaf, 0xc9d9c9]);
+    this.scatterScatteredBuildings('forest', 5, MAP_RADIUS * 0.2, MAP_RADIUS * 0.94, [0x4a5e49, 0x55664d, 0x405847], [0x98cb8c, 0xcfe8c7, 0x84bc7e]);
+    this.scatterScatteredBuildings('desert', 5, MAP_RADIUS * 0.22, MAP_RADIUS * 0.94, [0x8b6f49, 0x9c7d54, 0x7f6844], [0xe8c57d, 0xf3dfb2, 0xd6b37a]);
     this.populateRegularBiomeCover();
 
     for (let i = 0; i < randomObstacleCount; i += 1) {
@@ -1619,6 +1626,102 @@ export class FortLiteGame {
     }
   }
 
+  private scatterScatteredBuildings(
+    biome: Biome,
+    count: number,
+    minRadius: number,
+    maxRadius: number,
+    basePalette: number[],
+    accentPalette: number[]
+  ): void {
+    for (let index = 0; index < count; index += 1) {
+      const center = this.findBiomeFreePoint(biome, minRadius, maxRadius, 26);
+      const baseColor = this.rng.pick(basePalette);
+      const accentColor = this.rng.pick(accentPalette);
+      const roll = this.rng.next();
+
+      if (roll < 0.42) {
+        this.createScatteredOutpost(center, baseColor, accentColor);
+      } else if (roll < 0.74) {
+        this.createTallStructure(center, baseColor, accentColor, this.rng.range(12.8, 18.4));
+      } else {
+        this.createSmallHut(center, baseColor, accentColor);
+        const annexPoint = this.findBiomeFreePoint(biome, Math.max(minRadius, center.length() - 26), Math.min(maxRadius, center.length() + 26), 16);
+        this.createSmallHut(
+          annexPoint,
+          new THREE.Color(baseColor).offsetHSL(0.01, 0.02, 0.04).getHex(),
+          accentColor
+        );
+      }
+    }
+  }
+
+  private createScatteredOutpost(center: THREE.Vector3, baseColor: number, accentColor: number): void {
+    const boxCount = this.rng.int(2, 4);
+    const boxes: Array<{ offset: THREE.Vector3; size: THREE.Vector2; height: number }> = [];
+    for (let index = 0; index < boxCount; index += 1) {
+      const offset = index === 0
+        ? new THREE.Vector3(0, 0, 0)
+        : new THREE.Vector3(this.rng.range(-14, 14), 0, this.rng.range(-14, 14));
+      boxes.push({
+        offset,
+        size: new THREE.Vector2(this.rng.range(7.5, 13.5), this.rng.range(6.5, 12.5)),
+        height: this.rng.range(4.2, 7.8)
+      });
+    }
+
+    this.addTerrainPatch(
+      center,
+      this.rng.range(18, 28),
+      this.rng.range(16, 24),
+      new THREE.Color(baseColor).offsetHSL(0, 0.03, -0.08).getHex(),
+      0.2,
+      this.rng.range(-0.3, 0.3)
+    );
+    this.createCompound(center, baseColor, boxes);
+
+    if (this.rng.next() > 0.38) {
+      const hutOffset = new THREE.Vector3(this.rng.range(-18, 18), 0, this.rng.range(-18, 18));
+      this.createSmallHut(
+        center.clone().add(hutOffset),
+        new THREE.Color(baseColor).offsetHSL(0.01, 0.02, 0.06).getHex(),
+        accentColor
+      );
+    }
+
+    if (this.rng.next() > 0.52) {
+      const towerOffset = new THREE.Vector3(this.rng.range(-16, 16), 0, this.rng.range(-16, 16));
+      this.createTallStructure(
+        center.clone().add(towerOffset),
+        new THREE.Color(baseColor).offsetHSL(0, 0.03, -0.02).getHex(),
+        accentColor,
+        this.rng.range(11.4, 14.4)
+      );
+    }
+
+    const coverOffsets = [
+      new THREE.Vector3(-8, 0, 6),
+      new THREE.Vector3(8, 0, -6),
+      new THREE.Vector3(-10, 0, -8),
+      new THREE.Vector3(10, 0, 8)
+    ];
+    for (const coverOffset of coverOffsets) {
+      if (this.rng.next() > 0.65) {
+        continue;
+      }
+
+      const coverPoint = center.clone().add(coverOffset.clone().multiplyScalar(this.rng.range(0.7, 1.25)));
+      this.addStaticObstacle(
+        coverPoint,
+        new THREE.Vector2(this.rng.range(2.4, 4.4), this.rng.range(2.2, 4)),
+        this.rng.range(2.1, 3.4),
+        new THREE.Color(accentColor).offsetHSL(0, -0.02, -0.1).getHex(),
+        false
+      );
+      this.lootSpawnPoints.push(coverPoint.clone().add(new THREE.Vector3(0, 0, 3.1)));
+    }
+  }
+
   private createSmallHut(center: THREE.Vector3, baseColor: number, accentColor: number): void {
     const footprint = new THREE.Vector2(this.rng.range(5.2, 7.8), this.rng.range(4.8, 7.2));
     const hutHeight = this.rng.range(3.2, 4.4);
@@ -1976,63 +2079,88 @@ export class FortLiteGame {
     const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xffdfc0, roughness: 0.92 });
     const gearMaterial = new THREE.MeshStandardMaterial({ color: 0x253447, roughness: 0.66, metalness: 0.18 });
 
-    const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.42, 0.34), gearMaterial);
-    pelvis.position.y = 0.95;
+    const pelvis = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 14), gearMaterial);
+    pelvis.position.set(0, 0.95, 0.02);
+    pelvis.scale.set(1.15, 0.82, 0.95);
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.98, 0.44), clothMaterial);
-    body.position.y = 1.58;
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.82, 5, 12), clothMaterial);
+    body.position.y = 1.62;
 
-    const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.54, 0.18), accentMaterial);
-    chestPlate.position.set(0, 1.6, 0.3);
+    const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.48, 0.18), accentMaterial);
+    chestPlate.position.set(0, 1.62, 0.28);
 
-    const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.66, 0.22), gearMaterial);
-    backpack.position.set(0, 1.54, -0.32);
+    const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.6, 0.2), gearMaterial);
+    backpack.position.set(0, 1.56, -0.28);
 
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.52, 0.48), skinMaterial);
-    head.position.y = 2.34;
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.16, 10), skinMaterial);
+    neck.position.y = 2.1;
 
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.08), accentMaterial);
-    visor.position.set(0, 2.37, 0.25);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), skinMaterial);
+    head.position.y = 2.38;
+    head.scale.set(1, 1.08, 1);
+
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.11, 0.08), accentMaterial);
+    visor.position.set(0, 2.4, 0.24);
+
+    const shoulderPadLeft = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 10), gearMaterial);
+    shoulderPadLeft.position.set(-0.36, 1.88, 0.02);
+    shoulderPadLeft.scale.set(1.3, 0.8, 1.1);
+
+    const shoulderPadRight = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 10), gearMaterial);
+    shoulderPadRight.position.set(0.36, 1.88, 0.02);
+    shoulderPadRight.scale.set(1.3, 0.8, 1.1);
 
     const leftArmPivot = new THREE.Group();
-    leftArmPivot.position.set(-0.5, 1.95, 0);
-    const leftUpperArm = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.62, 0.22), clothMaterial);
-    leftUpperArm.position.y = -0.34;
-    const leftForearm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.56, 0.18), gearMaterial);
-    leftForearm.position.y = -0.92;
-    const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), skinMaterial);
-    leftHand.position.y = -1.26;
+    leftArmPivot.position.set(-0.4, 1.9, 0.02);
+    const leftUpperArm = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.115, 0.58, 10), clothMaterial);
+    leftUpperArm.position.y = -0.3;
+    const leftElbow = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 10), gearMaterial);
+    leftElbow.position.y = -0.62;
+    const leftForearm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.5, 10), gearMaterial);
+    leftForearm.position.y = -0.88;
+    const leftHand = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), skinMaterial);
+    leftHand.position.y = -1.2;
     leftArmPivot.add(leftUpperArm, leftForearm, leftHand);
+    leftArmPivot.add(leftElbow);
 
     const rightArmPivot = new THREE.Group();
-    rightArmPivot.position.set(0.5, 1.95, 0);
-    const rightUpperArm = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.62, 0.22), clothMaterial);
-    rightUpperArm.position.y = -0.34;
-    const rightForearm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.56, 0.18), gearMaterial);
-    rightForearm.position.y = -0.92;
-    const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), skinMaterial);
-    rightHand.position.y = -1.26;
+    rightArmPivot.position.set(0.4, 1.9, 0.02);
+    const rightUpperArm = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.115, 0.58, 10), clothMaterial);
+    rightUpperArm.position.y = -0.3;
+    const rightElbow = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 10), gearMaterial);
+    rightElbow.position.y = -0.62;
+    const rightForearm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.5, 10), gearMaterial);
+    rightForearm.position.y = -0.88;
+    const rightHand = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), skinMaterial);
+    rightHand.position.y = -1.2;
     rightArmPivot.add(rightUpperArm, rightForearm, rightHand);
+    rightArmPivot.add(rightElbow);
 
     const leftLegPivot = new THREE.Group();
-    leftLegPivot.position.set(-0.2, 0.95, 0.02);
-    const leftThigh = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.68, 0.24), clothMaterial);
-    leftThigh.position.y = -0.38;
-    const leftShin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.68, 0.2), gearMaterial);
-    leftShin.position.y = -1;
-    const leftFoot = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.14, 0.4), bootMaterial);
-    leftFoot.position.set(0, -1.42, 0.08);
+    leftLegPivot.position.set(-0.18, 0.92, 0.03);
+    const leftThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.12, 0.66, 10), clothMaterial);
+    leftThigh.position.y = -0.36;
+    const leftKnee = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), gearMaterial);
+    leftKnee.position.y = -0.68;
+    const leftShin = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.1, 0.64, 10), gearMaterial);
+    leftShin.position.y = -0.98;
+    const leftFoot = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.42), bootMaterial);
+    leftFoot.position.set(0, -1.36, 0.1);
     leftLegPivot.add(leftThigh, leftShin, leftFoot);
+    leftLegPivot.add(leftKnee);
 
     const rightLegPivot = new THREE.Group();
-    rightLegPivot.position.set(0.2, 0.95, 0.02);
-    const rightThigh = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.68, 0.24), clothMaterial);
-    rightThigh.position.y = -0.38;
-    const rightShin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.68, 0.2), gearMaterial);
-    rightShin.position.y = -1;
-    const rightFoot = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.14, 0.4), bootMaterial);
-    rightFoot.position.set(0, -1.42, 0.08);
+    rightLegPivot.position.set(0.18, 0.92, 0.03);
+    const rightThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.12, 0.66, 10), clothMaterial);
+    rightThigh.position.y = -0.36;
+    const rightKnee = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), gearMaterial);
+    rightKnee.position.y = -0.68;
+    const rightShin = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.1, 0.64, 10), gearMaterial);
+    rightShin.position.y = -0.98;
+    const rightFoot = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.42), bootMaterial);
+    rightFoot.position.set(0, -1.36, 0.1);
     rightLegPivot.add(rightThigh, rightShin, rightFoot);
+    rightLegPivot.add(rightKnee);
 
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(1.02, 1.18, 24),
@@ -2048,7 +2176,21 @@ export class FortLiteGame {
 
     const parachute = this.createParachuteMesh(new THREE.Color(color).offsetHSL(0, 0.02, 0.1).getHex(), accent);
 
-    visualRoot.add(pelvis, body, chestPlate, backpack, head, visor, leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot);
+    visualRoot.add(
+      pelvis,
+      body,
+      chestPlate,
+      backpack,
+      neck,
+      head,
+      visor,
+      shoulderPadLeft,
+      shoulderPadRight,
+      leftArmPivot,
+      rightArmPivot,
+      leftLegPivot,
+      rightLegPivot
+    );
     group.add(shadow, visualRoot, ring, parachute);
     group.position.copy(dropStart);
     group.rotation.y = Math.PI;
@@ -3519,13 +3661,27 @@ export class FortLiteGame {
 
     const swing = Math.sin(actor.stepTime) * 0.65 * actor.moveBlend;
     const counterSwing = Math.sin(actor.stepTime + Math.PI) * 0.65 * actor.moveBlend;
+    const idleBreath = Math.sin(this.matchTime * 2.8 + actor.stepTime * 0.18) * (actor.spawnState === 'grounded' ? 0.025 : 0.012);
+    const torsoSway = Math.cos(actor.stepTime * 0.5) * 0.08 * actor.moveBlend;
+    const strideBob = Math.abs(Math.cos(actor.stepTime * 1.9)) * 0.075 * actor.moveBlend;
     const airborneLean = actor.spawnState === 'parachuting' ? 0.38 : 0;
     actor.visualRoot.rotation.x = airborneLean;
-    actor.visualRoot.rotation.z = actor.spawnState === 'parachuting' ? Math.sin(actor.stepTime * 0.6) * 0.06 : 0;
-    actor.leftArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -1.05 : swing;
-    actor.rightArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -1.02 : counterSwing;
-    actor.leftLegPivot.rotation.x = actor.spawnState === 'parachuting' ? 0.58 : counterSwing * 0.9;
-    actor.rightLegPivot.rotation.x = actor.spawnState === 'parachuting' ? 0.56 : swing * 0.9;
+    actor.visualRoot.rotation.y = torsoSway * 0.24;
+    actor.visualRoot.rotation.z = actor.spawnState === 'parachuting' ? Math.sin(actor.stepTime * 0.6) * 0.06 : torsoSway * 0.3;
+    actor.visualRoot.position.set(torsoSway * 0.12, idleBreath + strideBob, 0);
+    actor.bodyMesh.rotation.x = actor.spawnState === 'parachuting' ? 0.12 : idleBreath * 0.65 + strideBob * 0.22;
+    actor.bodyMesh.rotation.y = torsoSway * 0.16;
+    actor.bodyMesh.rotation.z = actor.spawnState === 'parachuting' ? 0 : torsoSway * 0.4;
+    actor.headMesh.rotation.x = actor.spawnState === 'parachuting' ? -0.08 : idleBreath * 0.9;
+    actor.headMesh.rotation.y = torsoSway * 0.45;
+    actor.leftArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -1.05 : swing * 0.95 - 0.12;
+    actor.rightArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -1.02 : counterSwing * 0.95 - 0.12;
+    actor.leftArmPivot.rotation.z = actor.spawnState === 'parachuting' ? -0.1 : -0.18 - torsoSway * 1.15;
+    actor.rightArmPivot.rotation.z = actor.spawnState === 'parachuting' ? 0.1 : 0.18 + torsoSway * 1.15;
+    actor.leftLegPivot.rotation.x = actor.spawnState === 'parachuting' ? 0.58 : counterSwing * 0.82 + 0.08;
+    actor.rightLegPivot.rotation.x = actor.spawnState === 'parachuting' ? 0.56 : swing * 0.82 + 0.08;
+    actor.leftLegPivot.rotation.z = actor.spawnState === 'parachuting' ? 0.12 : -0.05 + torsoSway * 0.32;
+    actor.rightLegPivot.rotation.z = actor.spawnState === 'parachuting' ? -0.12 : 0.05 - torsoSway * 0.32;
     actor.parachuteGroup.visible = actor.spawnState === 'parachuting';
 
     const ringOpacity = actor === this.player
@@ -5037,7 +5193,7 @@ export class FortLiteGame {
   }
 
   private getPixelRatioForQuality(quality: GraphicsQuality): number {
-    const limit = quality === 'low' ? 0.72 : quality === 'medium' ? 0.9 : 1.08;
+    const limit = quality === 'low' ? 0.8 : quality === 'medium' ? 0.98 : 1.16;
     return Math.min(window.devicePixelRatio || 1, limit);
   }
 }
