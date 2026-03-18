@@ -84,6 +84,7 @@ export interface ProgressState {
   achievements: string[];
   stats: Record<string, GameStats>;
   dailyBest: Record<string, { gameId: string; score: number }>;
+  ebtBucks: number;
 }
 
 export interface DailyChallenge {

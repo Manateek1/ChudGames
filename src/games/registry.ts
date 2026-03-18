@@ -266,23 +266,22 @@ export const gameRegistry: GameDefinition[] = [
     id: "fortlite",
     title: "FortLite",
     genre: "action",
-    shortDescription: "Offline first-person battle royale with bots and building.",
-    description: "Drop into the existing FortLite prototype inside ChudGames, loot weapons, harvest materials, build cover, and outlast the bot lobby in solo or duos.",
+    shortDescription: "Offline battle royale with bots, building, and third-person combat.",
+    description: "Drop into FortLite inside ChudGames, loot weapons, harvest materials, build cover, and outlast the bot lobby in solo or duos.",
     controls: [
       "Move: WASD",
       "Look / Aim: Mouse after clicking the arena",
       "Shoot / Harvest: Left Mouse",
       "Sprint: Left Shift, Jump: Space, Pick Up Gun: E, Zoom: Hold Right Mouse",
       "Weapons: 1 Rifle, 2 Shotgun, 3 SMG",
-      "Fullscreen: F",
       "Build: Q to enter/exit, Z wall, Y floor, X ramp, R to rotate",
     ],
     tutorial: [
-      "Click into the arena to capture the mouse and enter first-person control.",
+      "Click into the arena to capture the mouse, steer your drop, and fight in third-person until you aim.",
       "Loot weapons and ammo fast, then harvest materials so you can build under pressure.",
       "Stay ahead of the storm and be the last player or last duo alive to win the match.",
     ],
-    tags: ["battle-royale", "fps", "building"],
+    tags: ["battle-royale", "third-person", "building"],
     difficulties: ["normal"],
     modes: [
       {

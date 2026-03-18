@@ -3,6 +3,8 @@ import type { GameComponentProps } from "../types/arcade";
 import { FortLiteGame } from "./fortliteRuntime/game";
 import "./fortlite.css";
 
+const FULLSCREEN_HINT_KEY = "fortlite_fullscreen_hint_hidden";
+
 export const FortLite = ({
   seed,
   mode,
@@ -21,6 +23,12 @@ export const FortLite = ({
   const graphicsQualityRef = useRef(settings.graphicsQuality);
   const gameOverRef = useRef(onGameOver);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showFullscreenHint, setShowFullscreenHint] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    return window.localStorage.getItem(FULLSCREEN_HINT_KEY) !== "true";
+  });
   const fullscreenSupported = typeof document !== "undefined" && document.fullscreenEnabled;
 
   useEffect(() => {
@@ -95,6 +103,19 @@ export const FortLite = ({
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [fullscreenSupported]);
+
+  useEffect(() => {
+    if (!fullscreenSupported || !showFullscreenHint) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowFullscreenHint(false);
+      window.localStorage.setItem(FULLSCREEN_HINT_KEY, "true");
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [fullscreenSupported, showFullscreenHint]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -181,7 +202,7 @@ export const FortLite = ({
 
   return (
     <div ref={viewportRef} className="fortlite-viewport">
-      {fullscreenSupported && (
+      {fullscreenSupported && showFullscreenHint && (
         <button
           type="button"
           className="fortlite-fullscreen-btn"

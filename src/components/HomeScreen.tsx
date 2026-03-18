@@ -11,6 +11,7 @@ interface HomeScreenProps {
 export const HomeScreen = ({ onPlay, onDaily, daily, dailyGame, progress }: HomeScreenProps): React.JSX.Element => {
   const sessions = Object.values(progress.stats).reduce((sum, item) => sum + item.plays, 0);
   const wins = Object.values(progress.stats).reduce((sum, item) => sum + item.wins, 0);
+  const ebtBucks = progress.ebtBucks ?? 0;
 
   return (
     <section className="space-y-8">
@@ -43,7 +44,7 @@ export const HomeScreen = ({ onPlay, onDaily, daily, dailyGame, progress }: Home
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <article className="arcade-card">
           <p className="arcade-kicker">Daily Challenge</p>
           <h3 className="mt-2 text-xl font-semibold text-slate-50">{dailyGame?.title ?? "Loading"}</h3>
@@ -54,6 +55,11 @@ export const HomeScreen = ({ onPlay, onDaily, daily, dailyGame, progress }: Home
           <p className="arcade-kicker">Achievements</p>
           <h3 className="mt-2 font-display text-4xl text-slate-50">{progress.achievements.length}</h3>
           <p className="mt-2 text-sm text-sky-100/72">Unlocked badges</p>
+        </article>
+        <article className="arcade-card">
+          <p className="arcade-kicker">EBT Bucks</p>
+          <h3 className="mt-2 font-display text-4xl text-slate-50">{ebtBucks}</h3>
+          <p className="mt-2 text-sm text-sky-100/72">Earn 1 for every win</p>
         </article>
         <article className="arcade-card">
           <p className="arcade-kicker">Sessions</p>

@@ -6,6 +6,7 @@ interface GameDetailProps {
   difficulty: Difficulty;
   mode: string;
   bestScore: number;
+  ebtBucks: number;
   daily: boolean;
   reducedMotion: boolean;
   onDifficultyChange: (difficulty: Difficulty) => void;
@@ -19,6 +20,7 @@ export const GameDetail = ({
   difficulty,
   mode,
   bestScore,
+  ebtBucks,
   daily,
   reducedMotion,
   onDifficultyChange,
@@ -91,6 +93,10 @@ export const GameDetail = ({
           <div className="rounded-2xl border border-sky-100/14 bg-[rgba(255,255,255,0.06)] p-3">
             <p className="arcade-kicker">{isFortLite ? "Wins" : "Personal Best"}</p>
             <p className="font-display text-4xl text-white">{bestScore}</p>
+          </div>
+          <div className="rounded-2xl border border-amber-200/18 bg-[rgba(255,210,108,0.08)] p-3">
+            <p className="arcade-kicker">EBT Bucks</p>
+            <p className="font-display text-4xl text-white">{ebtBucks}</p>
           </div>
         </div>
       </article>

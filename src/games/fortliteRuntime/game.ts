@@ -4113,7 +4113,7 @@ export class FortLiteGame {
     }
 
     if (!this.isPointerLocked()) {
-      return 'Click once to capture the mouse for unlimited 360 look. FortLite now defaults to third-person, and right click switches to first-person aim. Press F for fullscreen.';
+      return 'Click once to capture the mouse for unlimited 360 look. FortLite defaults to third-person, and right click switches to first-person aim.';
     }
 
     if (this.player.spawnState === 'parachuting') {

@@ -19,6 +19,7 @@ export const defaultProgress: ProgressState = {
   achievements: [],
   stats: {},
   dailyBest: {},
+  ebtBucks: 0,
 };
 
 const safeParse = <T,>(raw: string | null, fallback: T): T => {
@@ -107,6 +108,7 @@ export const withGameResult = (
     stats: {
       ...progress.stats,
     },
+    ebtBucks: progress.ebtBucks + (params.won ? 1 : 0),
   };
 
   const currentHigh = next.highScores[params.gameId][params.difficulty] ?? 0;

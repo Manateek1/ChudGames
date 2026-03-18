@@ -151,7 +151,13 @@ function App(): React.JSX.Element {
       const unlocked = evaluateAchievements(next, selectedGame.id, mode, result);
       if (unlocked.length > 0) {
         next = withUnlockedAchievements(next, unlocked);
-        setToast(`Achievement unlocked: ${unlocked.length}`);
+        setToast(
+          result.won
+            ? `+1 EBT Buck • Achievement unlocked: ${unlocked.length}`
+            : `Achievement unlocked: ${unlocked.length}`,
+        );
+      } else if (result.won) {
+        setToast("+1 EBT Buck");
       }
 
       return next;
@@ -185,6 +191,7 @@ function App(): React.JSX.Element {
         <span>Featured: FortLite</span>
         <span>Daily: {dailyGame?.title ?? "..."}</span>
         <span>Achievements: {progress.achievements.length}</span>
+        <span>EBT Bucks: {progress.ebtBucks}</span>
       </div>
     </header>
   );
@@ -229,6 +236,7 @@ function App(): React.JSX.Element {
               difficulty={difficulty}
               mode={mode}
               bestScore={bestScore}
+              ebtBucks={progress.ebtBucks}
               daily={daily.gameId === selectedGame.id}
               reducedMotion={settings.reducedMotion}
               onDifficultyChange={setDifficulty}

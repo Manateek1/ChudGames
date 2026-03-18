@@ -36,14 +36,14 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     id: 'auto-shotgun',
     name: 'Shotgun',
     ammoType: 'shells',
-    damage: 10,
-    range: 26,
-    fireInterval: 0.72,
-    magSize: 6,
-    reloadDuration: 1.9,
-    spread: 0.082,
+    damage: 14,
+    range: 30,
+    fireInterval: 0.64,
+    magSize: 8,
+    reloadDuration: 1.7,
+    spread: 0.058,
     pellets: 5,
-    reservePickup: 12,
+    reservePickup: 14,
     color: 0xf6ae2d
   },
   {
@@ -85,4 +85,4 @@ export const MATERIAL_DISPLAY_NAMES: Record<MaterialType, string> = {
 export const MATERIAL_PRIORITY: readonly MaterialType[] = ['wood', 'stone', 'metal'];
 
 export const HELP_TEXT =
-  'W forward, A left, S back, D right. Mouse aim, Shift sprint, Space jump, F fullscreen. FortLite now starts in third-person and holding right click swaps to first-person aim. The match begins in the sky with a parachute, and you can steer your own landing with WASD before touchdown. Walk over ammo and materials to auto-pick them up, use E to pick up guns, Q enters or exits build mode, Z wall, Y floor, X ramp, 1 rifle, 2 shotgun, 3 SMG, R reload or rotate, Enter restarts.';
+  'W forward, A left, S back, D right. Mouse aim, Shift sprint, Space jump. FortLite now starts in third-person and holding right click swaps to first-person aim. The match begins in the sky with a parachute, and you can steer your own landing with WASD before touchdown. Walk over ammo and materials to auto-pick them up, use E to pick up guns, Q enters or exits build mode, Z wall, Y floor, X ramp, 1 rifle, 2 shotgun, 3 SMG, R reload or rotate, Enter restarts.';
