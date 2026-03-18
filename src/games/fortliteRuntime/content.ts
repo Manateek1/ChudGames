@@ -3,6 +3,7 @@ import type { MaterialType, StormPhase, WeaponDefinition } from './types';
 export const BASE_MAP_RADIUS = 240;
 export const MAP_SCALE = 3;
 export const STORM_SPEED_MULTIPLIER = 4;
+const RELOAD_TIME_MULTIPLIER = 2.5;
 export const MAP_RADIUS = BASE_MAP_RADIUS * MAP_SCALE;
 export const PLAYER_EYE_HEIGHT = 1.7;
 export const ACTOR_RADIUS = 1;
@@ -26,7 +27,7 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     range: 86,
     fireInterval: 0.16,
     magSize: 24,
-    reloadDuration: 1.4,
+    reloadDuration: 1.4 * RELOAD_TIME_MULTIPLIER,
     spread: 0.009,
     pellets: 1,
     reservePickup: 36,
@@ -40,7 +41,7 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     range: 30,
     fireInterval: 0.64,
     magSize: 8,
-    reloadDuration: 1.7,
+    reloadDuration: 1.7 * RELOAD_TIME_MULTIPLIER,
     spread: 0.058,
     pellets: 5,
     reservePickup: 14,
@@ -54,7 +55,7 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     range: 54,
     fireInterval: 0.08,
     magSize: 30,
-    reloadDuration: 1.65,
+    reloadDuration: 1.65 * RELOAD_TIME_MULTIPLIER,
     spread: 0.015,
     pellets: 1,
     reservePickup: 40,

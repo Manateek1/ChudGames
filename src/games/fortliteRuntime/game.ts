@@ -199,6 +199,8 @@ const WORLD_CENTER = new THREE.Vector3(0, 0, 0);
 const PARACHUTE_DURATION = 7;
 const STORM_START_DELAY = 20;
 const SKYDIVE_ALTITUDE = 92;
+const COVER_DENSITY_MULTIPLIER = 1.5;
+const RENDER_DISTANCE_MULTIPLIER = 0.5;
 const THIRD_PERSON_CAMERA_DISTANCE = 6.8;
 const THIRD_PERSON_CAMERA_HEIGHT = 1.9;
 const THIRD_PERSON_CAMERA_SHOULDER = 0.92;
@@ -407,9 +409,9 @@ export class FortLiteGame {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xaed7ff);
-    this.scene.fog = new THREE.Fog(0xaed7ff, MAP_RADIUS * 0.68, MAP_RADIUS * 1.95);
+    this.scene.fog = new THREE.Fog(0xaed7ff, MAP_RADIUS * 0.68 * RENDER_DISTANCE_MULTIPLIER, MAP_RADIUS * 1.95 * RENDER_DISTANCE_MULTIPLIER);
 
-    this.camera = new THREE.PerspectiveCamera(DEFAULT_CAMERA_FOV, Math.max(1, this.root.clientWidth / Math.max(1, this.root.clientHeight)), 0.05, MAP_RADIUS * 2.2);
+    this.camera = new THREE.PerspectiveCamera(DEFAULT_CAMERA_FOV, Math.max(1, this.root.clientWidth / Math.max(1, this.root.clientHeight)), 0.05, MAP_RADIUS * 2.2 * RENDER_DISTANCE_MULTIPLIER);
     this.camera.rotation.order = 'YXZ';
     this.camera.position.set(0, 9, 12);
     this.scene.add(this.camera);
@@ -663,7 +665,7 @@ export class FortLiteGame {
 
   private buildWorld(): void {
     const perimeterWallCount = this.getAdjustedCount(44 * MAP_SCALE, 54);
-    const randomObstacleCount = this.getAdjustedCount(18 * MAP_SCALE, 24);
+    const randomObstacleCount = this.getAdjustedCoverCount(18 * MAP_SCALE, 24);
     const groundSegments = this.graphicsQuality === 'low' ? 48 : this.graphicsQuality === 'medium' ? 64 : 88;
 
     const ground = new THREE.Mesh(
@@ -981,9 +983,9 @@ export class FortLiteGame {
     this.createCityDistrict(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.34, MAP_RADIUS * 0.68, 44), 0x6a6c61, 0xf0ddb0, regularDistrictDensity);
     this.createCityDistrict(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.26, MAP_RADIUS * 0.62, 42), 0x8d7048, 0xe9c889, biomeDistrictDensity);
     this.createCityDistrict(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.24, MAP_RADIUS * 0.58, 42), 0x435b48, 0xaad59c, biomeDistrictDensity);
-    this.scatterScatteredBuildings('regular', this.getAdjustedCount(7, 4), MAP_RADIUS * 0.2, MAP_RADIUS * 0.96, [0x5f6968, 0x6c6e62, 0x6a716b], [0xc8dce8, 0xf3deaf, 0xc9d9c9]);
-    this.scatterScatteredBuildings('forest', this.getAdjustedCount(5, 3), MAP_RADIUS * 0.2, MAP_RADIUS * 0.94, [0x4a5e49, 0x55664d, 0x405847], [0x98cb8c, 0xcfe8c7, 0x84bc7e]);
-    this.scatterScatteredBuildings('desert', this.getAdjustedCount(5, 3), MAP_RADIUS * 0.22, MAP_RADIUS * 0.94, [0x8b6f49, 0x9c7d54, 0x7f6844], [0xe8c57d, 0xf3dfb2, 0xd6b37a]);
+    this.scatterScatteredBuildings('regular', this.getAdjustedCoverCount(7, 4), MAP_RADIUS * 0.2, MAP_RADIUS * 0.96, [0x5f6968, 0x6c6e62, 0x6a716b], [0xc8dce8, 0xf3deaf, 0xc9d9c9]);
+    this.scatterScatteredBuildings('forest', this.getAdjustedCoverCount(5, 3), MAP_RADIUS * 0.2, MAP_RADIUS * 0.94, [0x4a5e49, 0x55664d, 0x405847], [0x98cb8c, 0xcfe8c7, 0x84bc7e]);
+    this.scatterScatteredBuildings('desert', this.getAdjustedCoverCount(5, 3), MAP_RADIUS * 0.22, MAP_RADIUS * 0.94, [0x8b6f49, 0x9c7d54, 0x7f6844], [0xe8c57d, 0xf3dfb2, 0xd6b37a]);
     this.populateTerrainRelief();
     this.populateForestBiomeCover();
     this.populateRegularBiomeCover();
@@ -1827,17 +1829,17 @@ export class FortLiteGame {
   }
 
   private populateRegularBiomeCover(): void {
-    for (let i = 0; i < 10 * MAP_SCALE; i += 1) {
+    for (let i = 0; i < this.getScaledCoverLoopCount(10 * MAP_SCALE); i += 1) {
       const point = this.findBiomeFreePoint('regular', MAP_RADIUS * 0.12, MAP_RADIUS * 0.96, 5.2);
       this.addResourceNodeAt(point, this.rng.next() > 0.24 ? 'wood' : 'stone');
     }
 
-    for (let i = 0; i < 5 * MAP_SCALE; i += 1) {
+    for (let i = 0; i < this.getScaledCoverLoopCount(5 * MAP_SCALE); i += 1) {
       const clusterCenter = this.findBiomeFreePoint('regular', MAP_RADIUS * 0.16, MAP_RADIUS * 0.96, 14);
       this.createRockCluster(clusterCenter, this.rng.int(3, 6), this.rng.range(10, 18));
     }
 
-    for (let i = 0; i < 3 * MAP_SCALE; i += 1) {
+    for (let i = 0; i < this.getScaledCoverLoopCount(3 * MAP_SCALE); i += 1) {
       const hutCenter = this.findBiomeFreePoint('regular', MAP_RADIUS * 0.18, MAP_RADIUS * 0.94, 16);
       this.createSmallHut(
         hutCenter,
@@ -1845,7 +1847,7 @@ export class FortLiteGame {
         this.rng.pick([0xc3d5cf, 0xf0ddb0, 0xb2d3e0])
       );
 
-      for (let treeIndex = 0; treeIndex < 3; treeIndex += 1) {
+      for (let treeIndex = 0; treeIndex < Math.round(3 * COVER_DENSITY_MULTIPLIER); treeIndex += 1) {
         const treePoint = this.findBiomeFreePoint('regular', MAP_RADIUS * 0.18, MAP_RADIUS * 0.96, 5);
         this.addResourceNodeAt(treePoint, 'wood');
       }
@@ -1853,10 +1855,10 @@ export class FortLiteGame {
   }
 
   private populateForestBiomeCover(): void {
-    for (let i = 0; i < 4 * MAP_SCALE; i += 1) {
+    for (let i = 0; i < this.getScaledCoverLoopCount(4 * MAP_SCALE); i += 1) {
       const clusterCenter = this.findBiomeFreePoint('forest', MAP_RADIUS * 0.18, MAP_RADIUS * 0.96, 12);
       const clusterRadius = this.rng.range(8, 14);
-      const treeCount = this.rng.int(6, 10);
+      const treeCount = Math.max(1, Math.round(this.rng.int(6, 10) * COVER_DENSITY_MULTIPLIER));
 
       for (let treeIndex = 0; treeIndex < treeCount; treeIndex += 1) {
         const point = clusterCenter.clone().add(randomPointInCircle(this.rng, clusterRadius));
@@ -1874,7 +1876,7 @@ export class FortLiteGame {
       }
     }
 
-    for (let i = 0; i < 7 * MAP_SCALE; i += 1) {
+    for (let i = 0; i < this.getScaledCoverLoopCount(7 * MAP_SCALE); i += 1) {
       const point = this.findBiomeFreePoint('forest', MAP_RADIUS * 0.18, MAP_RADIUS * 0.96, 4.2);
       this.addResourceNodeAt(point, this.rng.next() > 0.9 ? 'stone' : 'wood');
     }
@@ -5695,6 +5697,14 @@ export class FortLiteGame {
   private getAdjustedCount(base: number, minimum: number): number {
     const multiplier = this.graphicsQuality === 'low' ? 0.3 : this.graphicsQuality === 'medium' ? 0.42 : 0.56;
     return Math.max(minimum, Math.round(base * multiplier));
+  }
+
+  private getAdjustedCoverCount(base: number, minimum: number): number {
+    return Math.max(minimum, Math.round(this.getAdjustedCount(base, minimum) * COVER_DENSITY_MULTIPLIER));
+  }
+
+  private getScaledCoverLoopCount(base: number): number {
+    return Math.max(1, Math.round(base * COVER_DENSITY_MULTIPLIER));
   }
 
   private getAdjustedDistrictDensity(base: number): number {
