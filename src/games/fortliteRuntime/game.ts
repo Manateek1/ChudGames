@@ -2808,15 +2808,20 @@ export class FortLiteGame {
 
   private handlePlayerLoadoutInput(): void {
     const actor = this.player;
-    const riflePressed = this.justPressedKeys.has('Digit1');
-    const shotgunPressed = this.justPressedKeys.has('Digit2');
-    const smgPressed = this.justPressedKeys.has('Digit3');
+    const pickaxePressed = this.justPressedKeys.has('Digit1');
+    const riflePressed = this.justPressedKeys.has('Digit2');
+    const shotgunPressed = this.justPressedKeys.has('Digit3');
+    const smgPressed = this.justPressedKeys.has('Digit4');
     const wallPressed = riflePressed || this.justPressedKeys.has('KeyZ');
     const floorPressed = shotgunPressed || this.justPressedKeys.has('KeyY');
     const rampPressed = smgPressed || this.justPressedKeys.has('KeyX');
 
     if (this.justPressedKeys.has('KeyQ')) {
       this.buildMode = !this.buildMode;
+    }
+
+    if (pickaxePressed && !this.isBuildMode()) {
+      actor.inventory.mode = 'harvest';
     }
 
     if (wallPressed) {
@@ -4130,7 +4135,7 @@ export class FortLiteGame {
             : this.isPointInWater(this.player.position)
               ? 'Wading through water'
               : this.player.inventory.mode === 'harvest'
-                ? 'Harvest tool ready'
+                ? 'Pickaxe ready'
                 : weapon
                   ? `${weapon.definition.name} ready`
                   : 'Find a weapon';
@@ -4138,7 +4143,7 @@ export class FortLiteGame {
     this.hud.render({
       health: this.player.health,
       maxHealth: this.player.maxHealth,
-      weaponName: this.isBuildMode() ? `Build Tool (${this.selectedBuildPiece})` : weapon ? weapon.definition.name : 'Harvest Tool',
+      weaponName: this.isBuildMode() ? `Build Tool (${this.selectedBuildPiece})` : weapon ? weapon.definition.name : 'Pickaxe',
       ammoInMag: this.isBuildMode() || !weapon ? 0 : weapon.magAmmo,
       ammoReserve: this.isBuildMode() || !weapon ? 0 : this.player.inventory.ammo[weapon.definition.ammoType],
       aliveCount,
@@ -4308,21 +4313,25 @@ export class FortLiteGame {
   private getHotbarItems(): Array<{ key: string; label: string; detail: string; active: boolean }> {
     if (this.isBuildMode()) {
       return [
-        { key: 'Z', label: 'Wall', detail: '20 mats', active: this.selectedBuildPiece === 'wall' },
-        { key: 'Y', label: 'Floor', detail: '20 mats', active: this.selectedBuildPiece === 'floor' },
-        { key: 'X', label: 'Ramp', detail: '20 mats', active: this.selectedBuildPiece === 'ramp' }
+        { key: '2', label: 'Wall', detail: '20 mats', active: this.selectedBuildPiece === 'wall' },
+        { key: '3', label: 'Floor', detail: '20 mats', active: this.selectedBuildPiece === 'floor' },
+        { key: '4', label: 'Ramp', detail: '20 mats', active: this.selectedBuildPiece === 'ramp' }
       ];
     }
 
-    return WEAPON_DEFINITIONS.map((definition, slotIndex) => {
+    const items = [
+      { key: '1', label: 'Pickaxe', detail: 'Harvest', active: this.player.inventory.mode === 'harvest' }
+    ];
+
+    return items.concat(WEAPON_DEFINITIONS.map((definition, slotIndex) => {
       const weapon = this.getWeaponForSlot(this.player, slotIndex);
       return {
-        key: String(slotIndex + 1),
+        key: String(slotIndex + 2),
         label: definition.name,
         detail: weapon ? `${weapon.magAmmo}/${this.player.inventory.ammo[definition.ammoType]}` : 'Pick up gun',
         active: this.player.inventory.mode === 'weapon' && this.player.inventory.weaponIndex === slotIndex
       };
-    });
+    }));
   }
 
   private getBannerText(nearbyPickup: LootPickup | null): string {
@@ -4360,7 +4369,7 @@ export class FortLiteGame {
     }
 
     if (this.player.inventory.mode === 'harvest') {
-      return 'Harvest trees, rocks, and metal nodes, or switch to Rifle, Shotgun, or SMG with 1, 2, or 3.';
+      return 'Harvest trees, rocks, and metal nodes with the pickaxe, or switch to Rifle, Shotgun, or SMG with 2, 3, or 4.';
     }
 
     return this.isDuosMode()
@@ -4958,50 +4967,42 @@ export class FortLiteGame {
 
   private createHarvestToolMesh(): THREE.Group {
     const tool = new THREE.Group();
-    const handleMaterial = new THREE.MeshStandardMaterial({ color: 0x77512d, roughness: 0.9 });
-    const gripMaterial = new THREE.MeshStandardMaterial({ color: 0x1e242d, roughness: 0.72, metalness: 0.12 });
-    const headMaterial = new THREE.MeshStandardMaterial({ color: 0xaebdcb, roughness: 0.26, metalness: 0.84 });
-    const accentMaterial = new THREE.MeshStandardMaterial({ color: 0x4fd1ff, emissive: 0x16485c, emissiveIntensity: 0.28, roughness: 0.34, metalness: 0.32 });
+    const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x7a4523, roughness: 0.92 });
+    const ferruleMaterial = new THREE.MeshStandardMaterial({ color: 0x6d4221, roughness: 0.7, metalness: 0.12 });
+    const steelMaterial = new THREE.MeshStandardMaterial({ color: 0xc4ccd5, roughness: 0.22, metalness: 0.9 });
+    const darkSteelMaterial = new THREE.MeshStandardMaterial({ color: 0x4e5661, roughness: 0.34, metalness: 0.78 });
+    const boltMaterial = new THREE.MeshStandardMaterial({ color: 0x9a592f, roughness: 0.54, metalness: 0.18 });
 
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.048, 1.28, 12), handleMaterial);
-    shaft.rotation.z = 0.8;
-    shaft.position.set(0.18, -0.12, -0.34);
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.05, 1.7, 10), woodMaterial);
+    handle.position.set(0.04, -0.26, -0.46);
+    handle.rotation.z = 0.64;
 
-    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.34, 12), gripMaterial);
-    grip.rotation.z = shaft.rotation.z;
-    grip.position.set(-0.03, -0.34, -0.18);
+    const ferrule = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.065, 0.16, 10), ferruleMaterial);
+    ferrule.position.set(0.52, 0.16, -0.86);
+    ferrule.rotation.z = 0.64;
 
-    const pommel = new THREE.Mesh(
-      new THREE.SphereGeometry(0.06, 10, 10),
-      new THREE.MeshStandardMaterial({ color: 0xadb6c1, roughness: 0.34, metalness: 0.76 })
-    );
-    pommel.position.set(-0.15, -0.47, -0.08);
+    const headCore = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.2), darkSteelMaterial);
+    headCore.position.set(0.63, 0.28, -0.95);
+    headCore.rotation.set(0.08, 0.16, -0.12);
 
-    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.075, 0.12, 10), gripMaterial);
-    collar.rotation.z = shaft.rotation.z;
-    collar.position.set(0.37, 0.08, -0.46);
+    const topSpike = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.92, 10), steelMaterial);
+    topSpike.position.set(0.42, 0.68, -0.98);
+    topSpike.rotation.z = -0.98;
 
-    const headCore = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.18), headMaterial);
-    headCore.position.set(0.45, 0.18, -0.5);
-    headCore.rotation.z = -0.12;
+    const lowerBlade = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.075, 1.1, 12), steelMaterial);
+    lowerBlade.position.set(0.94, 0.12, -1.02);
+    lowerBlade.rotation.z = Math.PI * 0.5 + 0.9;
+    lowerBlade.scale.set(1, 1, 0.42);
 
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.09, 0.08), headMaterial);
-    blade.position.set(0.56, 0.24, -0.53);
-    blade.rotation.z = -0.24;
+    const lowerBladeTip = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.26, 12), steelMaterial);
+    lowerBladeTip.position.set(1.26, -0.06, -1.03);
+    lowerBladeTip.rotation.z = Math.PI * 0.5 + 0.9;
 
-    const bladeTip = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.22, 10), headMaterial);
-    bladeTip.position.set(0.83, 0.3, -0.56);
-    bladeTip.rotation.z = -Math.PI * 0.5 - 0.24;
+    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.07, 12), boltMaterial);
+    bolt.position.set(0.66, 0.37, -0.9);
+    bolt.rotation.x = Math.PI * 0.5;
 
-    const rearSpike = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.34, 10), headMaterial);
-    rearSpike.position.set(0.18, 0.15, -0.47);
-    rearSpike.rotation.z = Math.PI * 0.5 - 0.08;
-
-    const accentStrip = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.04), accentMaterial);
-    accentStrip.position.set(0.46, 0.29, -0.5);
-    accentStrip.rotation.z = -0.24;
-
-    tool.add(shaft, grip, pommel, collar, headCore, blade, bladeTip, rearSpike, accentStrip);
+    tool.add(handle, ferrule, headCore, topSpike, lowerBlade, lowerBladeTip, bolt);
     return tool;
   }
 
