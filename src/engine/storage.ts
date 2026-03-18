@@ -8,7 +8,7 @@ export const defaultSettings: AppSettings = {
   music: true,
   reducedMotion: false,
   theme: "neon",
-  graphicsQuality: "medium",
+  graphicsQuality: "low",
   showFps: false,
   scanlines: true,
 };

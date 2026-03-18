@@ -57,6 +57,9 @@ interface Actor {
   leftLegPivot: THREE.Group;
   rightLegPivot: THREE.Group;
   bodyParts: THREE.Object3D[];
+  heldItemRoot: THREE.Group;
+  heldItemMesh: THREE.Object3D | null;
+  heldItemKey: string;
   parachuteGroup: THREE.Group;
   position: THREE.Vector3;
   lastPosition: THREE.Vector3;
@@ -353,7 +356,7 @@ export class FortLiteGame {
     this.root = root;
     this.options = options;
     this.matchMode = options.mode === 'duos' ? 'duos' : 'solo';
-    this.graphicsQuality = options.graphicsQuality ?? 'high';
+    this.graphicsQuality = options.graphicsQuality ?? 'low';
     this.root.innerHTML = '';
 
     this.shell = document.createElement('div');
@@ -361,7 +364,7 @@ export class FortLiteGame {
     this.root.append(this.shell);
 
     this.renderer = new THREE.WebGLRenderer({
-      antialias: this.graphicsQuality === 'high',
+      antialias: false,
       alpha: false,
       powerPreference: 'high-performance',
       stencil: false,
@@ -628,7 +631,7 @@ export class FortLiteGame {
   private buildWorld(): void {
     const perimeterWallCount = this.getAdjustedCount(44 * MAP_SCALE, 54);
     const randomObstacleCount = this.getAdjustedCount(18 * MAP_SCALE, 24);
-    const groundSegments = this.graphicsQuality === 'low' ? 72 : this.graphicsQuality === 'medium' ? 96 : 128;
+    const groundSegments = this.graphicsQuality === 'low' ? 48 : this.graphicsQuality === 'medium' ? 64 : 88;
 
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(MAP_RADIUS, groundSegments),
@@ -668,7 +671,7 @@ export class FortLiteGame {
       { position: new THREE.Vector3(246, 0, 438), radiusX: 70, radiusZ: 32, color: 0x738a54, opacity: 0.42, rotation: -0.16 }
     ];
 
-    const terrainPatchStep = this.graphicsQuality === 'low' ? 2 : 1;
+    const terrainPatchStep = this.graphicsQuality === 'low' ? 3 : this.graphicsQuality === 'medium' ? 2 : 1;
     for (let patchIndex = 0; patchIndex < terrainPatches.length; patchIndex += terrainPatchStep) {
       const patch = terrainPatches[patchIndex];
       this.addTerrainPatch(patch.position, patch.radiusX, patch.radiusZ, patch.color, patch.opacity, patch.rotation);
@@ -1205,10 +1208,10 @@ export class FortLiteGame {
   }
 
   private addCloudLayer(): void {
-    const cloudCount = this.graphicsQuality === 'low' ? 10 + MAP_SCALE * 2 : this.graphicsQuality === 'medium' ? 14 + MAP_SCALE * 3 : 18 + MAP_SCALE * 4;
-    const puffSegments = this.graphicsQuality === 'low' ? 7 : this.graphicsQuality === 'medium' ? 8 : 10;
-    const minPuffs = this.graphicsQuality === 'low' ? 2 : 3;
-    const maxPuffs = this.graphicsQuality === 'low' ? 4 : this.graphicsQuality === 'medium' ? 5 : 6;
+    const cloudCount = this.graphicsQuality === 'low' ? 5 + MAP_SCALE : this.graphicsQuality === 'medium' ? 8 + MAP_SCALE * 2 : 12 + MAP_SCALE * 3;
+    const puffSegments = this.graphicsQuality === 'low' ? 5 : this.graphicsQuality === 'medium' ? 6 : 8;
+    const minPuffs = this.graphicsQuality === 'low' ? 1 : 2;
+    const maxPuffs = this.graphicsQuality === 'low' ? 3 : this.graphicsQuality === 'medium' ? 4 : 5;
 
     for (let index = 0; index < cloudCount; index += 1) {
       const anchor = randomPointInCircle(this.rng, MAP_RADIUS + 140);
@@ -2110,94 +2113,51 @@ export class FortLiteGame {
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.03;
 
-    const bootMaterial = new THREE.MeshStandardMaterial({ color: 0x1c2229, roughness: 0.86 });
-    const clothMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.72 });
-    const accentMaterial = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.42, metalness: 0.08 });
+    const clothMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.8 });
+    const accentMaterial = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.42, metalness: 0.12 });
     const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xffdfc0, roughness: 0.92 });
-    const gearMaterial = new THREE.MeshStandardMaterial({ color: 0x253447, roughness: 0.66, metalness: 0.18 });
+    const limbMaterial = new THREE.MeshStandardMaterial({ color: 0x243241, roughness: 0.72, metalness: 0.12 });
 
-    const pelvis = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 14), gearMaterial);
-    pelvis.position.set(0, 0.95, 0.02);
-    pelvis.scale.set(1.15, 0.82, 0.95);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 1.34, 10), clothMaterial);
+    body.position.y = 1.36;
 
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.82, 5, 12), clothMaterial);
-    body.position.y = 1.62;
+    const bodyBand = new THREE.Mesh(new THREE.TorusGeometry(0.29, 0.05, 6, 14), accentMaterial);
+    bodyBand.position.y = 1.46;
+    bodyBand.rotation.x = Math.PI / 2;
 
-    const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.48, 0.18), accentMaterial);
-    chestPlate.position.set(0, 1.62, 0.28);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 12), skinMaterial);
+    head.position.y = 2.34;
 
-    const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.6, 0.2), gearMaterial);
-    backpack.position.set(0, 1.56, -0.28);
-
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.16, 10), skinMaterial);
-    neck.position.y = 2.1;
-
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), skinMaterial);
-    head.position.y = 2.38;
-    head.scale.set(1, 1.08, 1);
-
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.11, 0.08), accentMaterial);
-    visor.position.set(0, 2.4, 0.24);
-
-    const shoulderPadLeft = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 10), gearMaterial);
-    shoulderPadLeft.position.set(-0.36, 1.88, 0.02);
-    shoulderPadLeft.scale.set(1.3, 0.8, 1.1);
-
-    const shoulderPadRight = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 10), gearMaterial);
-    shoulderPadRight.position.set(0.36, 1.88, 0.02);
-    shoulderPadRight.scale.set(1.3, 0.8, 1.1);
+    const headBand = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.025, 6, 14), accentMaterial);
+    headBand.position.set(0, 2.34, 0.1);
+    headBand.rotation.x = Math.PI / 2;
 
     const leftArmPivot = new THREE.Group();
-    leftArmPivot.position.set(-0.4, 1.9, 0.02);
-    const leftUpperArm = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.115, 0.58, 10), clothMaterial);
-    leftUpperArm.position.y = -0.3;
-    const leftElbow = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 10), gearMaterial);
-    leftElbow.position.y = -0.62;
-    const leftForearm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.5, 10), gearMaterial);
-    leftForearm.position.y = -0.88;
-    const leftHand = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), skinMaterial);
-    leftHand.position.y = -1.2;
-    leftArmPivot.add(leftUpperArm, leftForearm, leftHand);
-    leftArmPivot.add(leftElbow);
+    leftArmPivot.position.set(-0.48, 1.76, 0.04);
+    const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.9, 8), limbMaterial);
+    leftArm.position.y = -0.44;
+    leftArmPivot.add(leftArm);
 
     const rightArmPivot = new THREE.Group();
-    rightArmPivot.position.set(0.4, 1.9, 0.02);
-    const rightUpperArm = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.115, 0.58, 10), clothMaterial);
-    rightUpperArm.position.y = -0.3;
-    const rightElbow = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 10), gearMaterial);
-    rightElbow.position.y = -0.62;
-    const rightForearm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.5, 10), gearMaterial);
-    rightForearm.position.y = -0.88;
-    const rightHand = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), skinMaterial);
-    rightHand.position.y = -1.2;
-    rightArmPivot.add(rightUpperArm, rightForearm, rightHand);
-    rightArmPivot.add(rightElbow);
+    rightArmPivot.position.set(0.48, 1.76, 0.04);
+    const rightArm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.9, 8), limbMaterial);
+    rightArm.position.y = -0.44;
+    rightArmPivot.add(rightArm);
 
     const leftLegPivot = new THREE.Group();
-    leftLegPivot.position.set(-0.18, 0.92, 0.03);
-    const leftThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.12, 0.66, 10), clothMaterial);
-    leftThigh.position.y = -0.36;
-    const leftKnee = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), gearMaterial);
-    leftKnee.position.y = -0.68;
-    const leftShin = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.1, 0.64, 10), gearMaterial);
-    leftShin.position.y = -0.98;
-    const leftFoot = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.42), bootMaterial);
-    leftFoot.position.set(0, -1.36, 0.1);
-    leftLegPivot.add(leftThigh, leftShin, leftFoot);
-    leftLegPivot.add(leftKnee);
+    leftLegPivot.position.set(-0.18, 0.7, 0.02);
+    const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.1, 1.04, 8), limbMaterial);
+    leftLeg.position.y = -0.52;
+    leftLegPivot.add(leftLeg);
 
     const rightLegPivot = new THREE.Group();
-    rightLegPivot.position.set(0.18, 0.92, 0.03);
-    const rightThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.12, 0.66, 10), clothMaterial);
-    rightThigh.position.y = -0.36;
-    const rightKnee = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), gearMaterial);
-    rightKnee.position.y = -0.68;
-    const rightShin = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.1, 0.64, 10), gearMaterial);
-    rightShin.position.y = -0.98;
-    const rightFoot = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.42), bootMaterial);
-    rightFoot.position.set(0, -1.36, 0.1);
-    rightLegPivot.add(rightThigh, rightShin, rightFoot);
-    rightLegPivot.add(rightKnee);
+    rightLegPivot.position.set(0.18, 0.7, 0.02);
+    const rightLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.1, 1.04, 8), limbMaterial);
+    rightLeg.position.y = -0.52;
+    rightLegPivot.add(rightLeg);
+
+    const heldItemRoot = new THREE.Group();
+    heldItemRoot.position.set(0.58, 1.54, 0.24);
 
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(1.02, 1.18, 24),
@@ -2214,26 +2174,22 @@ export class FortLiteGame {
     const parachute = this.createParachuteMesh(new THREE.Color(color).offsetHSL(0, 0.02, 0.1).getHex(), accent);
 
     visualRoot.add(
-      pelvis,
       body,
-      chestPlate,
-      backpack,
-      neck,
+      bodyBand,
       head,
-      visor,
-      shoulderPadLeft,
-      shoulderPadRight,
+      headBand,
       leftArmPivot,
       rightArmPivot,
       leftLegPivot,
-      rightLegPivot
+      rightLegPivot,
+      heldItemRoot
     );
     group.add(shadow, visualRoot, ring, parachute);
     group.position.copy(dropStart);
     group.rotation.y = Math.PI;
 
     this.actorGroup.add(group);
-    this.raycastTargets.push(body, head, chestPlate);
+    this.raycastTargets.push(body, head);
 
     const inventory: InventoryState = {
       mode: 'harvest',
@@ -2258,6 +2214,9 @@ export class FortLiteGame {
       leftLegPivot,
       rightLegPivot,
       bodyParts: [visualRoot, shadow],
+      heldItemRoot,
+      heldItemMesh: null,
+      heldItemKey: 'hidden',
       parachuteGroup: parachute,
       position: group.position.clone(),
       lastPosition: group.position.clone(),
@@ -2281,7 +2240,7 @@ export class FortLiteGame {
       dropTarget: groundSpawn.clone()
     };
 
-    for (const child of [body, head, chestPlate]) {
+    for (const child of [body, head]) {
       child.userData.kind = 'actor';
       child.userData.ref = actor;
     }
@@ -2301,11 +2260,38 @@ export class FortLiteGame {
       );
       actor.ringMesh.visible = actor !== this.player;
       actor.parachuteGroup.visible = actor.spawnState === 'parachuting';
+      this.syncActorLoadoutVisual(actor);
     }
   }
 
+  private syncActorLoadoutVisual(actor: Actor): void {
+    const equippedWeapon = actor.alive && actor.spawnState === 'grounded' && actor.inventory.mode === 'weapon'
+      ? this.getEquippedWeapon(actor)
+      : null;
+    const nextKey = equippedWeapon?.definition.id ?? 'hidden';
+    if (nextKey !== actor.heldItemKey) {
+      if (actor.heldItemMesh) {
+        actor.heldItemRoot.remove(actor.heldItemMesh);
+        this.disposeObject(actor.heldItemMesh);
+        actor.heldItemMesh = null;
+      }
+
+      if (equippedWeapon) {
+        const gun = this.createWeaponDisplayModel(equippedWeapon.definition, 'pickup');
+        gun.scale.setScalar(0.78);
+        gun.rotation.set(0.22, Math.PI * 0.95, 0.08);
+        actor.heldItemRoot.add(gun);
+        actor.heldItemMesh = gun;
+      }
+
+      actor.heldItemKey = nextKey;
+    }
+
+    actor.heldItemRoot.visible = Boolean(equippedWeapon);
+  }
+
   private getParticipantCount(): number {
-    const totalParticipants = this.graphicsQuality === 'low' ? 40 : this.graphicsQuality === 'medium' ? 56 : 72;
+    const totalParticipants = this.graphicsQuality === 'low' ? 28 : this.graphicsQuality === 'medium' ? 40 : 52;
     if (!this.isDuosMode()) {
       return totalParticipants;
     }
@@ -3024,11 +3010,17 @@ export class FortLiteGame {
     if (weapon) {
       actor.inventory.mode = 'weapon';
       actor.inventory.weaponIndex = this.getWeaponSlotIndexById(weapon.definition.id);
-      if (distance <= weapon.definition.range * 0.88 && hasSight && this.rng.next() > 0.32) {
+      const aimJitter = weapon.definition.id === 'auto-shotgun'
+        ? 0.42
+        : weapon.definition.id === 'tactical-smg'
+          ? 0.34
+          : 0.28;
+      const fireChance = weapon.definition.id === 'auto-shotgun' ? 0.22 : 0.15;
+      if (distance <= weapon.definition.range * 0.9 && hasSight && this.rng.next() > fireChance) {
         const aimTarget = target.position.clone().add(new THREE.Vector3(
-          this.rng.range(-0.62, 0.62),
-          this.rng.range(0.94, 1.72),
-          this.rng.range(-0.62, 0.62)
+          this.rng.range(-aimJitter, aimJitter),
+          this.rng.range(1.14, 1.68),
+          this.rng.range(-aimJitter, aimJitter)
         ));
         const direction = aimTarget.sub(actor.position.clone().add(new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0))).normalize();
         this.tryFireWeapon(actor, direction, false);
@@ -3799,30 +3791,41 @@ export class FortLiteGame {
     actor.stepTime += FIXED_TIMESTEP * THREE.MathUtils.lerp(2.1, 7.5, actor.moveBlend);
     actor.lastPosition.copy(actor.position);
 
-    const swing = Math.sin(actor.stepTime) * 0.65 * actor.moveBlend;
-    const counterSwing = Math.sin(actor.stepTime + Math.PI) * 0.65 * actor.moveBlend;
-    const idleBreath = Math.sin(this.matchTime * 2.8 + actor.stepTime * 0.18) * (actor.spawnState === 'grounded' ? 0.025 : 0.012);
-    const torsoSway = Math.cos(actor.stepTime * 0.5) * 0.08 * actor.moveBlend;
-    const strideBob = Math.abs(Math.cos(actor.stepTime * 1.9)) * 0.075 * actor.moveBlend;
-    const airborneLean = actor.spawnState === 'parachuting' ? 0.38 : 0;
+    const swing = Math.sin(actor.stepTime) * 0.4 * actor.moveBlend;
+    const counterSwing = Math.sin(actor.stepTime + Math.PI) * 0.4 * actor.moveBlend;
+    const idleBreath = Math.sin(this.matchTime * 2.4 + actor.stepTime * 0.16) * (actor.spawnState === 'grounded' ? 0.02 : 0.012);
+    const torsoSway = Math.cos(actor.stepTime * 0.42) * 0.05 * actor.moveBlend;
+    const strideBob = Math.abs(Math.cos(actor.stepTime * 1.5)) * 0.045 * actor.moveBlend;
+    const airborneLean = actor.spawnState === 'parachuting' ? 0.28 : 0;
     actor.visualRoot.rotation.x = airborneLean;
-    actor.visualRoot.rotation.y = torsoSway * 0.24;
-    actor.visualRoot.rotation.z = actor.spawnState === 'parachuting' ? Math.sin(actor.stepTime * 0.6) * 0.06 : torsoSway * 0.3;
-    actor.visualRoot.position.set(torsoSway * 0.12, idleBreath + strideBob, 0);
-    actor.bodyMesh.rotation.x = actor.spawnState === 'parachuting' ? 0.12 : idleBreath * 0.65 + strideBob * 0.22;
-    actor.bodyMesh.rotation.y = torsoSway * 0.16;
-    actor.bodyMesh.rotation.z = actor.spawnState === 'parachuting' ? 0 : torsoSway * 0.4;
-    actor.headMesh.rotation.x = actor.spawnState === 'parachuting' ? -0.08 : idleBreath * 0.9;
-    actor.headMesh.rotation.y = torsoSway * 0.45;
-    actor.leftArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -1.05 : swing * 0.95 - 0.12;
-    actor.rightArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -1.02 : counterSwing * 0.95 - 0.12;
-    actor.leftArmPivot.rotation.z = actor.spawnState === 'parachuting' ? -0.1 : -0.18 - torsoSway * 1.15;
-    actor.rightArmPivot.rotation.z = actor.spawnState === 'parachuting' ? 0.1 : 0.18 + torsoSway * 1.15;
-    actor.leftLegPivot.rotation.x = actor.spawnState === 'parachuting' ? 0.58 : counterSwing * 0.82 + 0.08;
-    actor.rightLegPivot.rotation.x = actor.spawnState === 'parachuting' ? 0.56 : swing * 0.82 + 0.08;
-    actor.leftLegPivot.rotation.z = actor.spawnState === 'parachuting' ? 0.12 : -0.05 + torsoSway * 0.32;
-    actor.rightLegPivot.rotation.z = actor.spawnState === 'parachuting' ? -0.12 : 0.05 - torsoSway * 0.32;
+    actor.visualRoot.rotation.y = torsoSway * 0.2;
+    actor.visualRoot.rotation.z = actor.spawnState === 'parachuting' ? Math.sin(actor.stepTime * 0.5) * 0.04 : torsoSway * 0.24;
+    actor.visualRoot.position.set(torsoSway * 0.07, idleBreath + strideBob, 0);
+    actor.bodyMesh.rotation.x = actor.spawnState === 'parachuting' ? 0.08 : idleBreath * 0.45 + strideBob * 0.18;
+    actor.bodyMesh.rotation.y = torsoSway * 0.12;
+    actor.bodyMesh.rotation.z = torsoSway * 0.2;
+    actor.headMesh.rotation.x = actor.spawnState === 'parachuting' ? -0.04 : idleBreath * 0.55;
+    actor.headMesh.rotation.y = torsoSway * 0.3;
+    actor.leftArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -0.74 : swing * 0.55 - 0.1;
+    actor.rightArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -0.7 : counterSwing * 0.55 - 0.1;
+    actor.leftArmPivot.rotation.z = actor.spawnState === 'parachuting' ? -0.08 : -0.12 - torsoSway * 0.72;
+    actor.rightArmPivot.rotation.z = actor.spawnState === 'parachuting' ? 0.08 : 0.12 + torsoSway * 0.72;
+    actor.leftLegPivot.rotation.x = actor.spawnState === 'parachuting' ? 0.34 : counterSwing * 0.58 + 0.04;
+    actor.rightLegPivot.rotation.x = actor.spawnState === 'parachuting' ? 0.34 : swing * 0.58 + 0.04;
+    actor.leftLegPivot.rotation.z = actor.spawnState === 'parachuting' ? 0.06 : -0.02 + torsoSway * 0.18;
+    actor.rightLegPivot.rotation.z = actor.spawnState === 'parachuting' ? -0.06 : 0.02 - torsoSway * 0.18;
     actor.parachuteGroup.visible = actor.spawnState === 'parachuting';
+    this.syncActorLoadoutVisual(actor);
+    actor.heldItemRoot.position.set(
+      0.58 + torsoSway * 0.05,
+      1.54 + idleBreath + (actor.spawnState === 'grounded' ? strideBob * 0.5 : 0.06),
+      0.24
+    );
+    actor.heldItemRoot.rotation.set(
+      actor.spawnState === 'parachuting' ? 0.42 : 0.16 + swing * 0.08,
+      -0.44,
+      actor.spawnState === 'parachuting' ? -0.26 : 0.08 + torsoSway * 0.28
+    );
 
     const ringOpacity = actor === this.player
       ? 0
@@ -5149,7 +5152,7 @@ export class FortLiteGame {
 
   private applyWeaponSpread(direction: THREE.Vector3, spread: number, playerOwned: boolean): THREE.Vector3 {
     const result = direction.clone();
-    const spreadMultiplier = playerOwned ? 0.85 : 1.45;
+    const spreadMultiplier = playerOwned ? 0.85 : 1.18;
     const angleX = this.rng.range(-1, 1) * spread * spreadMultiplier;
     const angleY = this.rng.range(-1, 1) * spread * spreadMultiplier;
     result.x += angleX;
@@ -5400,20 +5403,20 @@ export class FortLiteGame {
   }
 
   private applyGraphicsQuality(quality: GraphicsQuality): void {
-    this.maxShotEffects = quality === 'low' ? 8 : quality === 'medium' ? 14 : 22;
-    this.renderer.toneMapping = quality === 'low' ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = quality === 'high' ? 1.04 : 1;
+    this.maxShotEffects = quality === 'low' ? 5 : quality === 'medium' ? 9 : 14;
+    this.renderer.toneMapping = quality === 'high' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+    this.renderer.toneMappingExposure = quality === 'high' ? 1.02 : 1;
     this.renderer.setPixelRatio(this.getPixelRatioForQuality(quality));
     this.renderer.setSize(this.root.clientWidth, this.root.clientHeight, false);
   }
 
   private getPixelRatioForQuality(quality: GraphicsQuality): number {
-    const limit = quality === 'low' ? 0.55 : quality === 'medium' ? 0.72 : 0.9;
+    const limit = quality === 'low' ? 0.46 : quality === 'medium' ? 0.58 : 0.72;
     return Math.min(window.devicePixelRatio || 1, limit);
   }
 
   private getAdjustedCount(base: number, minimum: number): number {
-    const multiplier = this.graphicsQuality === 'low' ? 0.5 : this.graphicsQuality === 'medium' ? 0.68 : 0.82;
+    const multiplier = this.graphicsQuality === 'low' ? 0.3 : this.graphicsQuality === 'medium' ? 0.42 : 0.56;
     return Math.max(minimum, Math.round(base * multiplier));
   }
 
@@ -5422,49 +5425,49 @@ export class FortLiteGame {
       return Math.max(2, base - 2);
     }
     if (this.graphicsQuality === 'medium') {
-      return Math.max(2, base - 1);
+      return Math.max(2, base - 2);
     }
-    return base;
+    return Math.max(2, base - 1);
   }
 
   private getAdjustedFloorCount(base: number): number {
     if (this.graphicsQuality === 'low') {
-      return Math.max(3, base - 1);
+      return Math.max(2, base - 2);
     }
     if (this.graphicsQuality === 'medium') {
       return Math.max(3, base - 1);
     }
-    return base;
+    return Math.max(3, base - 1);
   }
 
   private getBotDecisionInterval(): number {
     if (this.graphicsQuality === 'low') {
-      return this.rng.range(0.75, 1.2);
+      return this.rng.range(0.88, 1.34);
     }
     if (this.graphicsQuality === 'medium') {
-      return this.rng.range(0.66, 1.05);
+      return this.rng.range(0.76, 1.16);
     }
-    return this.rng.range(0.55, 0.95);
+    return this.rng.range(0.66, 1.04);
   }
 
   private getBotRepathInterval(): number {
     if (this.graphicsQuality === 'low') {
-      return this.rng.range(1.4, 2.2);
+      return this.rng.range(1.7, 2.5);
     }
     if (this.graphicsQuality === 'medium') {
-      return this.rng.range(1.2, 1.8);
+      return this.rng.range(1.45, 2.1);
     }
-    return this.rng.range(0.95, 1.55);
+    return this.rng.range(1.2, 1.8);
   }
 
   private getBotSenseInterval(engaged: boolean): number {
     if (this.graphicsQuality === 'low') {
-      return engaged ? this.rng.range(0.16, 0.24) : this.rng.range(0.24, 0.4);
+      return engaged ? this.rng.range(0.22, 0.32) : this.rng.range(0.32, 0.48);
     }
     if (this.graphicsQuality === 'medium') {
-      return engaged ? this.rng.range(0.12, 0.2) : this.rng.range(0.18, 0.3);
+      return engaged ? this.rng.range(0.18, 0.26) : this.rng.range(0.26, 0.38);
     }
-    return engaged ? this.rng.range(0.1, 0.16) : this.rng.range(0.15, 0.24);
+    return engaged ? this.rng.range(0.14, 0.22) : this.rng.range(0.2, 0.3);
   }
 
   private getHudUpdateIntervalMs(): number {

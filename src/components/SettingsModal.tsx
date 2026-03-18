@@ -71,7 +71,7 @@ export const SettingsModal = ({ open, settings, onChange, onClose }: SettingsMod
               ))}
             </div>
             <p className="mt-2 text-xs text-sky-50/70">
-              Higher quality adds more FortLite world detail, active bots, and effects. Medium is the smoother default.
+              Higher quality adds more FortLite world detail, active bots, and effects. Low is the smoothest default.
             </p>
           </div>
         </div>
