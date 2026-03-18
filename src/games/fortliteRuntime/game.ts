@@ -201,6 +201,7 @@ const STORM_START_DELAY = 20;
 const SKYDIVE_ALTITUDE = 92;
 const COVER_DENSITY_MULTIPLIER = 1.5;
 const RENDER_DISTANCE_MULTIPLIER = 0.5;
+const LARGE_BUILDING_SCALE = 2;
 const THIRD_PERSON_CAMERA_DISTANCE = 6.8;
 const THIRD_PERSON_CAMERA_HEIGHT = 1.9;
 const THIRD_PERSON_CAMERA_SHOULDER = 0.92;
@@ -962,27 +963,27 @@ export class FortLiteGame {
     this.createRockCluster(new THREE.Vector3(104, 0, -412), 6, 22);
     this.createRockCluster(new THREE.Vector3(-82, 0, -468), 7, 28);
     this.createRockCluster(new THREE.Vector3(468, 0, 114), 5, 18);
-    this.createTallStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.32, MAP_RADIUS * 0.78, 18), 0x52684e, 0xa5c995, 13.5);
-    this.createTallStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.38, MAP_RADIUS * 0.88, 18), 0x4d5b46, 0x87b57a, 15.2);
-    this.createTallStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.32, MAP_RADIUS * 0.78, 18), 0x9d7c4e, 0xe2c483, 13.2);
-    this.createTallStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.4, MAP_RADIUS * 0.88, 18), 0x8d6f46, 0xf0d296, 15);
-    this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.28, MAP_RADIUS * 0.7, 18), 0x6e706e, 0xc6d5cf, 14.2);
-    this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.34, MAP_RADIUS * 0.82, 18), 0x767566, 0xf1e2b6, 15.8);
-    this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.42, MAP_RADIUS * 0.9, 18), 0x657168, 0xb6d7e5, 17.2);
+    this.createTallStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.32, MAP_RADIUS * 0.78, 36), 0x52684e, 0xa5c995, 13.5);
+    this.createTallStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.38, MAP_RADIUS * 0.88, 36), 0x4d5b46, 0x87b57a, 15.2);
+    this.createTallStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.32, MAP_RADIUS * 0.78, 36), 0x9d7c4e, 0xe2c483, 13.2);
+    this.createTallStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.4, MAP_RADIUS * 0.88, 36), 0x8d6f46, 0xf0d296, 15);
+    this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.28, MAP_RADIUS * 0.7, 36), 0x6e706e, 0xc6d5cf, 14.2);
+    this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.34, MAP_RADIUS * 0.82, 36), 0x767566, 0xf1e2b6, 15.8);
+    this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.42, MAP_RADIUS * 0.9, 36), 0x657168, 0xb6d7e5, 17.2);
     const megaStructureFloors = this.getAdjustedFloorCount(5);
     const standardMegaFloors = this.getAdjustedFloorCount(4);
     const regularDistrictDensity = this.getAdjustedDistrictDensity(4);
     const biomeDistrictDensity = this.getAdjustedDistrictDensity(3);
-    this.createMegaStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.44, MAP_RADIUS * 0.94, 26), 0x445d48, 0x9fd08f, megaStructureFloors);
-    this.createMegaStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.5, MAP_RADIUS * 0.96, 26), 0x365148, 0x85bf79, standardMegaFloors);
-    this.createMegaStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.44, MAP_RADIUS * 0.94, 26), 0x8f7049, 0xe3c17f, megaStructureFloors);
-    this.createMegaStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.5, MAP_RADIUS * 0.96, 26), 0x7f6642, 0xf0d69a, standardMegaFloors);
-    this.createMegaStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.4, MAP_RADIUS * 0.9, 26), 0x63686b, 0xc8d9e4, megaStructureFloors);
-    this.createMegaStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.48, MAP_RADIUS * 0.96, 26), 0x5d6661, 0xf0ddb0, standardMegaFloors);
-    this.createCityDistrict(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.18, MAP_RADIUS * 0.46, 44), 0x5d6769, 0xcde1ea, regularDistrictDensity);
-    this.createCityDistrict(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.34, MAP_RADIUS * 0.68, 44), 0x6a6c61, 0xf0ddb0, regularDistrictDensity);
-    this.createCityDistrict(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.26, MAP_RADIUS * 0.62, 42), 0x8d7048, 0xe9c889, biomeDistrictDensity);
-    this.createCityDistrict(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.24, MAP_RADIUS * 0.58, 42), 0x435b48, 0xaad59c, biomeDistrictDensity);
+    this.createMegaStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.44, MAP_RADIUS * 0.94, 52), 0x445d48, 0x9fd08f, megaStructureFloors);
+    this.createMegaStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.5, MAP_RADIUS * 0.96, 52), 0x365148, 0x85bf79, standardMegaFloors);
+    this.createMegaStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.44, MAP_RADIUS * 0.94, 52), 0x8f7049, 0xe3c17f, megaStructureFloors);
+    this.createMegaStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.5, MAP_RADIUS * 0.96, 52), 0x7f6642, 0xf0d69a, standardMegaFloors);
+    this.createMegaStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.4, MAP_RADIUS * 0.9, 52), 0x63686b, 0xc8d9e4, megaStructureFloors);
+    this.createMegaStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.48, MAP_RADIUS * 0.96, 52), 0x5d6661, 0xf0ddb0, standardMegaFloors);
+    this.createCityDistrict(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.18, MAP_RADIUS * 0.46, 78), 0x5d6769, 0xcde1ea, regularDistrictDensity);
+    this.createCityDistrict(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.34, MAP_RADIUS * 0.68, 78), 0x6a6c61, 0xf0ddb0, regularDistrictDensity);
+    this.createCityDistrict(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.26, MAP_RADIUS * 0.62, 74), 0x8d7048, 0xe9c889, biomeDistrictDensity);
+    this.createCityDistrict(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.24, MAP_RADIUS * 0.58, 74), 0x435b48, 0xaad59c, biomeDistrictDensity);
     this.scatterScatteredBuildings('regular', this.getAdjustedCoverCount(7, 4), MAP_RADIUS * 0.2, MAP_RADIUS * 0.96, [0x5f6968, 0x6c6e62, 0x6a716b], [0xc8dce8, 0xf3deaf, 0xc9d9c9]);
     this.scatterScatteredBuildings('forest', this.getAdjustedCoverCount(5, 3), MAP_RADIUS * 0.2, MAP_RADIUS * 0.94, [0x4a5e49, 0x55664d, 0x405847], [0x98cb8c, 0xcfe8c7, 0x84bc7e]);
     this.scatterScatteredBuildings('desert', this.getAdjustedCoverCount(5, 3), MAP_RADIUS * 0.22, MAP_RADIUS * 0.94, [0x8b6f49, 0x9c7d54, 0x7f6844], [0xe8c57d, 0xf3dfb2, 0xd6b37a]);
@@ -1336,7 +1337,7 @@ export class FortLiteGame {
 
   private createStructureShell(position: THREE.Vector3, size: THREE.Vector2, height: number, color: number, addLootSpots: boolean): void {
     const wallThickness = 0.4;
-    const doorwayWidth = clamp(Math.min(size.x, size.y) * 0.42, 3.8, 6.8);
+    const doorwayWidth = clamp(Math.min(size.x, size.y) * 0.5, 4.8, 12);
     const roofThickness = 0.3;
     const roofColor = new THREE.Color(color).offsetHSL(0, 0.04, 0.08).getHex();
     const towardCenter = WORLD_CENTER.clone().sub(position);
@@ -1448,9 +1449,21 @@ export class FortLiteGame {
   }
 
   private createTallStructure(center: THREE.Vector3, baseColor: number, accentColor: number, towerHeight: number): void {
-    const footprint = new THREE.Vector2(this.rng.range(12.4, 15.8), this.rng.range(12.2, 15.4));
-    const annexSize = new THREE.Vector2(this.rng.range(8.2, 10.4), this.rng.range(7.4, 9.4));
+    const footprint = new THREE.Vector2(this.rng.range(12.4, 15.8) * LARGE_BUILDING_SCALE, this.rng.range(12.2, 15.4) * LARGE_BUILDING_SCALE);
+    const annexSize = new THREE.Vector2(this.rng.range(8.2, 10.4) * LARGE_BUILDING_SCALE, this.rng.range(7.4, 9.4) * LARGE_BUILDING_SCALE);
     const annexOffset = new THREE.Vector3(footprint.x * 0.7, 0, -footprint.y * 0.55);
+    const floorCount = Math.max(2, Math.round(towerHeight / 5));
+    const levelHeight = Math.max(4, (towerHeight - 1.6) / floorCount);
+    const floorThickness = 0.32;
+    const platformWidth = footprint.x * 0.48;
+    const platformDepth = footprint.y * 0.78;
+    const platformOffsetX = footprint.x * 0.21;
+    const stairWidth = Math.max(3.8, footprint.x * 0.24);
+    const stairHeight = 0.42;
+    const stairDepth = 1.08;
+    const stairCount = Math.max(7, Math.ceil(levelHeight / stairHeight));
+    const platformColor = new THREE.Color(baseColor).offsetHSL(0.01, 0.05, 0.12).getHex();
+    const stairColor = new THREE.Color(accentColor).offsetHSL(0, 0.02, -0.08).getHex();
     this.addTerrainPatch(center, footprint.x * 1.6, footprint.y * 1.5, new THREE.Color(baseColor).offsetHSL(0, 0.02, -0.08).getHex(), 0.22, 0);
 
     this.createStructureShell(center, footprint, towerHeight, baseColor, true);
@@ -1459,6 +1472,61 @@ export class FortLiteGame {
     const annexPosition = center.clone().add(annexOffset);
     this.createStructureShell(annexPosition, annexSize, towerHeight * 0.48, new THREE.Color(baseColor).offsetHSL(0.01, 0.04, 0.06).getHex(), true);
     this.addCompoundDecor(annexPosition, annexSize, towerHeight * 0.48, accentColor);
+
+    for (let level = 0; level < floorCount - 1; level += 1) {
+      const leftSide = level % 2 === 0;
+      const platformCenter = new THREE.Vector3(
+        center.x + (leftSide ? -platformOffsetX : platformOffsetX),
+        (level + 1) * levelHeight,
+        center.z
+      );
+
+      this.addRaisedStaticObstacle(
+        new THREE.Vector3(platformCenter.x, platformCenter.y + floorThickness * 0.5, platformCenter.z),
+        new THREE.Vector3(platformWidth, floorThickness, platformDepth),
+        platformColor,
+        true,
+        0.74,
+        0.08
+      );
+      this.lootSpawnPoints.push(
+        platformCenter.clone().add(new THREE.Vector3(0, floorThickness * 0.5, leftSide ? platformDepth * 0.18 : -platformDepth * 0.18))
+      );
+
+      const stairStart = new THREE.Vector3(
+        center.x + (leftSide ? -platformOffsetX : platformOffsetX),
+        level * levelHeight,
+        center.z + (leftSide ? -footprint.y * 0.46 : footprint.y * 0.46)
+      );
+      this.addStairFlight(stairStart, stairWidth, stairCount, stairHeight, stairDepth, leftSide ? 0 : Math.PI, stairColor);
+    }
+
+    const roofSideLeft = (floorCount - 1) % 2 === 0;
+    const roofStairStart = new THREE.Vector3(
+      center.x + (roofSideLeft ? -platformOffsetX : platformOffsetX),
+      (floorCount - 1) * levelHeight,
+      center.z + (roofSideLeft ? -footprint.y * 0.46 : footprint.y * 0.46)
+    );
+    this.addStairFlight(
+      roofStairStart,
+      stairWidth,
+      Math.max(4, Math.ceil((towerHeight - ((floorCount - 1) * levelHeight) - 0.9) / stairHeight)),
+      stairHeight,
+      stairDepth,
+      roofSideLeft ? 0 : Math.PI,
+      stairColor
+    );
+
+    const roofDeckCenter = new THREE.Vector3(center.x, towerHeight - 0.82, center.z);
+    this.addRaisedStaticObstacle(
+      new THREE.Vector3(roofDeckCenter.x, roofDeckCenter.y + floorThickness * 0.5, roofDeckCenter.z),
+      new THREE.Vector3(footprint.x * 0.54, floorThickness, footprint.y * 0.54),
+      accentColor,
+      true,
+      0.66,
+      0.16
+    );
+    this.lootSpawnPoints.push(roofDeckCenter.clone().add(new THREE.Vector3(0, floorThickness * 0.5, 0)));
 
     const crown = new THREE.Mesh(
       new THREE.BoxGeometry(footprint.x * 1.12, 0.45, footprint.y * 1.12),
@@ -1501,17 +1569,17 @@ export class FortLiteGame {
   }
 
   private createMegaStructure(center: THREE.Vector3, baseColor: number, accentColor: number, floorCount: number): void {
-    const footprint = new THREE.Vector2(this.rng.range(18.5, 23), this.rng.range(17.5, 22));
-    const annexSize = new THREE.Vector2(this.rng.range(10.5, 13), this.rng.range(10, 12.6));
+    const footprint = new THREE.Vector2(this.rng.range(18.5, 23) * LARGE_BUILDING_SCALE, this.rng.range(17.5, 22) * LARGE_BUILDING_SCALE);
+    const annexSize = new THREE.Vector2(this.rng.range(10.5, 13) * LARGE_BUILDING_SCALE, this.rng.range(10, 12.6) * LARGE_BUILDING_SCALE);
     const levelHeight = 3.8;
     const towerHeight = floorCount * levelHeight + 2.2;
     const floorThickness = 0.28;
     const platformWidth = footprint.x * 0.44;
     const platformDepth = footprint.y * 0.72;
     const platformOffsetX = footprint.x * 0.23;
-    const stairWidth = Math.max(2.6, footprint.x * 0.24);
+    const stairWidth = Math.max(4.8, footprint.x * 0.24);
     const stairHeight = 0.46;
-    const stairDepth = 0.9;
+    const stairDepth = 1.08;
     const stairCount = Math.max(7, Math.ceil(levelHeight / stairHeight));
     const darkerBase = new THREE.Color(baseColor).offsetHSL(0, 0.04, -0.1).getHex();
     const platformColor = new THREE.Color(baseColor).offsetHSL(0.01, 0.05, 0.12).getHex();
@@ -1624,7 +1692,7 @@ export class FortLiteGame {
   }
 
   private createCityDistrict(center: THREE.Vector3, baseColor: number, accentColor: number, density: number): void {
-    const districtRadius = 24 + density * 6;
+    const districtRadius = (24 + density * 6) * 1.85;
     const streetColor = new THREE.Color(baseColor).offsetHSL(0, -0.04, -0.2).getHex();
     const plazaColor = new THREE.Color(baseColor).offsetHSL(0, -0.02, -0.12).getHex();
     this.addTerrainPatch(center, districtRadius * 1.28, districtRadius * 1.1, plazaColor, 0.26, this.rng.range(-0.08, 0.08));
@@ -1710,7 +1778,7 @@ export class FortLiteGame {
     accentPalette: number[]
   ): void {
     for (let index = 0; index < count; index += 1) {
-      const center = this.findBiomeFreePoint(biome, minRadius, maxRadius, 26);
+      const center = this.findBiomeFreePoint(biome, minRadius, maxRadius, 42);
       const baseColor = this.rng.pick(basePalette);
       const accentColor = this.rng.pick(accentPalette);
       const roll = this.rng.next();
