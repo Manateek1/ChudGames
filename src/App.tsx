@@ -30,6 +30,7 @@ const preferredDifficulty = (difficulties: Difficulty[]): Difficulty =>
   difficulties.includes("normal") ? "normal" : difficulties[0];
 const defaultModeForGame = (game: (typeof gameRegistry)[number]): string =>
   game.defaultMode ?? game.modes?.[0]?.id ?? "single";
+const defaultGameId = gameMap.get("fortlite")?.id ?? gameRegistry[0].id;
 
 function App(): React.JSX.Element {
   const [settings, setSettings] = useState(loadSettings);
@@ -37,7 +38,7 @@ function App(): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>("home");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<GameGenre | "all">("all");
-  const [selectedGameId, setSelectedGameId] = useState(gameRegistry[0].id);
+  const [selectedGameId, setSelectedGameId] = useState(defaultGameId);
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [mode, setMode] = useState("single");
   const [showSettings, setShowSettings] = useState(false);
@@ -76,15 +77,25 @@ function App(): React.JSX.Element {
 
   const filteredGames = useMemo(() => {
     const query = search.toLowerCase().trim();
-    return gameRegistry.filter((game) => {
-      const genreMatch = filter === "all" ? true : game.genre === filter;
-      const searchMatch =
-        query.length === 0 ||
-        game.title.toLowerCase().includes(query) ||
-        game.description.toLowerCase().includes(query) ||
-        game.tags.some((tag) => tag.includes(query));
-      return genreMatch && searchMatch;
-    });
+    return gameRegistry
+      .filter((game) => {
+        const genreMatch = filter === "all" ? true : game.genre === filter;
+        const searchMatch =
+          query.length === 0 ||
+          game.title.toLowerCase().includes(query) ||
+          game.description.toLowerCase().includes(query) ||
+          game.tags.some((tag) => tag.includes(query));
+        return genreMatch && searchMatch;
+      })
+      .sort((a, b) => {
+        if (a.id === "fortlite") {
+          return -1;
+        }
+        if (b.id === "fortlite") {
+          return 1;
+        }
+        return a.title.localeCompare(b.title);
+      });
   }, [search, filter]);
 
   const bestScore = selectedGame.id === "fortlite"
@@ -152,12 +163,12 @@ function App(): React.JSX.Element {
   };
 
   const sharedHeader = (
-    <header className="mb-6 rounded-2xl border border-sky-300/55 bg-white/78 px-4 py-3 shadow-[0_22px_50px_-30px_rgba(42,157,208,0.45)] backdrop-blur-sm">
+    <header className="mb-6 rounded-[1.6rem] border border-sky-200/35 bg-[rgba(7,18,34,0.74)] px-4 py-3 text-slate-50 shadow-[0_26px_60px_-34px_rgba(11,33,64,0.8)] backdrop-blur-xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => setScreen("home")}
-          className="font-display text-2xl tracking-wide text-sky-950"
+          className="font-display text-2xl tracking-[0.16em] text-white"
         >
           ChudGames
         </button>
@@ -169,8 +180,9 @@ function App(): React.JSX.Element {
           <button type="button" className="arcade-btn-secondary" onClick={() => setShowSettings(true)}>Settings</button>
         </nav>
       </div>
-      <div className="mt-2 flex flex-wrap gap-3 text-xs uppercase tracking-[0.2em] text-sky-700/80">
+      <div className="mt-2 flex flex-wrap gap-3 text-xs uppercase tracking-[0.24em] text-sky-100/70">
         <span>{daily.dateKey}</span>
+        <span>Featured: FortLite</span>
         <span>Daily: {dailyGame?.title ?? "..."}</span>
         <span>Achievements: {progress.achievements.length}</span>
       </div>
@@ -249,7 +261,7 @@ function App(): React.JSX.Element {
       <SettingsModal open={showSettings} settings={settings} onChange={setSettings} onClose={() => setShowSettings(false)} />
 
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-lg border border-lime-300/75 bg-white/90 px-4 py-3 text-sm text-sky-950 shadow-[0_20px_40px_-20px_rgba(122,213,76,0.45)]">
+        <div className="fixed bottom-4 right-4 z-50 rounded-2xl border border-amber-200/40 bg-[rgba(7,18,34,0.92)] px-4 py-3 text-sm text-slate-50 shadow-[0_22px_44px_-22px_rgba(4,12,24,0.85)]">
           {toast}
         </div>
       )}

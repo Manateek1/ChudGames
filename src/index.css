@@ -5,27 +5,27 @@
 @tailwind utilities;
 
 :root {
-  --bg-0: #e6fbff;
-  --bg-1: #c9f2ff;
-  --bg-2: #f2ffe5;
-  --text-main: #12384f;
-  --text-soft: #46738a;
+  --bg-0: #08152a;
+  --bg-1: #112542;
+  --bg-2: #203c61;
+  --text-main: #eef6ff;
+  --text-soft: #aec7df;
 }
 
 :root[data-theme="sunset"] {
-  --bg-0: #fff2dc;
-  --bg-1: #ffdcb8;
-  --bg-2: #fff7df;
-  --text-main: #64391f;
-  --text-soft: #946245;
+  --bg-0: #1b1b29;
+  --bg-1: #3d2b38;
+  --bg-2: #6d533d;
+  --text-main: #fff6e8;
+  --text-soft: #e7c9a8;
 }
 
 :root[data-theme="matrix"] {
-  --bg-0: #ecfff1;
-  --bg-1: #d6ffd8;
-  --bg-2: #f3ffe8;
-  --text-main: #1e4f33;
-  --text-soft: #4b7f5c;
+  --bg-0: #0d1b1d;
+  --bg-1: #14302f;
+  --bg-2: #2f4a3a;
+  --text-main: #eefdf3;
+  --text-soft: #afccb9;
 }
 
 * {
@@ -41,9 +41,9 @@ body,
 body {
   margin: 0;
   font-family: "Rajdhani", "Trebuchet MS", sans-serif;
-  background: radial-gradient(circle at 10% 0%, rgba(104, 222, 255, 0.28), transparent 40%),
-    radial-gradient(circle at 90% 0%, rgba(168, 255, 88, 0.2), transparent 42%),
-    radial-gradient(circle at 50% 100%, rgba(255, 245, 143, 0.22), transparent 46%),
+  background: radial-gradient(circle at 10% 0%, rgba(104, 198, 255, 0.22), transparent 40%),
+    radial-gradient(circle at 90% 0%, rgba(255, 196, 110, 0.18), transparent 40%),
+    radial-gradient(circle at 50% 100%, rgba(108, 154, 88, 0.18), transparent 48%),
     linear-gradient(180deg, var(--bg-0), var(--bg-1), var(--bg-2));
   color: var(--text-main);
 }
@@ -53,40 +53,57 @@ body {
 }
 
 .arcade-kicker {
-  @apply text-xs uppercase tracking-[0.34em] text-sky-700/80;
+  @apply text-xs uppercase tracking-[0.34em];
+  color: rgb(224 242 254 / 0.72);
 }
 
 .arcade-card {
-  @apply rounded-2xl border border-sky-300/50 bg-white/75 p-4 shadow-[0_18px_40px_-24px_rgba(24,147,198,0.45)];
+  @apply rounded-[1.5rem] p-4;
+  border: 1px solid rgb(224 242 254 / 0.14);
+  background: rgb(7 18 34 / 0.78);
+  box-shadow: 0 24px 56px -32px rgb(7 18 34 / 0.95);
 }
 
 .arcade-btn-primary {
-  @apply rounded-lg bg-lime-300 px-5 py-3 font-semibold text-sky-950 transition hover:-translate-y-0.5 hover:bg-lime-200;
+  @apply rounded-xl bg-amber-300 px-5 py-3 font-semibold text-slate-950 transition hover:-translate-y-0.5 hover:bg-amber-200;
 }
 
 .arcade-btn-secondary {
-  @apply rounded-lg border border-sky-300/70 bg-white/60 px-5 py-3 font-semibold text-sky-900 transition hover:border-sky-500 hover:bg-sky-100;
+  @apply rounded-xl px-5 py-3 font-semibold text-sky-50 transition;
+  border: 1px solid rgb(224 242 254 / 0.18);
+  background: rgb(255 255 255 / 0.06);
+}
+
+.arcade-btn-secondary:hover {
+  border-color: rgb(224 242 254 / 0.36);
+  background: rgb(255 255 255 / 0.1);
 }
 
 .touch-btn {
-  @apply rounded-lg border border-sky-300/70 bg-white/80 px-3 py-3 text-center text-sky-900 active:bg-sky-200;
+  @apply rounded-xl px-3 py-3 text-center text-sky-50;
+  border: 1px solid rgb(224 242 254 / 0.18);
+  background: rgb(7 18 34 / 0.82);
+}
+
+.touch-btn:active {
+  background: rgb(255 255 255 / 0.12);
 }
 
 .scanlines {
-  background-image: linear-gradient(to bottom, rgba(18, 56, 79, 0.06) 1px, transparent 1px);
+  background-image: linear-gradient(to bottom, rgba(194, 225, 255, 0.05) 1px, transparent 1px);
   background-size: 100% 4px;
-  mix-blend-mode: multiply;
+  mix-blend-mode: screen;
 }
 
 .arcade-grid {
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(rgba(88, 173, 255, 0.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(131, 222, 101, 0.12) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(102, 179, 232, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 201, 118, 0.1) 1px, transparent 1px);
   background-size: 34px 34px;
   transform: perspective(620px) rotateX(54deg) translateY(50%);
   transform-origin: center;
-  opacity: 0.65;
+  opacity: 0.44;
 }
 
 .arcade-grid-motion {
@@ -100,7 +117,7 @@ body {
   border-radius: 999px;
   left: calc(50% - 210px);
   top: calc(50% - 200px);
-  background: radial-gradient(circle, rgba(119, 207, 255, 0.32) 0%, rgba(163, 255, 119, 0.05) 70%);
+  background: radial-gradient(circle, rgba(122, 200, 255, 0.28) 0%, rgba(255, 197, 111, 0.08) 44%, rgba(95, 140, 88, 0.06) 74%);
   filter: blur(6px);
 }
 
@@ -113,7 +130,7 @@ body {
   top: -16px;
   width: 10px;
   height: 14px;
-  background: linear-gradient(180deg, #7ed8ff, #b8ff5a);
+  background: linear-gradient(180deg, #8ad4ff, #ffcd7c);
   animation: confettiFall 1.4s linear forwards;
 }
 

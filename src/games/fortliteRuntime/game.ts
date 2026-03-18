@@ -337,7 +337,7 @@ export class FortLiteGame {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xaed7ff);
-    this.scene.fog = new THREE.Fog(0xaed7ff, MAP_RADIUS * 0.42, MAP_RADIUS * 1.35);
+    this.scene.fog = new THREE.Fog(0xaed7ff, MAP_RADIUS * 0.68, MAP_RADIUS * 1.95);
 
     this.camera = new THREE.PerspectiveCamera(DEFAULT_CAMERA_FOV, Math.max(1, this.root.clientWidth / Math.max(1, this.root.clientHeight)), 0.05, MAP_RADIUS * 2.2);
     this.camera.rotation.order = 'YXZ';
@@ -883,6 +883,12 @@ export class FortLiteGame {
     this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.28, MAP_RADIUS * 0.7, 18), 0x6e706e, 0xc6d5cf, 14.2);
     this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.34, MAP_RADIUS * 0.82, 18), 0x767566, 0xf1e2b6, 15.8);
     this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.42, MAP_RADIUS * 0.9, 18), 0x657168, 0xb6d7e5, 17.2);
+    this.createMegaStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.44, MAP_RADIUS * 0.94, 26), 0x445d48, 0x9fd08f, 5);
+    this.createMegaStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.5, MAP_RADIUS * 0.96, 26), 0x365148, 0x85bf79, 4);
+    this.createMegaStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.44, MAP_RADIUS * 0.94, 26), 0x8f7049, 0xe3c17f, 5);
+    this.createMegaStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.5, MAP_RADIUS * 0.96, 26), 0x7f6642, 0xf0d69a, 4);
+    this.createMegaStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.4, MAP_RADIUS * 0.9, 26), 0x63686b, 0xc8d9e4, 5);
+    this.createMegaStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.48, MAP_RADIUS * 0.96, 26), 0x5d6661, 0xf0ddb0, 4);
 
     for (let i = 0; i < randomObstacleCount; i += 1) {
       const point = this.findFreePoint(MAP_RADIUS - 18, 6);
@@ -943,27 +949,55 @@ export class FortLiteGame {
     this.environmentGroup.add(lamp);
   }
 
-  private addStaticObstacle(position: THREE.Vector3, size: THREE.Vector2, height: number, color: number, addLootSpots: boolean): void {
+  private addRaisedStaticObstacle(
+    position: THREE.Vector3,
+    size: THREE.Vector3,
+    color: number,
+    walkable: boolean,
+    roughness = 0.9,
+    metalness = 0.05
+  ): ObstacleBox {
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(size.x, height, size.y),
-      new THREE.MeshStandardMaterial({ color, roughness: 0.9, metalness: 0.05 })
+      new THREE.BoxGeometry(size.x, size.y, size.z),
+      new THREE.MeshStandardMaterial({ color, roughness, metalness })
     );
-    mesh.position.set(position.x, height * 0.5, position.z);
+    mesh.position.copy(position);
     this.environmentGroup.add(mesh);
     this.tagTarget(mesh, 'static', null);
 
     const obstacle: ObstacleBox = {
       minX: position.x - size.x * 0.5,
       maxX: position.x + size.x * 0.5,
-      minZ: position.z - size.y * 0.5,
-      maxZ: position.z + size.y * 0.5,
-      height,
+      minZ: position.z - size.z * 0.5,
+      maxZ: position.z + size.z * 0.5,
+      height: position.y + size.y * 0.5,
       mesh
     };
 
     this.staticObstacles.push(obstacle);
     this.raycastTargets.push(mesh);
     this.cameraObstacles.push(mesh);
+
+    if (walkable) {
+      this.walkableSurfaces.push({
+        minX: obstacle.minX,
+        maxX: obstacle.maxX,
+        minZ: obstacle.minZ,
+        maxZ: obstacle.maxZ,
+        height: obstacle.height
+      });
+    }
+
+    return obstacle;
+  }
+
+  private addStaticObstacle(position: THREE.Vector3, size: THREE.Vector2, height: number, color: number, addLootSpots: boolean): void {
+    this.addRaisedStaticObstacle(
+      new THREE.Vector3(position.x, height * 0.5, position.z),
+      new THREE.Vector3(size.x, height, size.y),
+      color,
+      false
+    );
 
     if (!addLootSpots) {
       return;
@@ -1231,6 +1265,32 @@ export class FortLiteGame {
     }
   }
 
+  private addStairFlight(
+    start: THREE.Vector3,
+    width: number,
+    stepCount: number,
+    stepHeight: number,
+    stepDepth: number,
+    yaw: number,
+    color: number
+  ): THREE.Vector3 {
+    const direction = yawToDirection(yaw);
+    for (let step = 0; step < stepCount; step += 1) {
+      const center = start.clone().addScaledVector(direction, (step + 0.5) * stepDepth);
+      center.y += stepHeight * (step + 0.5);
+      this.addRaisedStaticObstacle(
+        center,
+        new THREE.Vector3(width, stepHeight, stepDepth),
+        color,
+        true,
+        0.78,
+        0.08
+      );
+    }
+
+    return start.clone().addScaledVector(direction, stepDepth * stepCount).add(new THREE.Vector3(0, stepHeight * stepCount, 0));
+  }
+
   private createTallStructure(center: THREE.Vector3, baseColor: number, accentColor: number, towerHeight: number): void {
     const footprint = new THREE.Vector2(this.rng.range(9, 12), this.rng.range(9, 12));
     const annexSize = new THREE.Vector2(this.rng.range(6, 8), this.rng.range(5, 7));
@@ -1280,6 +1340,129 @@ export class FortLiteGame {
 
       const sideBand = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.28, footprint.y * 0.62), windowMaterial);
       sideBand.position.set(center.x - (footprint.x * 0.51), bandHeight + 0.34, center.z);
+      this.environmentGroup.add(sideBand);
+    }
+  }
+
+  private createMegaStructure(center: THREE.Vector3, baseColor: number, accentColor: number, floorCount: number): void {
+    const footprint = new THREE.Vector2(this.rng.range(14, 18), this.rng.range(13, 17));
+    const annexSize = new THREE.Vector2(this.rng.range(8, 10), this.rng.range(8, 10));
+    const levelHeight = 3.8;
+    const towerHeight = floorCount * levelHeight + 2.2;
+    const floorThickness = 0.28;
+    const platformWidth = footprint.x * 0.44;
+    const platformDepth = footprint.y * 0.72;
+    const platformOffsetX = footprint.x * 0.23;
+    const stairWidth = Math.max(2.6, footprint.x * 0.24);
+    const stairHeight = 0.46;
+    const stairDepth = 0.9;
+    const stairCount = Math.max(7, Math.ceil(levelHeight / stairHeight));
+    const darkerBase = new THREE.Color(baseColor).offsetHSL(0, 0.04, -0.1).getHex();
+    const platformColor = new THREE.Color(baseColor).offsetHSL(0.01, 0.05, 0.12).getHex();
+    const stairColor = new THREE.Color(accentColor).offsetHSL(0, 0.02, -0.08).getHex();
+    const annexPosition = center.clone().add(new THREE.Vector3((footprint.x * 0.5) + (annexSize.x * 0.42), 0, footprint.y * 0.14));
+
+    this.addTerrainPatch(center, footprint.x * 1.78, footprint.y * 1.64, darkerBase, 0.24, this.rng.range(-0.16, 0.16));
+    this.createStructureShell(center, footprint, towerHeight, baseColor, true);
+    this.addCompoundDecor(center, footprint, towerHeight, accentColor);
+    this.createStructureShell(annexPosition, annexSize, towerHeight * 0.58, new THREE.Color(baseColor).offsetHSL(0.02, 0.06, 0.08).getHex(), true);
+    this.addCompoundDecor(annexPosition, annexSize, towerHeight * 0.58, accentColor);
+
+    for (let level = 0; level < floorCount - 1; level += 1) {
+      const leftSide = level % 2 === 0;
+      const platformCenter = new THREE.Vector3(
+        center.x + (leftSide ? -platformOffsetX : platformOffsetX),
+        (level + 1) * levelHeight,
+        center.z
+      );
+
+      this.addRaisedStaticObstacle(
+        new THREE.Vector3(platformCenter.x, platformCenter.y + floorThickness * 0.5, platformCenter.z),
+        new THREE.Vector3(platformWidth, floorThickness, platformDepth),
+        platformColor,
+        true,
+        0.72,
+        0.08
+      );
+      this.lootSpawnPoints.push(
+        platformCenter.clone().add(new THREE.Vector3(0, floorThickness * 0.5, leftSide ? platformDepth * 0.18 : -platformDepth * 0.18))
+      );
+
+      const stairStart = new THREE.Vector3(
+        center.x + (leftSide ? -platformOffsetX : platformOffsetX),
+        level * levelHeight,
+        center.z + (leftSide ? -footprint.y * 0.46 : footprint.y * 0.46)
+      );
+      this.addStairFlight(stairStart, stairWidth, stairCount, stairHeight, stairDepth, leftSide ? 0 : Math.PI, stairColor);
+    }
+
+    const roofSideLeft = (floorCount - 1) % 2 === 0;
+    const roofStairStart = new THREE.Vector3(
+      center.x + (roofSideLeft ? -platformOffsetX : platformOffsetX),
+      (floorCount - 1) * levelHeight,
+      center.z + (roofSideLeft ? -footprint.y * 0.46 : footprint.y * 0.46)
+    );
+    this.addStairFlight(
+      roofStairStart,
+      stairWidth,
+      Math.max(4, Math.ceil((towerHeight - ((floorCount - 1) * levelHeight) - 0.9) / stairHeight)),
+      stairHeight,
+      stairDepth,
+      roofSideLeft ? 0 : Math.PI,
+      stairColor
+    );
+
+    const roofDeckCenter = new THREE.Vector3(center.x, towerHeight - 0.85, center.z);
+    this.addRaisedStaticObstacle(
+      new THREE.Vector3(roofDeckCenter.x, roofDeckCenter.y + floorThickness * 0.5, roofDeckCenter.z),
+      new THREE.Vector3(footprint.x * 0.5, floorThickness, footprint.y * 0.5),
+      accentColor,
+      true,
+      0.64,
+      0.16
+    );
+    this.lootSpawnPoints.push(roofDeckCenter.clone().add(new THREE.Vector3(0, floorThickness * 0.5, 0)));
+
+    const crown = new THREE.Mesh(
+      new THREE.BoxGeometry(footprint.x * 1.12, 0.45, footprint.y * 1.12),
+      new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.54, metalness: 0.2 })
+    );
+    crown.position.set(center.x, towerHeight + 0.55, center.z);
+    this.environmentGroup.add(crown);
+
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.26, 0.34, towerHeight * 0.34, 10),
+      new THREE.MeshStandardMaterial({ color: 0x394552, roughness: 0.46, metalness: 0.52 })
+    );
+    mast.position.set(center.x, towerHeight + 1.2 + (towerHeight * 0.17), center.z);
+    this.environmentGroup.add(mast);
+
+    const beacon = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.82, 0),
+      new THREE.MeshStandardMaterial({ color: 0xffd385, emissive: 0xffb251, emissiveIntensity: 0.72, roughness: 0.24 })
+    );
+    beacon.position.set(center.x, towerHeight + 3.9, center.z);
+    this.environmentGroup.add(beacon);
+
+    const windowMaterial = new THREE.MeshStandardMaterial({
+      color: 0xeef7ff,
+      emissive: 0x92b9d5,
+      emissiveIntensity: 0.22,
+      roughness: 0.32,
+      metalness: 0.12
+    });
+    for (let level = 1; level <= floorCount; level += 1) {
+      const bandHeight = level * levelHeight - 0.85;
+      const frontBand = new THREE.Mesh(new THREE.BoxGeometry(footprint.x * 0.78, 0.3, 0.16), windowMaterial);
+      frontBand.position.set(center.x, bandHeight, center.z + (footprint.y * 0.51));
+      this.environmentGroup.add(frontBand);
+
+      const backBand = new THREE.Mesh(new THREE.BoxGeometry(footprint.x * 0.62, 0.28, 0.16), windowMaterial);
+      backBand.position.set(center.x, bandHeight + 0.24, center.z - (footprint.y * 0.51));
+      this.environmentGroup.add(backBand);
+
+      const sideBand = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.3, footprint.y * 0.68), windowMaterial);
+      sideBand.position.set(center.x - (footprint.x * 0.51), bandHeight + 0.36, center.z);
       this.environmentGroup.add(sideBand);
     }
   }
@@ -1740,10 +1923,10 @@ export class FortLiteGame {
     this.attachPickup(pickup);
   }
 
-  private createMaterialPickup(position: THREE.Vector3, materialType: MaterialType, _amount: number): void {
+  private createMaterialPickup(position: THREE.Vector3, materialType: MaterialType, amount: number): void {
     const mesh = new THREE.Group();
     const color = materialType === 'wood' ? 0xb97a3d : materialType === 'stone' ? 0xa1a9b2 : 0x9fb6c8;
-    const pickupAmount = FLOOR_MATERIAL_PICKUP_AMOUNT;
+    const pickupAmount = Math.max(FLOOR_MATERIAL_PICKUP_AMOUNT, amount);
 
     const box = new THREE.Mesh(
       new THREE.BoxGeometry(1.05, 1.05, 1.05),
@@ -1788,19 +1971,20 @@ export class FortLiteGame {
     this.prepareNextStormTarget();
 
     const stormMaterial = new THREE.MeshBasicMaterial({
-      color: 0x32b4ff,
+      color: 0x8d4bff,
       transparent: true,
-      opacity: 0.16,
+      opacity: 0.24,
+      depthWrite: false,
       side: THREE.DoubleSide
     });
 
-    this.stormWall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 18, 64, 1, true), stormMaterial);
-    this.stormWall.position.y = 9;
+    this.stormWall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 28, 64, 1, true), stormMaterial);
+    this.stormWall.position.y = 14;
     this.stormGroup.add(this.stormWall);
 
     this.safeZoneDisc = new THREE.Mesh(
       new THREE.CircleGeometry(1, 64),
-      new THREE.MeshBasicMaterial({ color: 0x9be15d, transparent: true, opacity: 0.08, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: 0xffe8a8, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false })
     );
     this.safeZoneDisc.rotation.x = -Math.PI / 2;
     this.safeZoneDisc.position.y = 0.03;
@@ -1808,7 +1992,7 @@ export class FortLiteGame {
 
     this.safeZoneRing = new THREE.LineLoop(
       new THREE.BufferGeometry().setFromPoints(this.makeCirclePoints(1, 64)),
-      new THREE.LineBasicMaterial({ color: 0xb8ff74, transparent: true, opacity: 0.8 })
+      new THREE.LineBasicMaterial({ color: 0xfff4cb, transparent: true, opacity: 0.82 })
     );
     this.safeZoneRing.rotation.x = -Math.PI / 2;
     this.safeZoneRing.position.y = 0.05;
@@ -2096,13 +2280,13 @@ export class FortLiteGame {
 
   private rethinkBotState(actor: Actor, visibleEnemy: Actor | null): void {
     const brain = actor.ai!;
-    const outsideStorm = this.isOutsideStorm(actor.position);
+    const shouldRotate = this.shouldRotateToSafeZone(actor.position);
     const armed = this.hasUsableWeapon(actor);
     const lowMaterials = this.totalMaterials(actor.inventory.materials) < 28;
     const node = lowMaterials ? this.findNearestResource(actor.position, 28) : null;
     const desiredLoot = this.findBestLootForActor(actor, 42);
 
-    if (outsideStorm) {
+    if (shouldRotate) {
       brain.state = 'seekSafeZone';
       brain.destination.copy(this.getSafeZoneDestination(actor.position));
       return;
@@ -2143,6 +2327,7 @@ export class FortLiteGame {
     const optimalDistance = weapon?.definition.id === 'auto-shotgun' ? 10 : weapon?.definition.id === 'tactical-smg' ? 17 : 25;
     const strafe = this.tempVectorC.set(-desiredDirection.z, 0, desiredDirection.x).multiplyScalar(brain.strafeDirection);
     const move = new THREE.Vector3();
+    const stormPressure = this.getStormPressure(actor.position);
 
     if (distance > optimalDistance + 6) {
       move.add(desiredDirection);
@@ -2150,6 +2335,14 @@ export class FortLiteGame {
       move.addScaledVector(desiredDirection, -0.9);
     }
     move.addScaledVector(strafe, 0.32);
+
+    if (stormPressure > 0.1 || this.shouldRotateToSafeZone(actor.position)) {
+      const safeVector = this.getSafeZoneDestination(actor.position).sub(actor.position);
+      safeVector.y = 0;
+      if (safeVector.lengthSq() > 0.01) {
+        move.addScaledVector(safeVector.normalize(), THREE.MathUtils.lerp(0.35, 1.15, stormPressure));
+      }
+    }
 
     if (move.lengthSq() > 0.01) {
       move.normalize();
@@ -2620,7 +2813,8 @@ export class FortLiteGame {
     const snappedX = snap(placeTarget.x, BUILD_GRID_SIZE);
     const snappedZ = snap(placeTarget.z, BUILD_GRID_SIZE);
     const supportY = this.sampleGroundHeight(snappedX, snappedZ, actor.position.y + 6);
-    const yaw = forcedYaw ?? Math.round((this.cameraYaw + this.buildRotation) / (Math.PI * 0.5)) * (Math.PI * 0.5);
+    const baseYaw = forcedYaw ?? Math.round((this.cameraYaw + this.buildRotation) / (Math.PI * 0.5)) * (Math.PI * 0.5);
+    const yaw = pieceType === 'ramp' ? baseYaw + Math.PI : baseYaw;
 
     const position = new THREE.Vector3(
       snappedX,
@@ -3153,7 +3347,10 @@ export class FortLiteGame {
         teammateZ: teammate?.position.z ?? null,
         stormCenterX: this.storm.currentCenter.x,
         stormCenterZ: this.storm.currentCenter.z,
-        stormRadius: this.storm.currentRadius
+        stormRadius: this.storm.currentRadius,
+        safeZoneCenterX: this.storm.targetCenter.x,
+        safeZoneCenterZ: this.storm.targetCenter.z,
+        safeZoneRadius: this.storm.targetRadius
       }
     });
     this.options.onPlacementChange?.(this.calculatePlacement());
@@ -3514,10 +3711,58 @@ export class FortLiteGame {
     this.ensurePreviewMesh();
   }
 
+  private getSafeZoneObjective(): { center: THREE.Vector3; radius: number } {
+    if (this.storm.mode === 'done') {
+      return {
+        center: this.storm.currentCenter,
+        radius: this.storm.currentRadius
+      };
+    }
+
+    return {
+      center: this.storm.targetCenter,
+      radius: this.storm.targetRadius
+    };
+  }
+
+  private getStormPressure(position: THREE.Vector3): number {
+    const currentMargin = this.storm.currentRadius - horizontalDistance(position, this.storm.currentCenter);
+    if (currentMargin < 0) {
+      return 1;
+    }
+
+    const objective = this.getSafeZoneObjective();
+    const objectiveMargin = objective.radius - horizontalDistance(position, objective.center);
+    if (this.storm.mode === 'shrink') {
+      return clamp((72 - currentMargin) / 72, 0, 1);
+    }
+
+    return clamp((36 - objectiveMargin) / 36, 0, 1);
+  }
+
+  private shouldRotateToSafeZone(position: THREE.Vector3): boolean {
+    if (this.isOutsideStorm(position)) {
+      return true;
+    }
+
+    const objective = this.getSafeZoneObjective();
+    const distanceToTarget = horizontalDistance(position, objective.center);
+    const phase = STORM_PHASES[Math.min(this.storm.phaseIndex, STORM_PHASES.length - 1)];
+    const pauseProgress = this.storm.mode === 'pause'
+      ? clamp(this.storm.timer / Math.max(0.001, phase?.pauseDuration ?? 1), 0, 1)
+      : 1;
+    const rotateBuffer = this.storm.mode === 'shrink'
+      ? 14
+      : THREE.MathUtils.lerp(34, 18, pauseProgress);
+
+    return distanceToTarget > Math.max(6, objective.radius - rotateBuffer);
+  }
+
   private getSafeZoneDestination(position: THREE.Vector3): THREE.Vector3 {
-    const desired = clampToCircle(position, this.storm.currentCenter, Math.max(4, this.storm.currentRadius - 10));
+    const objective = this.getSafeZoneObjective();
+    const desired = clampToCircle(position, objective.center, Math.max(6, objective.radius - 12));
     if (horizontalDistance(position, desired) < 2) {
-      return this.storm.currentCenter.clone();
+      return objective.center.clone();
     }
     return desired;
   }

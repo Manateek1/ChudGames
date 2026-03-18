@@ -81,6 +81,15 @@ export const GamePlayer = ({
     onComplete(finalResult);
   }, [finalResult, onComplete]);
 
+  const restart = useCallback((): void => {
+    submittedRef.current = false;
+    setRunId((value) => value + 1);
+    setScore(0);
+    setFps(0);
+    setPaused(false);
+    setFinalResult(null);
+  }, []);
+
   useEffect(() => {
     if (!finalResult) {
       return;
@@ -104,18 +113,9 @@ export const GamePlayer = ({
     return () => {
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [finalResult]);
+  }, [finalResult, restart]);
 
   const effectivePause = paused || tutorialOpen || Boolean(finalResult);
-
-  const restart = (): void => {
-    submittedRef.current = false;
-    setRunId((value) => value + 1);
-    setScore(0);
-    setFps(0);
-    setPaused(false);
-    setFinalResult(null);
-  };
 
   const dismissTutorial = async (): Promise<void> => {
     onTutorialDismiss();
@@ -145,32 +145,32 @@ export const GamePlayer = ({
 
   return (
     <section className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-300/55 bg-white/82 px-4 py-3 shadow-[0_20px_48px_-30px_rgba(52,168,221,0.4)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] border border-sky-200/24 bg-[rgba(7,18,34,0.82)] px-4 py-3 text-slate-50 shadow-[0_24px_54px_-32px_rgba(7,18,34,0.96)]">
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="font-display text-2xl text-sky-950">{game.title}</h2>
-          <span className="rounded-full border border-sky-300/60 bg-sky-50/80 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-800">
+          <h2 className="font-display text-2xl text-white">{game.title}</h2>
+          <span className="rounded-full border border-sky-100/16 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-50/78">
             {difficulty}
           </span>
           {game.modes && (
-            <span className="rounded-full border border-lime-300/70 bg-lime-50/80 px-3 py-1 text-xs uppercase tracking-[0.2em] text-lime-900">
+            <span className="rounded-full border border-amber-200/18 bg-amber-300/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-amber-50">
               {mode}
             </span>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 text-sm text-sky-900">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-sky-50/82">
           {isFortLite ? (
             <>
-              <span>Placement: <strong className="text-sky-950">{placementText}</strong></span>
-              <span>Wins: <strong className="text-sky-950">{bestScore}</strong></span>
+              <span>Placement: <strong className="text-white">{placementText}</strong></span>
+              <span>Wins: <strong className="text-white">{bestScore}</strong></span>
             </>
           ) : (
             <>
-              <span>Score: <strong className="text-sky-950">{score}</strong></span>
-              <span>Best: <strong className="text-sky-950">{bestScore}</strong></span>
+              <span>Score: <strong className="text-white">{score}</strong></span>
+              <span>Best: <strong className="text-white">{bestScore}</strong></span>
             </>
           )}
-          {settings.showFps && <span>FPS: <strong className="text-sky-950">{fps.toFixed(0)}</strong></span>}
+          {settings.showFps && <span>FPS: <strong className="text-white">{fps.toFixed(0)}</strong></span>}
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -186,7 +186,7 @@ export const GamePlayer = ({
         </div>
       </div>
 
-      <div className="relative overflow-hidden rounded-2xl border border-sky-300/55 bg-white/72 p-3 shadow-[0_22px_48px_-34px_rgba(52,168,221,0.34)]">
+      <div className="relative overflow-hidden rounded-[1.5rem] border border-sky-200/24 bg-[rgba(7,18,34,0.72)] p-3 shadow-[0_26px_60px_-38px_rgba(7,18,34,0.96)]">
         <GameComponent
           key={componentKey}
           gameId={game.id}
@@ -204,9 +204,9 @@ export const GamePlayer = ({
         />
 
         {paused && !finalResult && !tutorialOpen && (
-          <div className="absolute inset-0 z-10 grid place-items-center bg-[rgba(194,242,255,0.82)]">
-            <div className="w-[min(480px,90%)] space-y-4 rounded-2xl border border-sky-300/60 bg-white/95 p-5 text-sky-900">
-              <h3 className="font-display text-3xl text-sky-950">Paused</h3>
+          <div className="absolute inset-0 z-10 grid place-items-center bg-[rgba(3,9,20,0.76)]">
+            <div className="w-[min(480px,90%)] space-y-4 rounded-[1.5rem] border border-sky-100/14 bg-[rgba(7,18,34,0.96)] p-5 text-sky-50">
+              <h3 className="font-display text-3xl text-white">Paused</h3>
               <div className="grid gap-2 sm:grid-cols-2">
                 <button
                   type="button"
@@ -253,25 +253,25 @@ export const GamePlayer = ({
         )}
 
         {finalResult && (
-          <div className="absolute inset-0 z-20 grid place-items-center bg-[rgba(194,242,255,0.86)]">
-            <div className="w-[min(460px,90%)] space-y-4 rounded-2xl border border-sky-300/65 bg-white/95 p-6 text-center">
+          <div className="absolute inset-0 z-20 grid place-items-center bg-[rgba(3,9,20,0.82)]">
+            <div className="w-[min(460px,90%)] space-y-4 rounded-[1.6rem] border border-sky-100/14 bg-[rgba(7,18,34,0.96)] p-6 text-center text-sky-50">
               <p className="arcade-kicker">Run Complete</p>
-              <h3 className="font-display text-4xl text-sky-950">{finalResult.won ? "Victory" : "Game Over"}</h3>
+              <h3 className="font-display text-4xl text-white">{finalResult.won ? "Victory" : "Game Over"}</h3>
               {isFortLite ? (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-sky-300/55 bg-sky-50/90 px-4 py-4">
+                  <div className="rounded-2xl border border-sky-100/12 bg-white/5 px-4 py-4">
                     <p className="arcade-kicker">Placement</p>
-                    <p className="font-display text-4xl text-sky-950">{finalPlacement > 0 ? `#${finalPlacement}` : "--"}</p>
+                    <p className="font-display text-4xl text-white">{finalPlacement > 0 ? `#${finalPlacement}` : "--"}</p>
                   </div>
-                  <div className="rounded-2xl border border-sky-300/55 bg-sky-50/90 px-4 py-4">
+                  <div className="rounded-2xl border border-sky-100/12 bg-white/5 px-4 py-4">
                     <p className="arcade-kicker">Elims</p>
-                    <p className="font-display text-4xl text-sky-950">{finalResult.stats?.eliminations ?? 0}</p>
+                    <p className="font-display text-4xl text-white">{finalResult.stats?.eliminations ?? 0}</p>
                   </div>
                 </div>
               ) : (
-                <p className="text-sky-900">Score: <strong className="text-sky-950">{finalResult.score}</strong></p>
+                <p className="text-sky-50">Score: <strong className="text-white">{finalResult.score}</strong></p>
               )}
-              <p className="text-sm text-sky-800/80">Press Enter to start a new round.</p>
+              <p className="text-sm text-sky-50/72">Press Enter to start a new round.</p>
               {isFortLite ? (
                 <div className="space-y-3 pt-1">
                   <div className="flex justify-center">
@@ -280,7 +280,7 @@ export const GamePlayer = ({
                     </button>
                   </div>
                   <div className="flex justify-center">
-                    <button type="button" className="text-sm font-semibold text-sky-800 transition hover:text-sky-950" onClick={onQuit}>
+                    <button type="button" className="text-sm font-semibold text-sky-100 transition hover:text-white" onClick={onQuit}>
                       Back to Library
                     </button>
                   </div>
@@ -300,13 +300,13 @@ export const GamePlayer = ({
         )}
 
         {tutorialOpen && (
-          <div className="absolute inset-0 z-20 grid place-items-center bg-[rgba(194,242,255,0.88)]">
-            <div className="w-[min(560px,92%)] space-y-3 rounded-2xl border border-sky-300/65 bg-white/95 p-6">
+          <div className="absolute inset-0 z-20 grid place-items-center bg-[rgba(3,9,20,0.84)]">
+            <div className="w-[min(560px,92%)] space-y-3 rounded-[1.6rem] border border-sky-100/14 bg-[rgba(7,18,34,0.96)] p-6 text-sky-50">
               <p className="arcade-kicker">First-Time Tutorial</p>
-              <h3 className="font-display text-3xl text-sky-950">{game.title}</h3>
-              <ul className="space-y-2 text-sky-900/90">
+              <h3 className="font-display text-3xl text-white">{game.title}</h3>
+              <ul className="space-y-2 text-sky-50/88">
                 {game.tutorial.map((line) => (
-                  <li key={line} className="rounded-lg border border-sky-300/50 bg-sky-50/85 px-3 py-2">
+                  <li key={line} className="rounded-xl border border-sky-100/12 bg-white/5 px-3 py-2">
                     {line}
                   </li>
                 ))}

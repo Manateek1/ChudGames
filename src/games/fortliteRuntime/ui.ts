@@ -17,6 +17,9 @@ export interface HudMinimapSnapshot {
   stormCenterX: number;
   stormCenterZ: number;
   stormRadius: number;
+  safeZoneCenterX: number;
+  safeZoneCenterZ: number;
+  safeZoneRadius: number;
 }
 
 export interface HudSnapshot {
@@ -224,8 +227,22 @@ export class FortLiteHud {
     ctx.arc(centerX, centerY, mapRenderRadius, 0, Math.PI * 2);
     ctx.clip();
 
-    ctx.fillStyle = '#122129';
+    ctx.fillStyle = '#3e5b46';
     ctx.fillRect(0, 0, width, height);
+
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, mapRenderRadius, 0, Math.PI * 0.5);
+    ctx.closePath();
+    ctx.fillStyle = '#b89459';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, mapRenderRadius, Math.PI * 0.5, Math.PI);
+    ctx.closePath();
+    ctx.fillStyle = '#315a35';
+    ctx.fill();
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
     ctx.lineWidth = 1;
@@ -236,13 +253,25 @@ export class FortLiteHud {
     }
 
     const [stormX, stormY] = toCanvas(snapshot.stormCenterX, snapshot.stormCenterZ);
+    ctx.fillStyle = 'rgba(137, 84, 255, 0.26)';
+    ctx.fillRect(0, 0, width, height);
+    ctx.globalCompositeOperation = 'destination-out';
     ctx.beginPath();
     ctx.arc(stormX, stormY, snapshot.stormRadius * scale, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(79, 209, 255, 0.12)';
     ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
     ctx.lineWidth = 2;
-    ctx.strokeStyle = '#d9f7ff';
+    ctx.strokeStyle = '#b48cff';
     ctx.stroke();
+
+    const [safeZoneX, safeZoneY] = toCanvas(snapshot.safeZoneCenterX, snapshot.safeZoneCenterZ);
+    ctx.setLineDash([7, 6]);
+    ctx.beginPath();
+    ctx.arc(safeZoneX, safeZoneY, snapshot.safeZoneRadius * scale, 0, Math.PI * 2);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255, 247, 214, 0.92)';
+    ctx.stroke();
+    ctx.setLineDash([]);
 
     if (snapshot.teammateX !== null && snapshot.teammateZ !== null) {
       const [teammateX, teammateY] = toCanvas(snapshot.teammateX, snapshot.teammateZ);
@@ -258,7 +287,7 @@ export class FortLiteHud {
     const [playerX, playerY] = toCanvas(snapshot.playerX, snapshot.playerZ);
     ctx.save();
     ctx.translate(playerX, playerY);
-    ctx.rotate(snapshot.playerYaw);
+    ctx.rotate(snapshot.playerYaw + Math.PI);
     ctx.beginPath();
     ctx.moveTo(0, -9);
     ctx.lineTo(6.5, 7);
@@ -267,6 +296,10 @@ export class FortLiteHud {
     ctx.fillStyle = '#fff6d8';
     ctx.shadowColor = 'rgba(255, 236, 184, 0.4)';
     ctx.shadowBlur = 12;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
+    ctx.fillStyle = '#14304f';
     ctx.fill();
     ctx.restore();
 

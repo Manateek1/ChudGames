@@ -18,6 +18,7 @@ export const FortLite = ({
   const scoreRef = useRef(onScore);
   const fpsRef = useRef(onFps);
   const fpsVisibleRef = useRef(settings.showFps);
+  const graphicsQualityRef = useRef(settings.graphicsQuality);
   const gameOverRef = useRef(onGameOver);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const fullscreenSupported = typeof document !== "undefined" && document.fullscreenEnabled;
@@ -34,6 +35,10 @@ export const FortLite = ({
       onFps(0);
     }
   }, [settings.showFps, onFps]);
+
+  useEffect(() => {
+    graphicsQualityRef.current = settings.graphicsQuality;
+  }, [settings.graphicsQuality]);
 
   useEffect(() => {
     const onFullscreenChange = (): void => {
@@ -97,10 +102,11 @@ export const FortLite = ({
       return;
     }
 
+    const viewport = viewportRef.current;
     const game = new FortLiteGame(mount, {
       seedBase: seed,
       mode: mode === "duos" ? "duos" : "solo",
-      graphicsQuality: settings.graphicsQuality,
+      graphicsQuality: graphicsQualityRef.current,
       showEndScreen: false,
       onFpsChange: (fps) => {
         if (fpsVisibleRef.current) {
@@ -125,10 +131,9 @@ export const FortLite = ({
 
     gameRef.current = game;
     game.start();
-    game.setPaused(paused);
 
     return () => {
-      if (document.fullscreenElement === viewportRef.current) {
+      if (document.fullscreenElement === viewport) {
         void document.exitFullscreen();
       }
       gameRef.current = null;
