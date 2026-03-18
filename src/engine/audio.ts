@@ -134,6 +134,62 @@
     source.stop(context.currentTime + 0.18);
   }
 
+  fortliteFire(weaponId: string): void {
+    if (weaponId === "auto-shotgun") {
+      this.tone(110, 0.07, 0.08, "square", 0.001, 0.05);
+      this.tone(72, 0.08, 0.04, "triangle", 0.001, 0.07);
+      return;
+    }
+
+    if (weaponId === "tactical-smg") {
+      this.tone(260, 0.03, 0.034, "square", 0.001, 0.03);
+      this.tone(180, 0.035, 0.018, "triangle", 0.001, 0.04);
+      return;
+    }
+
+    this.tone(170, 0.05, 0.05, "sawtooth", 0.001, 0.04);
+    this.tone(98, 0.06, 0.026, "triangle", 0.001, 0.05);
+  }
+
+  fortlitePickup(): void {
+    this.tone(720, 0.04, 0.04, "triangle", 0.002, 0.04);
+    this.tone(980, 0.035, 0.025, "sine", 0.002, 0.05);
+  }
+
+  fortliteBuild(): void {
+    this.tone(210, 0.045, 0.042, "square", 0.001, 0.04);
+    this.tone(280, 0.04, 0.024, "triangle", 0.001, 0.05);
+  }
+
+  fortliteHarvest(): void {
+    this.tone(150, 0.05, 0.038, "triangle", 0.001, 0.04);
+    this.tone(220, 0.035, 0.024, "square", 0.001, 0.03);
+  }
+
+  fortliteHeal(): void {
+    this.tone(360, 0.08, 0.03, "sine", 0.003, 0.08);
+    this.tone(620, 0.11, 0.038, "triangle", 0.003, 0.1);
+  }
+
+  fortliteLand(): void {
+    this.tone(124, 0.06, 0.052, "triangle", 0.001, 0.06);
+    this.tone(186, 0.05, 0.022, "square", 0.001, 0.04);
+  }
+
+  fortliteDamage(): void {
+    this.tone(160, 0.055, 0.05, "sawtooth", 0.001, 0.06);
+  }
+
+  fortliteVictory(): void {
+    this.tone(523.25, 0.08, 0.04, "triangle", 0.002, 0.08);
+    this.tone(783.99, 0.12, 0.03, "sine", 0.01, 0.12);
+  }
+
+  fortliteDefeat(): void {
+    this.tone(220, 0.08, 0.04, "triangle", 0.002, 0.08);
+    this.tone(146.83, 0.12, 0.03, "sawtooth", 0.01, 0.12);
+  }
+
   startMusic(seed = 1): void {
     if (!this.musicEnabled || this.musicTimer !== null || typeof window === "undefined") {
       return;

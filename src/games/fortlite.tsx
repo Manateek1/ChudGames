@@ -10,6 +10,7 @@ export const FortLite = ({
   mode,
   settings,
   paused,
+  audio,
   onScore,
   onFps,
   onGameOver,
@@ -128,6 +129,7 @@ export const FortLite = ({
       seedBase: seed,
       mode: mode === "duos" ? "duos" : "solo",
       graphicsQuality: graphicsQualityRef.current,
+      audio,
       showEndScreen: false,
       onFpsChange: (fps) => {
         if (fpsVisibleRef.current) {
@@ -169,7 +171,7 @@ export const FortLite = ({
       gameRef.current = null;
       game.dispose();
     };
-  }, [seed, mode, fullscreenSupported]);
+  }, [seed, mode, fullscreenSupported, audio]);
 
   useEffect(() => {
     gameRef.current?.setPaused(paused);

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { AudioManager } from '../../engine/audio';
 import type { GraphicsQuality } from '../../types/arcade';
 import { RollingFps } from '../../engine/fps';
 import {
@@ -201,6 +202,7 @@ export interface FortLiteMatchResult {
 }
 
 interface FortLiteGameOptions {
+  audio?: AudioManager;
   graphicsQuality?: GraphicsQuality;
   mode?: FortLiteMode;
   onFpsChange?: (fps: number) => void;
@@ -298,6 +300,7 @@ export class FortLiteGame {
   private externallyPaused = false;
   private matchResultSent = false;
   private helpVisible = false;
+  private playerDamageSoundCooldown = 0;
   private lastHudRenderTime = 0;
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
@@ -951,6 +954,7 @@ export class FortLiteGame {
     this.scatterScatteredBuildings('regular', this.getAdjustedCount(7, 4), MAP_RADIUS * 0.2, MAP_RADIUS * 0.96, [0x5f6968, 0x6c6e62, 0x6a716b], [0xc8dce8, 0xf3deaf, 0xc9d9c9]);
     this.scatterScatteredBuildings('forest', this.getAdjustedCount(5, 3), MAP_RADIUS * 0.2, MAP_RADIUS * 0.94, [0x4a5e49, 0x55664d, 0x405847], [0x98cb8c, 0xcfe8c7, 0x84bc7e]);
     this.scatterScatteredBuildings('desert', this.getAdjustedCount(5, 3), MAP_RADIUS * 0.22, MAP_RADIUS * 0.94, [0x8b6f49, 0x9c7d54, 0x7f6844], [0xe8c57d, 0xf3dfb2, 0xd6b37a]);
+    this.populateForestBiomeCover();
     this.populateRegularBiomeCover();
 
     for (let i = 0; i < randomObstacleCount; i += 1) {
@@ -1297,8 +1301,8 @@ export class FortLiteGame {
   }
 
   private createStructureShell(position: THREE.Vector3, size: THREE.Vector2, height: number, color: number, addLootSpots: boolean): void {
-    const wallThickness = 0.46;
-    const doorwayWidth = clamp(Math.min(size.x, size.y) * 0.34, 2.8, 4.6);
+    const wallThickness = 0.4;
+    const doorwayWidth = clamp(Math.min(size.x, size.y) * 0.42, 3.8, 6.8);
     const roofThickness = 0.3;
     const roofColor = new THREE.Color(color).offsetHSL(0, 0.04, 0.08).getHex();
     const towardCenter = WORLD_CENTER.clone().sub(position);
@@ -1410,8 +1414,8 @@ export class FortLiteGame {
   }
 
   private createTallStructure(center: THREE.Vector3, baseColor: number, accentColor: number, towerHeight: number): void {
-    const footprint = new THREE.Vector2(this.rng.range(9, 12), this.rng.range(9, 12));
-    const annexSize = new THREE.Vector2(this.rng.range(6, 8), this.rng.range(5, 7));
+    const footprint = new THREE.Vector2(this.rng.range(12.4, 15.8), this.rng.range(12.2, 15.4));
+    const annexSize = new THREE.Vector2(this.rng.range(8.2, 10.4), this.rng.range(7.4, 9.4));
     const annexOffset = new THREE.Vector3(footprint.x * 0.7, 0, -footprint.y * 0.55);
     this.addTerrainPatch(center, footprint.x * 1.6, footprint.y * 1.5, new THREE.Color(baseColor).offsetHSL(0, 0.02, -0.08).getHex(), 0.22, 0);
 
@@ -1463,8 +1467,8 @@ export class FortLiteGame {
   }
 
   private createMegaStructure(center: THREE.Vector3, baseColor: number, accentColor: number, floorCount: number): void {
-    const footprint = new THREE.Vector2(this.rng.range(14, 18), this.rng.range(13, 17));
-    const annexSize = new THREE.Vector2(this.rng.range(8, 10), this.rng.range(8, 10));
+    const footprint = new THREE.Vector2(this.rng.range(18.5, 23), this.rng.range(17.5, 22));
+    const annexSize = new THREE.Vector2(this.rng.range(10.5, 13), this.rng.range(10, 12.6));
     const levelHeight = 3.8;
     const towerHeight = floorCount * levelHeight + 2.2;
     const floorThickness = 0.28;
@@ -1702,7 +1706,7 @@ export class FortLiteGame {
         : new THREE.Vector3(this.rng.range(-14, 14), 0, this.rng.range(-14, 14));
       boxes.push({
         offset,
-        size: new THREE.Vector2(this.rng.range(7.5, 13.5), this.rng.range(6.5, 12.5)),
+        size: new THREE.Vector2(this.rng.range(10.5, 16), this.rng.range(9.2, 14.8)),
         height: this.rng.range(4.2, 7.8)
       });
     }
@@ -1760,7 +1764,7 @@ export class FortLiteGame {
   }
 
   private createSmallHut(center: THREE.Vector3, baseColor: number, accentColor: number): void {
-    const footprint = new THREE.Vector2(this.rng.range(5.2, 7.8), this.rng.range(4.8, 7.2));
+    const footprint = new THREE.Vector2(this.rng.range(7.4, 10.4), this.rng.range(7, 9.8));
     const hutHeight = this.rng.range(3.2, 4.4);
     const patchColor = new THREE.Color(baseColor).offsetHSL(0, 0.03, -0.1).getHex();
     this.addTerrainPatch(center, footprint.x * 1.4, footprint.y * 1.26, patchColor, 0.2, this.rng.range(-0.2, 0.2));
@@ -1813,6 +1817,34 @@ export class FortLiteGame {
         const treePoint = this.findBiomeFreePoint('regular', MAP_RADIUS * 0.18, MAP_RADIUS * 0.96, 5);
         this.addResourceNodeAt(treePoint, 'wood');
       }
+    }
+  }
+
+  private populateForestBiomeCover(): void {
+    for (let i = 0; i < 4 * MAP_SCALE; i += 1) {
+      const clusterCenter = this.findBiomeFreePoint('forest', MAP_RADIUS * 0.18, MAP_RADIUS * 0.96, 12);
+      const clusterRadius = this.rng.range(8, 14);
+      const treeCount = this.rng.int(6, 10);
+
+      for (let treeIndex = 0; treeIndex < treeCount; treeIndex += 1) {
+        const point = clusterCenter.clone().add(randomPointInCircle(this.rng, clusterRadius));
+        if (point.length() >= MAP_RADIUS - 8 || this.getBiomeAtPosition(point) !== 'forest' || !this.isPointClear(point, 3.8)) {
+          continue;
+        }
+        this.addResourceNodeAt(point, 'wood');
+      }
+
+      if (this.rng.next() > 0.34) {
+        const rockPoint = clusterCenter.clone().add(randomPointInCircle(this.rng, clusterRadius * 0.55));
+        if (rockPoint.length() < MAP_RADIUS - 12 && this.getBiomeAtPosition(rockPoint) === 'forest' && this.isPointClear(rockPoint, 8)) {
+          this.createRockCluster(rockPoint, this.rng.int(2, 4), this.rng.range(6, 10));
+        }
+      }
+    }
+
+    for (let i = 0; i < 7 * MAP_SCALE; i += 1) {
+      const point = this.findBiomeFreePoint('forest', MAP_RADIUS * 0.18, MAP_RADIUS * 0.96, 4.2);
+      this.addResourceNodeAt(point, this.rng.next() > 0.9 ? 'stone' : 'wood');
     }
   }
 
@@ -2591,6 +2623,7 @@ export class FortLiteGame {
     this.viewModelKick = Math.max(0, this.viewModelKick - dt * 6.5);
     this.muzzleFlashTime = Math.max(0, this.muzzleFlashTime - dt * 7.5);
     this.viewModelSway.multiplyScalar(Math.max(0, 1 - dt * 7.5));
+    this.playerDamageSoundCooldown = Math.max(0, this.playerDamageSoundCooldown - dt);
     this.updateStorm(dt);
     this.updateLootVisuals(this.matchTime);
     this.updateShotEffects(dt);
@@ -2642,6 +2675,7 @@ export class FortLiteGame {
     }
 
     if (actor === this.player) {
+      this.options.audio?.fortliteLand();
       this.showMessage('Touchdown. Loot fast before the storm starts moving.', 1.8);
     }
   }
@@ -3266,6 +3300,7 @@ export class FortLiteGame {
     if (playerOwned) {
       this.viewModelKick = Math.min(0.22, this.viewModelKick + (weapon.definition.id === 'auto-shotgun' ? 0.18 : 0.1));
       this.muzzleFlashTime = 0.14;
+      this.options.audio?.fortliteFire(weapon.definition.id);
     }
 
     const origin = actor.kind === 'player'
@@ -3374,6 +3409,7 @@ export class FortLiteGame {
     actor.inventory.materials[node.materialType] += amount;
 
     if (actor.kind === 'player') {
+      this.options.audio?.fortliteHarvest();
       this.showMessage(`+${amount} ${MATERIAL_DISPLAY_NAMES[node.materialType]}`, 1.2);
     }
 
@@ -3415,6 +3451,7 @@ export class FortLiteGame {
     actor.inventory.materials[materialType] -= BUILD_COST;
     const piece = this.addBuildPiece(pieceType, materialType, placement.position, placement.yaw);
     if (actor.kind === 'player') {
+      this.options.audio?.fortliteBuild();
       this.showMessage(`${pieceType[0].toUpperCase()}${pieceType.slice(1)} placed.`, 1);
     }
 
@@ -3879,6 +3916,7 @@ export class FortLiteGame {
       if (existing) {
         actor.inventory.ammo[pickup.weapon.ammoType] += pickup.weapon.reservePickup;
         if (actor.kind === 'player') {
+          this.options.audio?.fortlitePickup();
           this.showMessage(`Ammo topped up for ${pickup.weapon.name}.`, 1.2);
         }
       } else {
@@ -3902,17 +3940,20 @@ export class FortLiteGame {
         actor.inventory.weaponIndex = this.getWeaponSlotIndexById(pickup.weapon.id);
         actor.inventory.ammo[pickup.weapon.ammoType] += pickup.weapon.reservePickup;
         if (actor.kind === 'player') {
+          this.options.audio?.fortlitePickup();
           this.showMessage(`Picked up ${pickup.weapon.name}.`, 1.4);
         }
       }
     } else if (pickup.kind === 'ammo' && pickup.ammoType && pickup.amount) {
       actor.inventory.ammo[pickup.ammoType] += pickup.amount;
       if (actor.kind === 'player') {
+        this.options.audio?.fortlitePickup();
         this.showMessage(`+${pickup.amount} ${pickup.ammoType} ammo`, 1.1);
       }
     } else if (pickup.kind === 'material' && pickup.materialType && pickup.amount) {
       actor.inventory.materials[pickup.materialType] += pickup.amount;
       if (actor.kind === 'player') {
+        this.options.audio?.fortlitePickup();
         this.showMessage(`+${pickup.amount} ${MATERIAL_DISPLAY_NAMES[pickup.materialType]}`, 1.1);
       }
     } else if (pickup.kind === 'medkit') {
@@ -3922,6 +3963,7 @@ export class FortLiteGame {
       }
       actor.health = actor.maxHealth;
       if (actor.kind === 'player') {
+        this.options.audio?.fortliteHeal();
         this.showMessage(`Medkit used. +${healed} HP`, 1.1);
       }
     }
@@ -3937,6 +3979,10 @@ export class FortLiteGame {
     }
 
     target.health -= amount;
+    if (target.kind === 'player' && amount > 0.01 && this.playerDamageSoundCooldown <= 0) {
+      this.options.audio?.fortliteDamage();
+      this.playerDamageSoundCooldown = reason === 'storm' ? 0.45 : 0.12;
+    }
     if (target.health > 0) {
       return;
     }
@@ -3949,6 +3995,7 @@ export class FortLiteGame {
     if (attacker) {
       attacker.eliminationCount += 1;
       if (attacker.kind === 'player') {
+        this.options.audio?.explosion();
         this.showMessage(`Eliminated ${target.id}.`, 1.6);
       }
     }
@@ -4021,6 +4068,11 @@ export class FortLiteGame {
     this.state = 'ended';
     if (this.options.showEndScreen !== false) {
       this.hud.showEndScreen(title, body);
+    }
+    if (won) {
+      this.options.audio?.fortliteVictory();
+    } else {
+      this.options.audio?.fortliteDefeat();
     }
     this.reportMatchResult(won);
   }

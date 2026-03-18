@@ -132,9 +132,11 @@ export const GamePlayer = ({
     (result: GameResult) => {
       setFinalResult((current) => current ?? result);
       setPaused(true);
-      audio.hit();
+      if (game.id !== "fortlite") {
+        audio.hit();
+      }
     },
-    [audio],
+    [audio, game.id],
   );
 
   const componentKey = `${game.id}-${difficulty}-${mode}-${seed}-${runId}`;
