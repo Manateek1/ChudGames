@@ -41,7 +41,7 @@ type MatchState = 'boot' | 'inProgress' | 'ended';
 type StormMode = 'pause' | 'shrink' | 'done';
 type Biome = 'regular' | 'forest' | 'desert';
 type FortLiteMode = 'solo' | 'duos';
-type SpawnState = 'plane' | 'parachuting' | 'grounded';
+type SpawnState = 'parachuting' | 'grounded';
 
 interface Actor {
   id: string;
@@ -77,8 +77,6 @@ interface Actor {
   stepTime: number;
   spawnState: SpawnState;
   spawnTimer: number;
-  dropDelay: number;
-  seatOffset: THREE.Vector3;
   dropStart: THREE.Vector3;
   dropTarget: THREE.Vector3;
   ai?: BotBrain;
@@ -142,17 +140,6 @@ interface ShotEffect {
   duration: number;
 }
 
-interface PlaneRuntime {
-  group: THREE.Group;
-  progress: number;
-  duration: number;
-  altitude: number;
-  start: THREE.Vector3;
-  end: THREE.Vector3;
-  direction: THREE.Vector3;
-  yaw: number;
-}
-
 const GRAVITY = 22;
 const DESERT_BIOME_THETA_START = 0;
 const FOREST_BIOME_THETA_START = Math.PI * 0.5;
@@ -188,10 +175,9 @@ const PLAYER_SPAWN_PADDING = 7;
 const PLAYER_SPAWN_SEPARATION = 34;
 const PLAYER_STARTER_LOOT_OFFSET = 4.2;
 const WORLD_CENTER = new THREE.Vector3(0, 0, 0);
-const AIRPLANE_LEAD_IN_DURATION = 3.4;
 const PARACHUTE_DURATION = 7;
 const STORM_START_DELAY = 20;
-const AIRPLANE_ALTITUDE = 92;
+const SKYDIVE_ALTITUDE = 92;
 const THIRD_PERSON_CAMERA_DISTANCE = 6.8;
 const THIRD_PERSON_CAMERA_HEIGHT = 1.9;
 const THIRD_PERSON_CAMERA_SHOULDER = 0.92;
@@ -200,10 +186,6 @@ const PARACHUTE_STEER_SPEED = 32;
 const CAMERA_POSITION_LERP = 0.22;
 const CAMERA_LOOK_LERP = 0.3;
 const CAMERA_COLLISION_PADDING = 0.45;
-const AIRPLANE_PATH_MARGIN = 220;
-const AIRPLANE_TOTAL_DURATION = AIRPLANE_LEAD_IN_DURATION + PARACHUTE_DURATION + 2.4;
-const AIRPLANE_SEAT_ROWS = 18;
-const AIRPLANE_SEAT_GAP = 0.68;
 
 export interface FortLiteMatchResult {
   won: boolean;
@@ -306,7 +288,6 @@ export class FortLiteGame {
   private wheelDirection = 0;
 
   private timedMessage: TimedMessage | null = null;
-  private plane: PlaneRuntime | null = null;
   private disposed = false;
   private externallyPaused = false;
   private matchResultSent = false;
@@ -567,7 +548,6 @@ export class FortLiteGame {
     this.matchResultSent = false;
     this.cameraRigInitialized = false;
     this.lastFirstPersonView = false;
-    this.plane = null;
 
     this.clearMatchRoot();
 
@@ -602,8 +582,8 @@ export class FortLiteGame {
     this.hud.hideEndScreen();
     this.showMessage(
       this.isDuosMode()
-        ? 'FortLite Duos is live. The drop ship is inbound, the storm waits 20 seconds, and right click snaps you into first-person aim.'
-        : 'The drop ship is inbound. Land fast, loot up, and use right click to swap from third-person into first-person aim.',
+        ? 'FortLite Duos is live. You drop straight from the sky now, the storm waits 20 seconds, and right click snaps you into first-person aim.'
+        : 'You now drop straight from the sky with a steerable parachute. Land fast, loot up, and use right click to swap from third-person into first-person aim.',
       4
     );
     this.refreshNavigation();
@@ -621,7 +601,6 @@ export class FortLiteGame {
 
     this.disposeObject(this.matchRoot);
     this.matchRoot = new THREE.Group();
-    this.plane = null;
   }
 
   private disposeObject(object: THREE.Object3D): void {
@@ -1876,132 +1855,22 @@ export class FortLiteGame {
     };
   }
 
-  private setupPlaneFlight(): void {
-    const angle = this.rng.range(0, Math.PI * 2);
-    const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)).normalize();
-    const side = new THREE.Vector3(-direction.z, 0, direction.x);
-    const lateralOffset = this.rng.range(-MAP_RADIUS * 0.18, MAP_RADIUS * 0.18);
-    const midpointOffset = side.multiplyScalar(lateralOffset);
-    const travelRadius = MAP_RADIUS + AIRPLANE_PATH_MARGIN;
-    const start = midpointOffset.clone().addScaledVector(direction, -travelRadius);
-    const end = midpointOffset.clone().addScaledVector(direction, travelRadius);
-    const group = this.createAirplaneMesh();
-
-    this.environmentGroup.add(group);
-    this.plane = {
-      group,
-      progress: 0,
-      duration: AIRPLANE_TOTAL_DURATION,
-      altitude: AIRPLANE_ALTITUDE,
-      start,
-      end,
-      direction,
-      yaw: Math.atan2(direction.x, direction.z)
-    };
-
-    this.updatePlaneFlight();
-  }
-
-  private createAirplaneMesh(): THREE.Group {
-    const group = new THREE.Group();
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x203044, roughness: 0.46, metalness: 0.42 });
-    const accentMaterial = new THREE.MeshStandardMaterial({ color: 0x4fd1ff, roughness: 0.28, metalness: 0.26 });
-    const trimMaterial = new THREE.MeshStandardMaterial({ color: 0xffd46d, roughness: 0.44, metalness: 0.24 });
-
-    const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.35, 38, 18), bodyMaterial);
-    fuselage.rotation.x = Math.PI / 2;
-
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(1.08, 4.8, 18), accentMaterial);
-    nose.position.z = 21.2;
-    nose.rotation.x = Math.PI / 2;
-
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.95, 4.2, 16), bodyMaterial);
-    tail.position.z = -20.6;
-    tail.rotation.x = -Math.PI / 2;
-
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(22, 0.32, 5.8), bodyMaterial);
-    wing.position.set(0, -0.12, 2.2);
-
-    const tailWing = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.24, 2.4), trimMaterial);
-    tailWing.position.set(0, 1.3, -16.2);
-
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.34, 3.8, 3.4), trimMaterial);
-    fin.position.set(0, 1.85, -17.4);
-
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 34), accentMaterial);
-    stripe.position.set(0, 0.56, 0.8);
-
-    const cockpit = new THREE.Mesh(
-      new THREE.BoxGeometry(1.3, 0.72, 3.4),
-      new THREE.MeshStandardMaterial({
-        color: 0xd7eefc,
-        emissive: 0x335a73,
-        emissiveIntensity: 0.22,
-        roughness: 0.18,
-        metalness: 0.08,
-        transparent: true,
-        opacity: 0.88
-      })
-    );
-    cockpit.position.set(0, 0.82, 12.4);
-
-    const engineOffsets = [-7.2, 7.2];
-    for (const engineOffset of engineOffsets) {
-      const engine = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.56, 2.4, 14), trimMaterial);
-      engine.rotation.x = Math.PI / 2;
-      engine.position.set(engineOffset, -0.48, 1.9);
-      group.add(engine);
-    }
-
-    group.add(fuselage, nose, tail, wing, tailWing, fin, stripe, cockpit);
-    return group;
-  }
-
-  private makePlaneSeatOffset(index: number): THREE.Vector3 {
-    const row = Math.floor(index / 2) % AIRPLANE_SEAT_ROWS;
-    const cabin = Math.floor(index / (AIRPLANE_SEAT_ROWS * 2));
-    const side = index % 2 === 0 ? -1 : 1;
-    const offsetX = side * 0.92;
-    const offsetY = -0.48;
-    const offsetZ = 10.2 - row * AIRPLANE_SEAT_GAP - cabin * (AIRPLANE_SEAT_ROWS * AIRPLANE_SEAT_GAP + 2.4);
-    return new THREE.Vector3(offsetX, offsetY, offsetZ);
-  }
-
-  private getPlanePosition(progress = this.plane?.progress ?? 0): THREE.Vector3 {
-    if (!this.plane) {
-      return new THREE.Vector3();
-    }
-
-    return this.plane.start.clone().lerp(this.plane.end, progress);
-  }
-
-  private getPlaneSeatWorldPosition(offset: THREE.Vector3): THREE.Vector3 {
-    const position = this.getPlanePosition();
-    if (!this.plane) {
-      return position.add(offset);
-    }
-
-    const rotatedOffset = offset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.plane.yaw);
-    rotatedOffset.y += this.plane.altitude;
-    return position.add(rotatedOffset);
-  }
-
-  private updatePlaneFlight(): void {
-    if (!this.plane) {
-      return;
-    }
-
-    this.plane.progress = clamp(this.matchTime / this.plane.duration, 0, 1);
-    const position = this.getPlanePosition(this.plane.progress);
-    this.plane.group.position.set(position.x, this.plane.altitude + Math.sin(this.matchTime * 1.8) * 0.35, position.z);
-    this.plane.group.rotation.set(0.03 * Math.sin(this.matchTime * 2), this.plane.yaw, -0.04 * Math.sin(this.matchTime * 1.6));
+  private makeSkyDropStart(groundSpawn: THREE.Vector3, playerControlled: boolean): THREE.Vector3 {
+    const horizontalStart = playerControlled
+      ? randomPointInCircle(this.rng, MAP_RADIUS * 0.08)
+      : clampToCircle(
+          groundSpawn.clone().add(randomPointInCircle(this.rng, MAP_RADIUS * 0.18)),
+          WORLD_CENTER,
+          MAP_RADIUS * 0.42
+        );
+    horizontalStart.y = SKYDIVE_ALTITUDE + (playerControlled ? 0 : this.rng.range(-4, 4));
+    return horizontalStart;
   }
 
   private spawnParticipants(): void {
     const participantCount = this.getParticipantCount();
     const botCount = this.getBotCount();
     this.participantSpawns = this.generateParticipantSpawns(participantCount, this.getTeamSize());
-    this.setupPlaneFlight();
 
     this.player = this.createActor(
       'player',
@@ -2009,13 +1878,11 @@ export class FortLiteGame {
       0x2dd4bf,
       0x4fd1ff,
       0,
-      this.makePlaneSeatOffset(0),
-      AIRPLANE_LEAD_IN_DURATION + 0.2
+      this.makeSkyDropStart(this.participantSpawns[0], true)
     );
-    this.player.yaw = this.plane?.yaw ?? Math.PI;
+    this.player.yaw = this.cameraYaw;
     this.actors.push(this.player);
 
-    const latestDropDelay = AIRPLANE_TOTAL_DURATION - PARACHUTE_DURATION - 0.8;
     for (let i = 0; i < botCount; i += 1) {
       const spawn = this.participantSpawns[i + 1];
       const bot = this.createActor(
@@ -2024,10 +1891,8 @@ export class FortLiteGame {
         new THREE.Color().setHSL(this.rng.next(), 0.45, 0.55).getHex(),
         0xffffff,
         this.getTeamIdForParticipant(i + 1),
-        this.makePlaneSeatOffset(i + 1),
-        clamp(AIRPLANE_LEAD_IN_DURATION + this.rng.range(-0.45, 1.65) + (i / Math.max(1, botCount)) * 1.35, AIRPLANE_LEAD_IN_DURATION - 0.15, latestDropDelay)
+        this.makeSkyDropStart(spawn, false)
       );
-      bot.yaw = this.plane?.yaw ?? Math.PI;
       bot.ai = {
         state: 'roam',
         destination: spawn.clone(),
@@ -2044,8 +1909,8 @@ export class FortLiteGame {
     }
 
     this.refreshActorPresentations();
-    this.cameraYaw = this.plane?.yaw ?? this.player.yaw;
-    this.cameraPitch = -0.12;
+    this.cameraYaw = Math.PI;
+    this.cameraPitch = -0.16;
     this.cameraRigInitialized = false;
     this.lastFirstPersonView = false;
   }
@@ -2093,8 +1958,7 @@ export class FortLiteGame {
     color: number,
     accent: number,
     teamId: number,
-    seatOffset: THREE.Vector3,
-    dropDelay: number
+    dropStart: THREE.Vector3
   ): Actor {
     const group = new THREE.Group();
     const visualRoot = new THREE.Group();
@@ -2186,8 +2050,8 @@ export class FortLiteGame {
 
     visualRoot.add(pelvis, body, chestPlate, backpack, head, visor, leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot);
     group.add(shadow, visualRoot, ring, parachute);
-    group.position.copy(this.getPlaneSeatWorldPosition(seatOffset));
-    group.rotation.y = this.plane?.yaw ?? Math.PI;
+    group.position.copy(dropStart);
+    group.rotation.y = Math.PI;
 
     this.actorGroup.add(group);
     this.raycastTargets.push(body, head, chestPlate);
@@ -2219,7 +2083,7 @@ export class FortLiteGame {
       position: group.position.clone(),
       lastPosition: group.position.clone(),
       verticalVelocity: 0,
-      yaw: this.plane?.yaw ?? Math.PI,
+      yaw: Math.PI,
       radius: ACTOR_RADIUS,
       health: 100,
       maxHealth: 100,
@@ -2232,11 +2096,9 @@ export class FortLiteGame {
       eliminationCount: 0,
       moveBlend: 0,
       stepTime: this.rng.range(0, Math.PI * 2),
-      spawnState: 'plane',
+      spawnState: 'parachuting',
       spawnTimer: 0,
-      dropDelay,
-      seatOffset: seatOffset.clone(),
-      dropStart: group.position.clone(),
+      dropStart: dropStart.clone(),
       dropTarget: groundSpawn.clone()
     };
 
@@ -2505,7 +2367,6 @@ export class FortLiteGame {
     }
 
     this.matchTime += dt;
-    this.updatePlaneFlight();
     this.viewModelKick = Math.max(0, this.viewModelKick - dt * 6.5);
     this.muzzleFlashTime = Math.max(0, this.muzzleFlashTime - dt * 7.5);
     this.viewModelSway.multiplyScalar(Math.max(0, 1 - dt * 7.5));
@@ -2535,19 +2396,6 @@ export class FortLiteGame {
     this.resolveActorSeparation();
     this.updateBuildPreview();
     this.checkMatchEnd();
-  }
-
-  private beginParachuteDrop(actor: Actor): void {
-    actor.spawnState = 'parachuting';
-    actor.spawnTimer = 0;
-    actor.dropStart.copy(actor.position);
-    actor.dropStart.y = this.plane?.altitude ?? AIRPLANE_ALTITUDE;
-    actor.position.copy(actor.dropStart);
-    actor.parachuteGroup.visible = true;
-
-    if (actor === this.player) {
-      this.showMessage('Jumping. Steer your parachute with WASD before touchdown.', 2);
-    }
   }
 
   private finishLanding(actor: Actor, groundHeight: number): void {
@@ -2581,18 +2429,6 @@ export class FortLiteGame {
       return false;
     }
 
-    if (actor.spawnState === 'plane') {
-      actor.position.copy(this.getPlaneSeatWorldPosition(actor.seatOffset));
-      actor.yaw = this.plane?.yaw ?? actor.yaw;
-      actor.verticalVelocity = 0;
-      actor.grounded = false;
-
-      if (this.matchTime >= actor.dropDelay) {
-        this.beginParachuteDrop(actor);
-      }
-      return true;
-    }
-
     actor.spawnTimer = Math.min(PARACHUTE_DURATION, actor.spawnTimer + dt);
     const forward = new THREE.Vector3(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
@@ -2607,7 +2443,7 @@ export class FortLiteGame {
     const progress = clamp(actor.spawnTimer / PARACHUTE_DURATION, 0, 1);
     const travelProgress = 1 - Math.pow(1 - progress, 1.15);
     const horizontalPosition = actor.dropStart.clone().lerp(actor.dropTarget, travelProgress);
-    const groundHeight = this.sampleGroundHeight(horizontalPosition.x, horizontalPosition.z, AIRPLANE_ALTITUDE + 6);
+    const groundHeight = this.sampleGroundHeight(horizontalPosition.x, horizontalPosition.z, SKYDIVE_ALTITUDE + 6);
     actor.position.set(
       horizontalPosition.x,
       THREE.MathUtils.lerp(actor.dropStart.y, groundHeight, progress),
@@ -2656,7 +2492,7 @@ export class FortLiteGame {
     }
 
     if (this.updateActorSpawnState(actor, dt, moveInput)) {
-      actor.yaw = angleLerp(actor.yaw, this.cameraYaw, actor.spawnState === 'plane' ? 0.2 : 0.14);
+      actor.yaw = angleLerp(actor.yaw, this.cameraYaw, 0.18);
       this.viewModelMoveBlend = 0;
       return;
     }
@@ -2944,11 +2780,11 @@ export class FortLiteGame {
     if (weapon) {
       actor.inventory.mode = 'weapon';
       actor.inventory.weaponIndex = this.getWeaponSlotIndexById(weapon.definition.id);
-      if (distance <= weapon.definition.range * 0.82 && this.hasLineOfSight(actor, target) && this.rng.next() > 0.28) {
+      if (distance <= weapon.definition.range * 0.9 && this.hasLineOfSight(actor, target) && this.rng.next() > 0.14) {
         const aimTarget = target.position.clone().add(new THREE.Vector3(
-          this.rng.range(-0.65, 0.65),
-          this.rng.range(0.95, 1.65),
-          this.rng.range(-0.65, 0.65)
+          this.rng.range(-0.34, 0.34),
+          this.rng.range(1.1, 1.58),
+          this.rng.range(-0.34, 0.34)
         ));
         const direction = aimTarget.sub(actor.position.clone().add(new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0))).normalize();
         this.tryFireWeapon(actor, direction, false);
@@ -3683,7 +3519,7 @@ export class FortLiteGame {
 
     const swing = Math.sin(actor.stepTime) * 0.65 * actor.moveBlend;
     const counterSwing = Math.sin(actor.stepTime + Math.PI) * 0.65 * actor.moveBlend;
-    const airborneLean = actor.spawnState === 'parachuting' ? 0.38 : actor.spawnState === 'plane' ? 0.06 : 0;
+    const airborneLean = actor.spawnState === 'parachuting' ? 0.38 : 0;
     actor.visualRoot.rotation.x = airborneLean;
     actor.visualRoot.rotation.z = actor.spawnState === 'parachuting' ? Math.sin(actor.stepTime * 0.6) * 0.06 : 0;
     actor.leftArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -1.05 : swing;
@@ -3696,7 +3532,7 @@ export class FortLiteGame {
       ? 0
       : 0.26 + (1 - actor.health / actor.maxHealth) * 0.22;
     material.opacity = ringOpacity;
-    actor.shadowMesh.scale.setScalar(actor.spawnState === 'parachuting' ? clamp(1.5 - (actor.position.y / AIRPLANE_ALTITUDE), 0.4, 1) : 1);
+    actor.shadowMesh.scale.setScalar(actor.spawnState === 'parachuting' ? clamp(1.5 - (actor.position.y / SKYDIVE_ALTITUDE), 0.4, 1) : 1);
     const shadowMaterial = actor.shadowMesh.material as THREE.MeshBasicMaterial;
     shadowMaterial.opacity = actor.spawnState === 'grounded' ? 0.16 : actor.spawnState === 'parachuting' ? 0.08 : 0;
   }
@@ -3923,9 +3759,7 @@ export class FortLiteGame {
       ? `Storm in ${Math.ceil(Math.max(0, STORM_START_DELAY - this.matchTime))}s`
       : `Storm Phase ${stormProgress.toFixed(0)}%`;
 
-    const statusText = this.player.spawnState === 'plane'
-      ? 'Riding the drop ship'
-      : this.player.spawnState === 'parachuting'
+    const statusText = this.player.spawnState === 'parachuting'
         ? 'Parachuting to target'
         : this.player.reloadTimer > 0 && weapon
           ? `Reloading ${weapon.definition.name}`
@@ -4036,9 +3870,7 @@ export class FortLiteGame {
     const aimDirection = this.getAimDirection();
     const horizontalForward = new THREE.Vector3(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
     const right = new THREE.Vector3(-horizontalForward.z, 0, horizontalForward.x);
-    const pivotHeight = this.player.spawnState === 'plane'
-      ? 1.95
-      : this.player.spawnState === 'parachuting'
+    const pivotHeight = this.player.spawnState === 'parachuting'
         ? 2.2
         : PLAYER_EYE_HEIGHT;
     const pivot = this.player.position.clone().add(new THREE.Vector3(0, pivotHeight, 0));
@@ -4049,14 +3881,10 @@ export class FortLiteGame {
       desiredPosition = pivot.clone();
       lookTarget = pivot.clone().addScaledVector(aimDirection, 24);
     } else {
-      const cameraDistance = this.player.spawnState === 'plane'
-        ? THIRD_PERSON_CAMERA_DISTANCE * 0.95
-        : this.player.spawnState === 'parachuting'
+      const cameraDistance = this.player.spawnState === 'parachuting'
           ? PARACHUTE_CAMERA_DISTANCE
           : THIRD_PERSON_CAMERA_DISTANCE;
-      const cameraHeight = this.player.spawnState === 'plane'
-        ? THIRD_PERSON_CAMERA_HEIGHT + 0.4
-        : this.player.spawnState === 'parachuting'
+      const cameraHeight = this.player.spawnState === 'parachuting'
           ? THIRD_PERSON_CAMERA_HEIGHT + 1.35
           : THIRD_PERSON_CAMERA_HEIGHT;
       const shoulderOffset = this.player.spawnState === 'parachuting' ? 0.32 : THIRD_PERSON_CAMERA_SHOULDER;
@@ -4065,7 +3893,7 @@ export class FortLiteGame {
         .addScaledVector(horizontalForward, -cameraDistance)
         .addScaledVector(right, shoulderOffset);
       desiredPosition = this.resolveCameraCollision(pivot.clone().add(new THREE.Vector3(0, 0.55, 0)), desiredPosition);
-      lookTarget = pivot.clone().addScaledVector(aimDirection, this.player.spawnState === 'plane' ? 18 : 22);
+      lookTarget = pivot.clone().addScaledVector(aimDirection, this.player.spawnState === 'parachuting' ? 20 : 22);
     }
 
     if (!this.cameraRigInitialized || this.lastFirstPersonView !== firstPerson) {
@@ -4132,12 +3960,8 @@ export class FortLiteGame {
       return 'Click once to capture the mouse for unlimited 360 look. FortLite now defaults to third-person, and right click switches to first-person aim. Press F for fullscreen.';
     }
 
-    if (this.player.spawnState === 'plane') {
-      return 'Airplane inbound. Hold steady, line up your route, and get ready to jump into the city blocks and biomes below.';
-    }
-
     if (this.player.spawnState === 'parachuting') {
-      return 'Parachuting. Steer with WASD, pick your landing, and race to loot before the storm timer expires.';
+      return 'Parachuting. Steer with WASD, choose your direction, and race to loot before the storm timer expires.';
     }
 
     if (nearbyPickup) {
@@ -4956,12 +4780,12 @@ export class FortLiteGame {
 
   private applyWeaponSpread(direction: THREE.Vector3, spread: number, playerOwned: boolean): THREE.Vector3 {
     const result = direction.clone();
-    const spreadMultiplier = playerOwned ? 0.85 : 1.85;
+    const spreadMultiplier = playerOwned ? 0.85 : 1.1;
     const angleX = this.rng.range(-1, 1) * spread * spreadMultiplier;
     const angleY = this.rng.range(-1, 1) * spread * spreadMultiplier;
     result.x += angleX;
     result.y += angleY;
-    result.z += this.rng.range(-1, 1) * spread * (playerOwned ? 0.25 : 0.45);
+    result.z += this.rng.range(-1, 1) * spread * (playerOwned ? 0.25 : 0.18);
     return result.normalize();
   }
 
