@@ -57,6 +57,8 @@ interface Actor {
   rightArmPivot: THREE.Group;
   leftLegPivot: THREE.Group;
   rightLegPivot: THREE.Group;
+  healthBarRoot: THREE.Group;
+  healthBarFill: THREE.Mesh;
   bodyParts: THREE.Object3D[];
   heldItemRoot: THREE.Group;
   heldItemMesh: THREE.Object3D | null;
@@ -151,6 +153,10 @@ interface ShotEffect {
   duration: number;
 }
 
+type HarvestTarget =
+  | { kind: 'resource'; node: ResourceNode }
+  | { kind: 'build'; piece: BuildPiece };
+
 const GRAVITY = 22;
 const DESERT_BIOME_THETA_START = 0;
 const FOREST_BIOME_THETA_START = Math.PI * 0.5;
@@ -168,6 +174,7 @@ const BOT_SPRINT_SPEED = 7.1 * 0.9 * BOT_BUFF_MULTIPLIER;
 const JUMP_SPEED = 8;
 const INTERACT_DISTANCE = 3;
 const HARVEST_DISTANCE = 4.6;
+const PICKAXE_STRUCTURE_DAMAGE = 80;
 const WATER_MOVE_MULTIPLIER = 0.58;
 const WALL_WIDTH = 4;
 const WALL_HEIGHT = 4;
@@ -2075,9 +2082,8 @@ export class FortLiteGame {
     }
 
     mesh.position.set(position.x, terrainY, position.z);
-    this.tagTarget(mesh, 'resource', null);
 
-    return {
+    const node: ResourceNode = {
       id: `resource-${index}`,
       mesh,
       position: position.clone(),
@@ -2094,6 +2100,8 @@ export class FortLiteGame {
         mesh
       }
     };
+    this.tagTarget(mesh, 'resource', node);
+    return node;
   }
 
   private makeSkyDropStart(groundSpawn: THREE.Vector3, playerControlled: boolean): THREE.Vector3 {
@@ -2272,6 +2280,28 @@ export class FortLiteGame {
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.04;
 
+    const healthBarRoot = new THREE.Group();
+    healthBarRoot.position.set(0, 3.35, 0);
+
+    const healthBarBack = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.1, 0.18),
+      new THREE.MeshBasicMaterial({ color: 0x081018, transparent: true, opacity: 0.86, depthWrite: false, depthTest: false })
+    );
+
+    const healthBarFill = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.96, 0.09),
+      new THREE.MeshBasicMaterial({ color: 0x66e37c, transparent: true, opacity: 0.96, depthWrite: false, depthTest: false })
+    );
+    healthBarFill.position.set(0, 0, 0.01);
+
+    const healthBarFrame = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.16, 0.24),
+      new THREE.MeshBasicMaterial({ color: 0xcfe6f2, transparent: true, opacity: 0.42, depthWrite: false, depthTest: false })
+    );
+    healthBarFrame.position.z = -0.005;
+
+    healthBarRoot.add(healthBarFrame, healthBarBack, healthBarFill);
+
     const parachute = this.createParachuteMesh(new THREE.Color(color).offsetHSL(0, 0.02, 0.1).getHex(), accent);
 
     visualRoot.add(
@@ -2285,7 +2315,7 @@ export class FortLiteGame {
       rightLegPivot,
       heldItemRoot
     );
-    group.add(shadow, visualRoot, ring, parachute);
+    group.add(shadow, visualRoot, ring, healthBarRoot, parachute);
     group.position.copy(dropStart);
     group.rotation.y = Math.PI;
 
@@ -2314,6 +2344,8 @@ export class FortLiteGame {
       rightArmPivot,
       leftLegPivot,
       rightLegPivot,
+      healthBarRoot,
+      healthBarFill,
       bodyParts: [visualRoot, shadow],
       heldItemRoot,
       heldItemMesh: null,
@@ -2360,16 +2392,20 @@ export class FortLiteGame {
         actor === this.player ? 0x3bdad6 : actor.teamId === playerTeamId ? 0x6cf0b2 : 0xff7c70
       );
       actor.ringMesh.visible = actor !== this.player;
+      actor.healthBarRoot.visible = actor !== this.player;
       actor.parachuteGroup.visible = actor.spawnState === 'parachuting';
       this.syncActorLoadoutVisual(actor);
     }
   }
 
   private syncActorLoadoutVisual(actor: Actor): void {
-    const equippedWeapon = actor.alive && actor.spawnState === 'grounded' && actor.inventory.mode === 'weapon'
+    const canShowHeldItem = actor.alive && actor.spawnState === 'grounded';
+    const equippedWeapon = canShowHeldItem && actor.inventory.mode === 'weapon'
       ? this.getEquippedWeapon(actor)
       : null;
-    const nextKey = equippedWeapon?.definition.id ?? 'hidden';
+    const nextKey = actor === this.player && this.isBuildMode() && canShowHeldItem
+      ? `build-${this.selectedBuildPiece}`
+      : equippedWeapon?.definition.id ?? (canShowHeldItem && actor.inventory.mode === 'harvest' ? 'harvest' : 'hidden');
     if (nextKey !== actor.heldItemKey) {
       if (actor.heldItemMesh) {
         actor.heldItemRoot.remove(actor.heldItemMesh);
@@ -2377,7 +2413,20 @@ export class FortLiteGame {
         actor.heldItemMesh = null;
       }
 
-      if (equippedWeapon) {
+      if (nextKey === 'harvest') {
+        const tool = this.createHarvestToolMesh();
+        tool.scale.setScalar(0.84);
+        tool.position.set(0.02, -0.04, -0.08);
+        tool.rotation.set(0.08, Math.PI * 0.96, 0.22);
+        actor.heldItemRoot.add(tool);
+        actor.heldItemMesh = tool;
+      } else if (nextKey.startsWith('build-')) {
+        const tool = this.createBuildToolMesh();
+        tool.scale.setScalar(0.8);
+        tool.rotation.set(0.18, Math.PI * 0.95, 0.1);
+        actor.heldItemRoot.add(tool);
+        actor.heldItemMesh = tool;
+      } else if (equippedWeapon) {
         const gun = this.createWeaponDisplayModel(equippedWeapon.definition, 'pickup');
         gun.scale.setScalar(0.78);
         gun.rotation.set(0.22, Math.PI * 0.95, 0.08);
@@ -2388,7 +2437,7 @@ export class FortLiteGame {
       actor.heldItemKey = nextKey;
     }
 
-    actor.heldItemRoot.visible = Boolean(equippedWeapon);
+    actor.heldItemRoot.visible = nextKey !== 'hidden';
   }
 
   private getParticipantCount(): number {
@@ -2894,13 +2943,13 @@ export class FortLiteGame {
 
   private handlePlayerLoadoutInput(): void {
     const actor = this.player;
-    const pickaxePressed = this.justPressedKeys.has('Digit1');
-    const riflePressed = this.justPressedKeys.has('Digit2');
-    const shotgunPressed = this.justPressedKeys.has('Digit3');
-    const smgPressed = this.justPressedKeys.has('Digit4');
-    const wallPressed = riflePressed || this.justPressedKeys.has('KeyZ');
-    const floorPressed = shotgunPressed || this.justPressedKeys.has('KeyX');
-    const rampPressed = smgPressed || this.justPressedKeys.has('KeyC');
+    const pickaxePressed = this.justPressedKeys.has('KeyG');
+    const riflePressed = this.justPressedKeys.has('Digit1');
+    const shotgunPressed = this.justPressedKeys.has('Digit2');
+    const smgPressed = this.justPressedKeys.has('Digit3');
+    const wallPressed = this.justPressedKeys.has('KeyZ');
+    const floorPressed = this.justPressedKeys.has('KeyX');
+    const rampPressed = this.justPressedKeys.has('KeyC');
 
     if (this.justPressedKeys.has('KeyQ')) {
       this.buildMode = !this.buildMode;
@@ -3393,13 +3442,13 @@ export class FortLiteGame {
     if (playerOwned) {
       this.viewModelKick = Math.min(0.22, this.viewModelKick + (weapon.definition.id === 'auto-shotgun' ? 0.18 : 0.1));
       this.muzzleFlashTime = 0.14;
-      this.options.audio?.fortliteFire(weapon.definition.id);
     }
 
     const origin = actor.kind === 'player'
       ? this.camera.position.clone()
       : actor.position.clone().add(new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0));
     const visualOrigin = this.getShotVisualOrigin(actor);
+    let landedImpact = false;
 
     for (let pellet = 0; pellet < weapon.definition.pellets; pellet += 1) {
       const shotDirection = this.applyWeaponSpread(direction, weapon.definition.spread, playerOwned);
@@ -3419,6 +3468,7 @@ export class FortLiteGame {
         if (!ref) {
           if (kind === 'static' || kind === 'resource') {
             impactPoint = hit.point.clone();
+            landedImpact = true;
             break;
           }
           continue;
@@ -3430,18 +3480,30 @@ export class FortLiteGame {
             continue;
           }
           impactPoint = hit.point.clone();
+          landedImpact = true;
           this.applyDamage(target, weapon.definition.damage, actor, 'weapon');
           break;
         }
 
         if (kind === 'build') {
           impactPoint = hit.point.clone();
+          landedImpact = true;
           this.damageBuildPiece(ref as BuildPiece, weapon.definition.damage);
+          break;
+        }
+
+        if (kind === 'resource') {
+          impactPoint = hit.point.clone();
+          landedImpact = true;
           break;
         }
       }
 
       this.createShotEffect(visualOrigin, impactPoint, weapon.definition.color);
+    }
+
+    if (playerOwned && landedImpact) {
+      this.options.audio?.fortliteFire(weapon.definition.id);
     }
   }
 
@@ -3480,10 +3542,10 @@ export class FortLiteGame {
   }
 
   private tryHarvest(actor: Actor): void {
-    const node = this.findHarvestTarget(actor);
-    if (!node) {
+    const target = this.findHarvestTarget(actor);
+    if (!target) {
       if (actor.kind === 'player') {
-        this.showMessage('No harvestable node in range.', 1);
+        this.showMessage('No harvest target in range.', 1);
       }
       return;
     }
@@ -3492,7 +3554,12 @@ export class FortLiteGame {
     if (actor.kind === 'player') {
       this.viewModelKick = Math.min(0.16, this.viewModelKick + 0.08);
     }
-    this.harvestNode(actor, node);
+    if (target.kind === 'resource') {
+      this.harvestNode(actor, target.node);
+      return;
+    }
+
+    this.harvestBuildPiece(actor, target.piece);
   }
 
   private harvestNode(actor: Actor, node: ResourceNode): void {
@@ -3521,6 +3588,15 @@ export class FortLiteGame {
     this.removeCameraObstacle(node.mesh);
     this.disposeObject(node.mesh);
     this.refreshNavigation();
+  }
+
+  private harvestBuildPiece(actor: Actor, piece: BuildPiece): void {
+    this.damageBuildPiece(piece, PICKAXE_STRUCTURE_DAMAGE);
+
+    if (actor.kind === 'player') {
+      this.options.audio?.fortliteHarvest();
+      this.showMessage('Build piece damaged.', 0.9);
+    }
   }
 
   private tryPlaceBuild(actor: Actor, forcedType?: BuildPieceType, forcedWorldPosition?: THREE.Vector3, forcedYaw?: number): void {
@@ -3979,6 +4055,15 @@ export class FortLiteGame {
       ? 0
       : 0.26 + (1 - actor.health / actor.maxHealth) * 0.22;
     material.opacity = ringOpacity;
+    const healthRatio = clamp(actor.health / Math.max(1, actor.maxHealth), 0, 1);
+    const healthBarMaterial = actor.healthBarFill.material as THREE.MeshBasicMaterial;
+    healthBarMaterial.color.setHex(
+      healthRatio > 0.65 ? 0x66e37c : healthRatio > 0.3 ? 0xf0c65c : 0xff6b6b
+    );
+    actor.healthBarFill.scale.x = healthRatio;
+    actor.healthBarFill.position.x = -0.48 + healthRatio * 0.48;
+    actor.healthBarRoot.quaternion.copy(this.camera.quaternion);
+    actor.healthBarRoot.visible = actor !== this.player && actor.alive && actor.spawnState === 'grounded';
     actor.shadowMesh.scale.setScalar(actor.spawnState === 'parachuting' ? clamp(1.5 - (actor.position.y / SKYDIVE_ALTITUDE), 0.4, 1) : 1);
     const shadowMaterial = actor.shadowMesh.material as THREE.MeshBasicMaterial;
     shadowMaterial.opacity = actor.spawnState === 'grounded' ? 0.16 : actor.spawnState === 'parachuting' ? 0.08 : 0;
@@ -4426,13 +4511,13 @@ export class FortLiteGame {
     }
 
     const items = [
-      { key: '1', label: 'Pickaxe', detail: 'Harvest', active: this.player.inventory.mode === 'harvest' }
+      { key: 'G', label: 'Pickaxe', detail: 'Harvest', active: this.player.inventory.mode === 'harvest' }
     ];
 
     return items.concat(WEAPON_DEFINITIONS.map((definition, slotIndex) => {
       const weapon = this.getWeaponForSlot(this.player, slotIndex);
       return {
-        key: String(slotIndex + 2),
+        key: String(slotIndex + 1),
         label: definition.name,
         detail: weapon ? `${weapon.magAmmo}/${this.player.inventory.ammo[definition.ammoType]}` : 'Pick up gun',
         active: this.player.inventory.mode === 'weapon' && this.player.inventory.weaponIndex === slotIndex
@@ -4475,7 +4560,7 @@ export class FortLiteGame {
     }
 
     if (this.player.inventory.mode === 'harvest') {
-      return 'Harvest trees, rocks, and metal nodes with the pickaxe, or switch to Rifle, Shotgun, or SMG with 2, 3, or 4.';
+      return 'Harvest trees, rocks, and player-made builds with the pickaxe, or switch to Rifle, Shotgun, or SMG with 1, 2, or 3.';
     }
 
     return this.isDuosMode()
@@ -4871,19 +4956,81 @@ export class FortLiteGame {
     return best;
   }
 
-  private findHarvestTarget(actor: Actor): ResourceNode | null {
-    const nearby = this.findNearestResource(actor.position, HARVEST_DISTANCE);
-    if (!nearby) {
-      return null;
+  private findNearestBuildPiece(position: THREE.Vector3, maxDistance: number): BuildPiece | null {
+    let best: BuildPiece | null = null;
+    let bestDistance = maxDistance;
+
+    for (const piece of this.buildPieces) {
+      const distance = horizontalDistance(position, piece.position);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = piece;
+      }
     }
 
+    return best;
+  }
+
+  private findHarvestTarget(actor: Actor): HarvestTarget | null {
+    const origin = actor.kind === 'player'
+      ? this.camera.position.clone()
+      : actor.position.clone().add(new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0));
     const aimDirection = actor.kind === 'player' ? this.getAimDirection() : yawToDirection(actor.yaw);
-    const toNode = nearby.position.clone().sub(actor.position).setY(0).normalize();
-    if (aimDirection.dot(toNode) < 0.15 && actor.kind === 'player') {
-      return null;
+    this.raycaster.set(origin, aimDirection);
+    this.raycaster.far = HARVEST_DISTANCE + 1.4;
+    const hits = this.raycaster.intersectObjects(this.raycastTargets, true);
+
+    for (const hit of hits) {
+      const hitKind = hit.object.userData.kind as string | undefined;
+      const ref = hit.object.userData.ref as Actor | ResourceNode | BuildPiece | null | undefined;
+      if (hitKind === 'actor' && ref && (ref as Actor).id === actor.id) {
+        continue;
+      }
+      if (hitKind === 'resource' && ref) {
+        return { kind: 'resource', node: ref as ResourceNode };
+      }
+      if (hitKind === 'build' && ref) {
+        return { kind: 'build', piece: ref as BuildPiece };
+      }
+      if (hitKind === 'static') {
+        return null;
+      }
     }
 
-    return nearby;
+    const resource = this.findNearestResource(actor.position, HARVEST_DISTANCE);
+    const buildPiece = this.findNearestBuildPiece(actor.position, HARVEST_DISTANCE);
+    const options: HarvestTarget[] = [];
+    if (resource) {
+      options.push({ kind: 'resource', node: resource });
+    }
+    if (buildPiece) {
+      options.push({ kind: 'build', piece: buildPiece });
+    }
+
+    let best: HarvestTarget | null = null;
+    let bestDistance = HARVEST_DISTANCE;
+    for (const option of options) {
+      const position = option.kind === 'resource' ? option.node.position : option.piece.position;
+      const distance = horizontalDistance(actor.position, position);
+      if (distance >= bestDistance) {
+        continue;
+      }
+
+      if (actor.kind === 'player') {
+        const toTarget = position.clone().sub(actor.position).setY(0);
+        if (toTarget.lengthSq() > 0.0001) {
+          toTarget.normalize();
+          if (aimDirection.dot(toTarget) < 0.15) {
+            continue;
+          }
+        }
+      }
+
+      bestDistance = distance;
+      best = option;
+    }
+
+    return best;
   }
 
   private weaponScore(definition: WeaponDefinition): number {
@@ -5073,42 +5220,13 @@ export class FortLiteGame {
 
   private createHarvestToolMesh(): THREE.Group {
     const tool = new THREE.Group();
-    const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x7a4523, roughness: 0.92 });
-    const ferruleMaterial = new THREE.MeshStandardMaterial({ color: 0x6d4221, roughness: 0.7, metalness: 0.12 });
-    const steelMaterial = new THREE.MeshStandardMaterial({ color: 0xc4ccd5, roughness: 0.22, metalness: 0.9 });
-    const darkSteelMaterial = new THREE.MeshStandardMaterial({ color: 0x4e5661, roughness: 0.34, metalness: 0.78 });
-    const boltMaterial = new THREE.MeshStandardMaterial({ color: 0x9a592f, roughness: 0.54, metalness: 0.18 });
-
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.05, 1.7, 10), woodMaterial);
-    handle.position.set(0.04, -0.26, -0.46);
-    handle.rotation.z = 0.64;
-
-    const ferrule = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.065, 0.16, 10), ferruleMaterial);
-    ferrule.position.set(0.52, 0.16, -0.86);
-    ferrule.rotation.z = 0.64;
-
-    const headCore = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.2), darkSteelMaterial);
-    headCore.position.set(0.63, 0.28, -0.95);
-    headCore.rotation.set(0.08, 0.16, -0.12);
-
-    const topSpike = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.92, 10), steelMaterial);
-    topSpike.position.set(0.42, 0.68, -0.98);
-    topSpike.rotation.z = -0.98;
-
-    const lowerBlade = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.075, 1.1, 12), steelMaterial);
-    lowerBlade.position.set(0.94, 0.12, -1.02);
-    lowerBlade.rotation.z = Math.PI * 0.5 + 0.9;
-    lowerBlade.scale.set(1, 1, 0.42);
-
-    const lowerBladeTip = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.26, 12), steelMaterial);
-    lowerBladeTip.position.set(1.26, -0.06, -1.03);
-    lowerBladeTip.rotation.z = Math.PI * 0.5 + 0.9;
-
-    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.07, 12), boltMaterial);
-    bolt.position.set(0.66, 0.37, -0.9);
-    bolt.rotation.x = Math.PI * 0.5;
-
-    tool.add(handle, ferrule, headCore, topSpike, lowerBlade, lowerBladeTip, bolt);
+    const stick = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.03, 0.04, 1.78, 8),
+      new THREE.MeshStandardMaterial({ color: 0x7b4d2c, roughness: 0.94 })
+    );
+    stick.position.set(0.1, -0.16, -0.62);
+    stick.rotation.z = 0.66;
+    tool.add(stick);
     return tool;
   }
 
