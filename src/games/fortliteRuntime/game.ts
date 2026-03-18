@@ -3014,9 +3014,9 @@ export class FortLiteGame {
   private handlePlayerLoadoutInput(): void {
     const actor = this.player;
     const pickaxePressed = this.justPressedKeys.has('KeyG');
-    const riflePressed = this.justPressedKeys.has('Digit1');
-    const shotgunPressed = this.justPressedKeys.has('Digit2');
-    const smgPressed = this.justPressedKeys.has('Digit3');
+    const riflePressed = this.justPressedKeys.has('Digit1') || this.justPressedKeys.has('Numpad1');
+    const shotgunPressed = this.justPressedKeys.has('Digit2') || this.justPressedKeys.has('Numpad2');
+    const smgPressed = this.justPressedKeys.has('Digit3') || this.justPressedKeys.has('Numpad3');
     const wallPressed = this.justPressedKeys.has('KeyZ');
     const floorPressed = this.justPressedKeys.has('KeyX');
     const rampPressed = this.justPressedKeys.has('KeyC');
@@ -3025,32 +3025,36 @@ export class FortLiteGame {
       this.buildMode = !this.buildMode;
     }
 
-    if (pickaxePressed && !this.isBuildMode()) {
+    if (pickaxePressed) {
+      this.buildMode = false;
       actor.inventory.mode = 'harvest';
     }
 
-    if (wallPressed) {
-      if (this.isBuildMode()) {
-        this.setBuildPieceType('wall');
-      } else if (riflePressed) {
-        this.selectWeaponSlot(actor, 0);
-      }
+    if (riflePressed) {
+      this.buildMode = false;
+      this.selectWeaponSlot(actor, 0);
     }
 
-    if (floorPressed) {
-      if (this.isBuildMode()) {
-        this.setBuildPieceType('floor');
-      } else if (shotgunPressed) {
-        this.selectWeaponSlot(actor, 1);
-      }
+    if (shotgunPressed) {
+      this.buildMode = false;
+      this.selectWeaponSlot(actor, 1);
     }
 
-    if (rampPressed) {
-      if (this.isBuildMode()) {
-        this.setBuildPieceType('ramp');
-      } else if (smgPressed) {
-        this.selectWeaponSlot(actor, 2);
-      }
+    if (smgPressed) {
+      this.buildMode = false;
+      this.selectWeaponSlot(actor, 2);
+    }
+
+    if (wallPressed && this.isBuildMode()) {
+      this.setBuildPieceType('wall');
+    }
+
+    if (floorPressed && this.isBuildMode()) {
+      this.setBuildPieceType('floor');
+    }
+
+    if (rampPressed && this.isBuildMode()) {
+      this.setBuildPieceType('ramp');
     }
 
     if (this.wheelDirection !== 0 && !this.isBuildMode()) {

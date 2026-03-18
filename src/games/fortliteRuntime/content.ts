@@ -1,6 +1,6 @@
 import type { MaterialType, StormPhase, WeaponDefinition } from './types';
 
-export const BASE_MAP_RADIUS = 240;
+export const BASE_MAP_RADIUS = 180;
 export const MAP_SCALE = 3;
 export const STORM_SPEED_MULTIPLIER = 4;
 const RELOAD_TIME_MULTIPLIER = 2.5;
