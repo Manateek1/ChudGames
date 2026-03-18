@@ -117,15 +117,24 @@ export const FortLite = ({
         scoreRef.current(placement);
       },
       onMatchEnd: (result) => {
-        gameOverRef.current({
-          score: result.won ? 1 : 0,
-          won: result.won,
-          stats: {
-            placement: result.placement,
-            eliminations: result.eliminations,
-            run: result.survivalTime,
-          },
-        });
+        const reportGameOver = (): void => {
+          gameOverRef.current({
+            score: result.won ? 1 : 0,
+            won: result.won,
+            stats: {
+              placement: result.placement,
+              eliminations: result.eliminations,
+              run: result.survivalTime,
+            },
+          });
+        };
+
+        if (fullscreenSupported && document.fullscreenElement === viewport) {
+          void document.exitFullscreen().finally(reportGameOver);
+          return;
+        }
+
+        reportGameOver();
       },
     });
 
@@ -139,7 +148,7 @@ export const FortLite = ({
       gameRef.current = null;
       game.dispose();
     };
-  }, [seed, mode]);
+  }, [seed, mode, fullscreenSupported]);
 
   useEffect(() => {
     gameRef.current?.setPaused(paused);

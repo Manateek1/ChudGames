@@ -287,7 +287,7 @@ export class FortLiteHud {
     const [playerX, playerY] = toCanvas(snapshot.playerX, snapshot.playerZ);
     ctx.save();
     ctx.translate(playerX, playerY);
-    ctx.rotate(snapshot.playerYaw + Math.PI);
+    ctx.rotate(Math.PI - snapshot.playerYaw);
     ctx.beginPath();
     ctx.moveTo(0, -9);
     ctx.lineTo(6.5, 7);

@@ -10,7 +10,7 @@ export const BOT_COUNT = 99;
 export const BUILD_GRID_SIZE = 4;
 export const BUILD_COST = 20;
 export const MAX_WEAPON_SLOTS = 3;
-export const RESOURCE_RESPAWN_COUNT = 88 * MAP_SCALE;
+export const RESOURCE_RESPAWN_COUNT = 72 * MAP_SCALE;
 export const PATHFINDING_GRID_SIZE = 128;
 export const PATHFINDING_CELL_SIZE = 12;
 export const FIXED_TIMESTEP = 1 / 60;
@@ -85,4 +85,4 @@ export const MATERIAL_DISPLAY_NAMES: Record<MaterialType, string> = {
 export const MATERIAL_PRIORITY: readonly MaterialType[] = ['wood', 'stone', 'metal'];
 
 export const HELP_TEXT =
-  'W forward, A left, S back, D right. Mouse aim, Shift sprint, Space jump, F fullscreen. Hold right click to zoom. Walk over ammo and materials to auto-pick them up, use E to pick up guns, Q enters or exits build mode, Z wall, Y floor, X ramp, 1 rifle, 2 shotgun, 3 SMG, R reload or rotate, Enter restarts.';
+  'W forward, A left, S back, D right. Mouse aim, Shift sprint, Space jump, F fullscreen. FortLite now starts in third-person and holding right click swaps to first-person aim. The match opens in the airplane, then you parachute down and can steer your landing with WASD. Walk over ammo and materials to auto-pick them up, use E to pick up guns, Q enters or exits build mode, Z wall, Y floor, X ramp, 1 rifle, 2 shotgun, 3 SMG, R reload or rotate, Enter restarts.';
