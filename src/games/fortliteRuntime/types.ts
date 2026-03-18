@@ -4,7 +4,7 @@ export type AmmoType = 'light' | 'shells';
 export type MaterialType = 'wood' | 'stone' | 'metal';
 export type BuildPieceType = 'wall' | 'floor' | 'ramp';
 export type ActorKind = 'player' | 'bot';
-export type LootKind = 'weapon' | 'ammo' | 'material';
+export type LootKind = 'weapon' | 'ammo' | 'material' | 'medkit';
 export type EquipmentMode = 'harvest' | 'weapon';
 export type BotState = 'roam' | 'seekLoot' | 'seekSafeZone' | 'engage' | 'harvest';
 

@@ -11,7 +11,7 @@ export const BUILD_GRID_SIZE = 4;
 export const BUILD_COST = 20;
 export const MAX_WEAPON_SLOTS = 3;
 export const RESOURCE_RESPAWN_COUNT = 72 * MAP_SCALE;
-export const PATHFINDING_GRID_SIZE = 128;
+export const PATHFINDING_GRID_SIZE = 96;
 export const PATHFINDING_CELL_SIZE = 12;
 export const FIXED_TIMESTEP = 1 / 60;
 const SHRINK_DURATION_SCALE = MAP_SCALE / STORM_SPEED_MULTIPLIER;
@@ -30,7 +30,7 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     spread: 0.009,
     pellets: 1,
     reservePickup: 36,
-    color: 0x47b6ff
+    color: 0xe3b341
   },
   {
     id: 'auto-shotgun',
@@ -44,7 +44,7 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     spread: 0.058,
     pellets: 5,
     reservePickup: 14,
-    color: 0xf6ae2d
+    color: 0xe14b52
   },
   {
     id: 'tactical-smg',
@@ -58,7 +58,7 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     spread: 0.015,
     pellets: 1,
     reservePickup: 40,
-    color: 0x4ade80
+    color: 0x3d8dff
   }
 ];
 
@@ -85,4 +85,4 @@ export const MATERIAL_DISPLAY_NAMES: Record<MaterialType, string> = {
 export const MATERIAL_PRIORITY: readonly MaterialType[] = ['wood', 'stone', 'metal'];
 
 export const HELP_TEXT =
-  'W forward, A left, S back, D right. Mouse aim, Shift sprint, Space jump. FortLite now starts in third-person and holding right click swaps to first-person aim. The match begins in the sky with a parachute, and you can steer your own landing with WASD before touchdown. Walk over ammo and materials to auto-pick them up, use E to pick up guns, Q enters or exits build mode, Z wall, Y floor, X ramp, 1 rifle, 2 shotgun, 3 SMG, R reload or rotate, Enter restarts.';
+  'W forward, A left, S back, D right. Mouse aim, Shift sprint, Space jump. FortLite now starts in third-person and holding right click swaps to first-person aim. The match begins in the sky with a parachute, and you can steer your own landing with WASD before touchdown. Walk over ammo, materials, and medkits to auto-pick them up, use E to pick up guns, Q enters or exits build mode, Z wall, Y floor, X ramp, 1 rifle, 2 shotgun, 3 SMG, R reload or rotate, Enter restarts.';
