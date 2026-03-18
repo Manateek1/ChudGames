@@ -218,6 +218,8 @@ const DYNAMIC_RESOLUTION_DROP_DELAY = 0.45;
 const DYNAMIC_RESOLUTION_RECOVER_DELAY = 1.4;
 const DYNAMIC_RESOLUTION_DROP_STEP = 0.08;
 const DYNAMIC_RESOLUTION_RECOVER_STEP = 0.05;
+const BOT_NEAR_PRIORITY_DISTANCE = 72;
+const BOT_MID_PRIORITY_DISTANCE = 120;
 
 export interface FortLiteMatchResult {
   won: boolean;
@@ -334,6 +336,7 @@ export class FortLiteGame {
   private currentPixelRatio = 1;
   private lowFpsTime = 0;
   private highFpsTime = 0;
+  private simulationTick = 0;
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (event.code === 'Tab') {
@@ -617,6 +620,7 @@ export class FortLiteGame {
     this.cameraRigInitialized = false;
     this.lastFirstPersonView = false;
     this.lastHudRenderTime = 0;
+    this.simulationTick = 0;
 
     this.clearMatchRoot();
 
@@ -2862,6 +2866,7 @@ export class FortLiteGame {
     }
 
     this.matchTime += dt;
+    this.simulationTick = (this.simulationTick + 1) % 12;
     this.viewModelKick = Math.max(0, this.viewModelKick - dt * 6.5);
     this.muzzleFlashTime = Math.max(0, this.muzzleFlashTime - dt * 7.5);
     this.viewModelSway.multiplyScalar(Math.max(0, 1 - dt * 7.5));
@@ -2871,11 +2876,17 @@ export class FortLiteGame {
     this.updateShotEffects(dt);
     this.processPlayer(dt);
 
-    for (const actor of this.actors) {
+    for (let actorIndex = 0; actorIndex < this.actors.length; actorIndex += 1) {
+      const actor = this.actors[actorIndex];
       if (actor === this.player || !actor.alive) {
         continue;
       }
-      this.processBot(actor, dt);
+      const simulationStep = this.getBotSimulationStep(actor);
+      if (!this.shouldRunBotSimulationThisTick(simulationStep, actorIndex)) {
+        continue;
+      }
+      this.processBot(actor, dt * simulationStep);
+      this.tryAutoPickup(actor);
     }
 
     for (const actor of this.actors) {
@@ -2886,7 +2897,9 @@ export class FortLiteGame {
       this.updateActorTimers(actor, dt);
       this.applyStormDamage(actor, dt);
       this.updateActorVisual(actor);
-      this.tryAutoPickup(actor);
+      if (actor === this.player) {
+        this.tryAutoPickup(actor);
+      }
     }
 
     this.resolveActorSeparation();
@@ -3391,6 +3404,10 @@ export class FortLiteGame {
   }
 
   private updateLootVisuals(time: number): void {
+    if (this.graphicsQuality === 'low' && this.simulationTick % 2 !== 0) {
+      return;
+    }
+
     for (const pickup of this.loot) {
       pickup.mesh.position.set(
         pickup.position.x,
@@ -4081,6 +4098,11 @@ export class FortLiteGame {
   }
 
   private resolveActorSeparation(): void {
+    const cadence = this.graphicsQuality === 'low' ? 3 : this.graphicsQuality === 'medium' ? 2 : 1;
+    if (cadence > 1 && this.simulationTick % cadence !== 0) {
+      return;
+    }
+
     for (let i = 0; i < this.actors.length; i += 1) {
       const a = this.actors[i];
       if (!a.alive) {
@@ -4093,17 +4115,27 @@ export class FortLiteGame {
           continue;
         }
 
-        const delta = this.tempVectorA.copy(a.position).sub(b.position);
-        delta.y = 0;
-        const distance = delta.length();
         const minDistance = a.radius + b.radius;
-        if (distance === 0 || distance >= minDistance) {
+        const dx = a.position.x - b.position.x;
+        if (Math.abs(dx) >= minDistance) {
           continue;
         }
 
-        delta.normalize().multiplyScalar((minDistance - distance) * 0.5);
-        a.position.add(delta);
-        b.position.sub(delta);
+        const dz = a.position.z - b.position.z;
+        if (Math.abs(dz) >= minDistance) {
+          continue;
+        }
+
+        const distanceSquared = dx * dx + dz * dz;
+        if (distanceSquared === 0 || distanceSquared >= minDistance * minDistance) {
+          continue;
+        }
+
+        const distance = Math.sqrt(distanceSquared);
+        const pushScale = ((minDistance - distance) * 0.5) / Math.max(distance, 0.0001);
+        this.tempVectorA.set(dx * pushScale, 0, dz * pushScale);
+        a.position.add(this.tempVectorA);
+        b.position.sub(this.tempVectorA);
       }
     }
   }
@@ -5810,6 +5842,44 @@ export class FortLiteGame {
     this.renderer.setSize(this.root.clientWidth, this.root.clientHeight, false);
   }
 
+  private isHighPriorityBot(actor: Actor): boolean {
+    const brain = actor.ai;
+    if (!brain || actor.spawnState !== 'grounded') {
+      return true;
+    }
+
+    if (brain.state === 'engage' || Boolean(brain.targetActorId)) {
+      return true;
+    }
+
+    if (actor.health < actor.maxHealth * 0.55) {
+      return true;
+    }
+
+    if (this.shouldRotateToSafeZone(actor.position)) {
+      return true;
+    }
+
+    return horizontalDistance(actor.position, this.player.position) < BOT_NEAR_PRIORITY_DISTANCE;
+  }
+
+  private getBotSimulationStep(actor: Actor): number {
+    if (this.graphicsQuality === 'high' || this.isHighPriorityBot(actor)) {
+      return 1;
+    }
+
+    const distanceToPlayer = horizontalDistance(actor.position, this.player.position);
+    if (this.graphicsQuality === 'medium') {
+      return distanceToPlayer < BOT_MID_PRIORITY_DISTANCE ? 1 : 2;
+    }
+
+    return distanceToPlayer < BOT_MID_PRIORITY_DISTANCE ? 2 : 3;
+  }
+
+  private shouldRunBotSimulationThisTick(simulationStep: number, actorIndex: number): boolean {
+    return simulationStep <= 1 || (this.simulationTick + actorIndex) % simulationStep === 0;
+  }
+
   private updateDynamicResolution(fps: number, dt: number): void {
     const minimumPixelRatio = this.getMinimumPixelRatioForQuality(this.graphicsQuality);
     const targetPixelRatio = this.getPixelRatioForQuality(this.graphicsQuality);
@@ -5877,30 +5947,30 @@ export class FortLiteGame {
 
   private getBotDecisionInterval(): number {
     if (this.graphicsQuality === 'low') {
-      return this.rng.range(1.18, 1.8);
+      return this.rng.range(1.7, 2.45);
     }
     if (this.graphicsQuality === 'medium') {
-      return this.rng.range(0.96, 1.42);
+      return this.rng.range(1.2, 1.8);
     }
     return this.rng.range(0.82, 1.2);
   }
 
   private getBotRepathInterval(): number {
     if (this.graphicsQuality === 'low') {
-      return this.rng.range(2.3, 3.4);
+      return this.rng.range(3.1, 4.6);
     }
     if (this.graphicsQuality === 'medium') {
-      return this.rng.range(1.9, 2.8);
+      return this.rng.range(2.4, 3.5);
     }
     return this.rng.range(1.5, 2.2);
   }
 
   private getBotSenseInterval(engaged: boolean): number {
     if (this.graphicsQuality === 'low') {
-      return engaged ? this.rng.range(0.34, 0.5) : this.rng.range(0.46, 0.68);
+      return engaged ? this.rng.range(0.5, 0.72) : this.rng.range(0.66, 0.94);
     }
     if (this.graphicsQuality === 'medium') {
-      return engaged ? this.rng.range(0.26, 0.38) : this.rng.range(0.38, 0.54);
+      return engaged ? this.rng.range(0.34, 0.5) : this.rng.range(0.48, 0.68);
     }
     return engaged ? this.rng.range(0.2, 0.3) : this.rng.range(0.3, 0.42);
   }
