@@ -1247,10 +1247,10 @@ export class FortLiteGame {
   }
 
   private addCloudLayer(): void {
-    const cloudCount = this.graphicsQuality === 'low' ? 5 + MAP_SCALE : this.graphicsQuality === 'medium' ? 8 + MAP_SCALE * 2 : 12 + MAP_SCALE * 3;
-    const puffSegments = this.graphicsQuality === 'low' ? 5 : this.graphicsQuality === 'medium' ? 6 : 8;
+    const cloudCount = this.graphicsQuality === 'low' ? 3 + MAP_SCALE : this.graphicsQuality === 'medium' ? 5 + MAP_SCALE : 8 + MAP_SCALE * 2;
+    const puffSegments = this.graphicsQuality === 'low' ? 4 : this.graphicsQuality === 'medium' ? 5 : 6;
     const minPuffs = this.graphicsQuality === 'low' ? 1 : 2;
-    const maxPuffs = this.graphicsQuality === 'low' ? 3 : this.graphicsQuality === 'medium' ? 4 : 5;
+    const maxPuffs = this.graphicsQuality === 'low' ? 2 : this.graphicsQuality === 'medium' ? 3 : 4;
 
     for (let index = 0; index < cloudCount; index += 1) {
       const anchor = randomPointInCircle(this.rng, MAP_RADIUS + 140);
@@ -1337,54 +1337,64 @@ export class FortLiteGame {
 
   private createStructureShell(position: THREE.Vector3, size: THREE.Vector2, height: number, color: number, addLootSpots: boolean): void {
     const wallThickness = 0.4;
-    const doorwayWidth = clamp(Math.min(size.x, size.y) * 0.5, 4.8, 12);
+    const doorwayWidthX = clamp(size.x * 0.42, 6, 16);
+    const doorwayWidthZ = clamp(size.y * 0.42, 6, 16);
     const roofThickness = 0.3;
+    const floorThickness = 0.24;
     const roofColor = new THREE.Color(color).offsetHSL(0, 0.04, 0.08).getHex();
-    const towardCenter = WORLD_CENTER.clone().sub(position);
-    const doorwayAxis = Math.abs(towardCenter.x) > Math.abs(towardCenter.z) ? 'x' : 'z';
-    const doorwaySign = doorwayAxis === 'x'
-      ? (towardCenter.x >= 0 ? 1 : -1)
-      : (towardCenter.z >= 0 ? 1 : -1);
+    const sideWidth = Math.max(0.7, (size.x - doorwayWidthX) * 0.5);
+    const sideDepth = Math.max(0.7, (size.y - doorwayWidthZ) * 0.5);
 
-    if (doorwayAxis === 'z') {
-      const sideWidth = Math.max(0.7, (size.x - doorwayWidth) * 0.5);
-      this.addStaticObstacle(
-        new THREE.Vector3(position.x - (doorwayWidth * 0.5 + sideWidth * 0.5), 0, position.z + doorwaySign * size.y * 0.5),
-        new THREE.Vector2(sideWidth, wallThickness),
-        height,
-        color,
-        false
-      );
-      this.addStaticObstacle(
-        new THREE.Vector3(position.x + (doorwayWidth * 0.5 + sideWidth * 0.5), 0, position.z + doorwaySign * size.y * 0.5),
-        new THREE.Vector2(sideWidth, wallThickness),
-        height,
-        color,
-        false
-      );
-      this.addStaticObstacle(new THREE.Vector3(position.x, 0, position.z - doorwaySign * size.y * 0.5), new THREE.Vector2(size.x, wallThickness), height, color, false);
-      this.addStaticObstacle(new THREE.Vector3(position.x - size.x * 0.5, 0, position.z), new THREE.Vector2(wallThickness, size.y), height, color, false);
-      this.addStaticObstacle(new THREE.Vector3(position.x + size.x * 0.5, 0, position.z), new THREE.Vector2(wallThickness, size.y), height, color, false);
-    } else {
-      const sideDepth = Math.max(0.7, (size.y - doorwayWidth) * 0.5);
-      this.addStaticObstacle(
-        new THREE.Vector3(position.x + doorwaySign * size.x * 0.5, 0, position.z - (doorwayWidth * 0.5 + sideDepth * 0.5)),
-        new THREE.Vector2(wallThickness, sideDepth),
-        height,
-        color,
-        false
-      );
-      this.addStaticObstacle(
-        new THREE.Vector3(position.x + doorwaySign * size.x * 0.5, 0, position.z + (doorwayWidth * 0.5 + sideDepth * 0.5)),
-        new THREE.Vector2(wallThickness, sideDepth),
-        height,
-        color,
-        false
-      );
-      this.addStaticObstacle(new THREE.Vector3(position.x - doorwaySign * size.x * 0.5, 0, position.z), new THREE.Vector2(wallThickness, size.y), height, color, false);
-      this.addStaticObstacle(new THREE.Vector3(position.x, 0, position.z - size.y * 0.5), new THREE.Vector2(size.x, wallThickness), height, color, false);
-      this.addStaticObstacle(new THREE.Vector3(position.x, 0, position.z + size.y * 0.5), new THREE.Vector2(size.x, wallThickness), height, color, false);
+    const wallSegments: Array<{ center: THREE.Vector3; size: THREE.Vector2 }> = [
+      {
+        center: new THREE.Vector3(position.x - (doorwayWidthX * 0.5 + sideWidth * 0.5), 0, position.z - size.y * 0.5),
+        size: new THREE.Vector2(sideWidth, wallThickness)
+      },
+      {
+        center: new THREE.Vector3(position.x + (doorwayWidthX * 0.5 + sideWidth * 0.5), 0, position.z - size.y * 0.5),
+        size: new THREE.Vector2(sideWidth, wallThickness)
+      },
+      {
+        center: new THREE.Vector3(position.x - (doorwayWidthX * 0.5 + sideWidth * 0.5), 0, position.z + size.y * 0.5),
+        size: new THREE.Vector2(sideWidth, wallThickness)
+      },
+      {
+        center: new THREE.Vector3(position.x + (doorwayWidthX * 0.5 + sideWidth * 0.5), 0, position.z + size.y * 0.5),
+        size: new THREE.Vector2(sideWidth, wallThickness)
+      },
+      {
+        center: new THREE.Vector3(position.x - size.x * 0.5, 0, position.z - (doorwayWidthZ * 0.5 + sideDepth * 0.5)),
+        size: new THREE.Vector2(wallThickness, sideDepth)
+      },
+      {
+        center: new THREE.Vector3(position.x - size.x * 0.5, 0, position.z + (doorwayWidthZ * 0.5 + sideDepth * 0.5)),
+        size: new THREE.Vector2(wallThickness, sideDepth)
+      },
+      {
+        center: new THREE.Vector3(position.x + size.x * 0.5, 0, position.z - (doorwayWidthZ * 0.5 + sideDepth * 0.5)),
+        size: new THREE.Vector2(wallThickness, sideDepth)
+      },
+      {
+        center: new THREE.Vector3(position.x + size.x * 0.5, 0, position.z + (doorwayWidthZ * 0.5 + sideDepth * 0.5)),
+        size: new THREE.Vector2(wallThickness, sideDepth)
+      }
+    ];
+
+    for (const segment of wallSegments) {
+      this.addStaticObstacle(segment.center, segment.size, height, color, false);
     }
+
+    const floor = this.addRaisedStaticObstacle(
+      new THREE.Vector3(position.x, this.sampleBaseTerrainHeight(position.x, position.z) + floorThickness * 0.5, position.z),
+      new THREE.Vector3(size.x * 0.96, floorThickness, size.y * 0.96),
+      new THREE.Color(color).offsetHSL(0, -0.02, -0.04).getHex(),
+      true,
+      0.9,
+      0.02
+    );
+    this.lootSpawnPoints.push(
+      new THREE.Vector3(position.x, floor.height, position.z)
+    );
 
     const roof = new THREE.Mesh(
       new THREE.BoxGeometry(size.x * 1.04, roofThickness, size.y * 1.04),
@@ -2511,12 +2521,12 @@ export class FortLiteGame {
   }
 
   private getParticipantCount(): number {
-    const totalParticipants = this.graphicsQuality === 'low' ? 28 : this.graphicsQuality === 'medium' ? 40 : 52;
+    const totalParticipants = this.graphicsQuality === 'low' ? 20 : this.graphicsQuality === 'medium' ? 28 : 36;
     if (!this.isDuosMode()) {
       return totalParticipants;
     }
 
-    return Math.max(DUOS_TEAM_SIZE * 16, Math.floor(totalParticipants / DUOS_TEAM_SIZE) * DUOS_TEAM_SIZE);
+    return Math.max(DUOS_TEAM_SIZE * 10, Math.floor(totalParticipants / DUOS_TEAM_SIZE) * DUOS_TEAM_SIZE);
   }
 
   private getBotCount(): number {
@@ -5754,7 +5764,7 @@ export class FortLiteGame {
   }
 
   private applyGraphicsQuality(quality: GraphicsQuality): void {
-    this.maxShotEffects = quality === 'low' ? 5 : quality === 'medium' ? 9 : 14;
+    this.maxShotEffects = quality === 'low' ? 4 : quality === 'medium' ? 7 : 10;
     this.renderer.toneMapping = quality === 'high' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
     this.renderer.toneMappingExposure = quality === 'high' ? 1.02 : 1;
     this.renderer.setPixelRatio(this.getPixelRatioForQuality(quality));
@@ -5762,7 +5772,7 @@ export class FortLiteGame {
   }
 
   private getPixelRatioForQuality(quality: GraphicsQuality): number {
-    const limit = quality === 'low' ? 0.46 : quality === 'medium' ? 0.58 : 0.72;
+    const limit = quality === 'low' ? 0.38 : quality === 'medium' ? 0.5 : 0.64;
     return Math.min(window.devicePixelRatio || 1, limit);
   }
 
@@ -5781,20 +5791,20 @@ export class FortLiteGame {
 
   private getAdjustedDistrictDensity(base: number): number {
     if (this.graphicsQuality === 'low') {
-      return Math.max(2, base - 2);
+      return Math.max(1, base - 3);
     }
     if (this.graphicsQuality === 'medium') {
-      return Math.max(2, base - 2);
+      return Math.max(1, base - 2);
     }
     return Math.max(2, base - 1);
   }
 
   private getAdjustedFloorCount(base: number): number {
     if (this.graphicsQuality === 'low') {
-      return Math.max(2, base - 2);
+      return Math.max(2, base - 3);
     }
     if (this.graphicsQuality === 'medium') {
-      return Math.max(3, base - 1);
+      return Math.max(2, base - 2);
     }
     return Math.max(3, base - 1);
   }

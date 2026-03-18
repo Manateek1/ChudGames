@@ -11,7 +11,7 @@ export const BOT_COUNT = 99;
 export const BUILD_GRID_SIZE = 4;
 export const BUILD_COST = 20;
 export const MAX_WEAPON_SLOTS = 3;
-export const RESOURCE_RESPAWN_COUNT = 72 * MAP_SCALE;
+export const RESOURCE_RESPAWN_COUNT = 48 * MAP_SCALE;
 export const PATHFINDING_GRID_SIZE = 96;
 export const PATHFINDING_CELL_SIZE = 12;
 export const FIXED_TIMESTEP = 1 / 60;
@@ -51,7 +51,7 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     id: 'tactical-smg',
     name: 'SMG',
     ammoType: 'light',
-    damage: 15,
+    damage: 20,
     range: 54,
     fireInterval: 0.08,
     magSize: 30,
