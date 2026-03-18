@@ -11,7 +11,7 @@ export const BOT_COUNT = 99;
 export const BUILD_GRID_SIZE = 4;
 export const BUILD_COST = 20;
 export const MAX_WEAPON_SLOTS = 3;
-export const RESOURCE_RESPAWN_COUNT = 48 * MAP_SCALE;
+export const RESOURCE_RESPAWN_COUNT = 30 * MAP_SCALE;
 export const PATHFINDING_GRID_SIZE = 96;
 export const PATHFINDING_CELL_SIZE = 12;
 export const FIXED_TIMESTEP = 1 / 60;
@@ -37,12 +37,12 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     id: 'auto-shotgun',
     name: 'Shotgun',
     ammoType: 'shells',
-    damage: 14,
-    range: 30,
-    fireInterval: 0.64,
+    damage: 11,
+    range: 24,
+    fireInterval: 0.76,
     magSize: 8,
     reloadDuration: 1.7 * RELOAD_TIME_MULTIPLIER,
-    spread: 0.058,
+    spread: 0.068,
     pellets: 5,
     reservePickup: 14,
     color: 0xe14b52

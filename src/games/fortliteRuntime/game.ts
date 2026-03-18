@@ -334,14 +334,25 @@ export class FortLiteGame {
       return;
     }
 
+    const keyToken = this.getKeyboardToken(event);
     if (!this.keysDown.has(event.code)) {
       this.justPressedKeys.add(event.code);
     }
     this.keysDown.add(event.code);
+    if (keyToken) {
+      if (!this.keysDown.has(keyToken)) {
+        this.justPressedKeys.add(keyToken);
+      }
+      this.keysDown.add(keyToken);
+    }
   };
 
   private readonly handleKeyUp = (event: KeyboardEvent): void => {
     this.keysDown.delete(event.code);
+    const keyToken = this.getKeyboardToken(event);
+    if (keyToken) {
+      this.keysDown.delete(keyToken);
+    }
   };
 
   private readonly handleMouseDown = (event: MouseEvent): void => {
@@ -667,8 +678,8 @@ export class FortLiteGame {
 
   private buildWorld(): void {
     const perimeterWallCount = this.getAdjustedCount(44 * MAP_SCALE, 54);
-    const randomObstacleCount = this.getAdjustedCoverCount(18 * MAP_SCALE, 24);
-    const groundSegments = this.graphicsQuality === 'low' ? 48 : this.graphicsQuality === 'medium' ? 64 : 88;
+    const randomObstacleCount = this.getAdjustedCoverCount(18 * MAP_SCALE, 18);
+    const groundSegments = this.graphicsQuality === 'low' ? 32 : this.graphicsQuality === 'medium' ? 44 : 60;
 
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(MAP_RADIUS, groundSegments),
@@ -708,7 +719,7 @@ export class FortLiteGame {
       { position: new THREE.Vector3(246, 0, 438), radiusX: 70, radiusZ: 32, color: 0x738a54, opacity: 0.42, rotation: -0.16 }
     ];
 
-    const terrainPatchStep = this.graphicsQuality === 'low' ? 3 : this.graphicsQuality === 'medium' ? 2 : 1;
+    const terrainPatchStep = this.graphicsQuality === 'low' ? 5 : this.graphicsQuality === 'medium' ? 3 : 2;
     for (let patchIndex = 0; patchIndex < terrainPatches.length; patchIndex += terrainPatchStep) {
       const patch = terrainPatches[patchIndex];
       this.addTerrainPatch(patch.position, patch.radiusX, patch.radiusZ, patch.color, patch.opacity, patch.rotation);
@@ -1251,10 +1262,10 @@ export class FortLiteGame {
   }
 
   private addCloudLayer(): void {
-    const cloudCount = this.graphicsQuality === 'low' ? 3 + MAP_SCALE : this.graphicsQuality === 'medium' ? 5 + MAP_SCALE : 8 + MAP_SCALE * 2;
-    const puffSegments = this.graphicsQuality === 'low' ? 4 : this.graphicsQuality === 'medium' ? 5 : 6;
+    const cloudCount = this.graphicsQuality === 'low' ? 2 + MAP_SCALE : this.graphicsQuality === 'medium' ? 4 + MAP_SCALE : 6 + MAP_SCALE;
+    const puffSegments = this.graphicsQuality === 'low' ? 3 : this.graphicsQuality === 'medium' ? 4 : 5;
     const minPuffs = this.graphicsQuality === 'low' ? 1 : 2;
-    const maxPuffs = this.graphicsQuality === 'low' ? 2 : this.graphicsQuality === 'medium' ? 3 : 4;
+    const maxPuffs = this.graphicsQuality === 'low' ? 2 : this.graphicsQuality === 'medium' ? 2 : 3;
 
     for (let index = 0; index < cloudCount; index += 1) {
       const anchor = randomPointInCircle(this.rng, MAP_RADIUS + 140);
@@ -2526,12 +2537,12 @@ export class FortLiteGame {
   }
 
   private getParticipantCount(): number {
-    const totalParticipants = this.graphicsQuality === 'low' ? 20 : this.graphicsQuality === 'medium' ? 28 : 36;
+    const totalParticipants = this.graphicsQuality === 'low' ? 16 : this.graphicsQuality === 'medium' ? 22 : 28;
     if (!this.isDuosMode()) {
       return totalParticipants;
     }
 
-    return Math.max(DUOS_TEAM_SIZE * 10, Math.floor(totalParticipants / DUOS_TEAM_SIZE) * DUOS_TEAM_SIZE);
+    return Math.max(DUOS_TEAM_SIZE * 8, Math.floor(totalParticipants / DUOS_TEAM_SIZE) * DUOS_TEAM_SIZE);
   }
 
   private getBotCount(): number {
@@ -3028,10 +3039,10 @@ export class FortLiteGame {
 
   private handlePlayerLoadoutInput(): void {
     const actor = this.player;
-    const pickaxePressed = this.justPressedKeys.has('KeyG');
-    const riflePressed = this.justPressedKeys.has('Digit1') || this.justPressedKeys.has('Numpad1');
-    const shotgunPressed = this.justPressedKeys.has('Digit2') || this.justPressedKeys.has('Numpad2');
-    const smgPressed = this.justPressedKeys.has('Digit3') || this.justPressedKeys.has('Numpad3');
+    const pickaxePressed = this.justPressedKeys.has('KeyG') || this.justPressedKeys.has('g');
+    const riflePressed = this.justPressedKeys.has('Digit1') || this.justPressedKeys.has('Numpad1') || this.justPressedKeys.has('1');
+    const shotgunPressed = this.justPressedKeys.has('Digit2') || this.justPressedKeys.has('Numpad2') || this.justPressedKeys.has('2');
+    const smgPressed = this.justPressedKeys.has('Digit3') || this.justPressedKeys.has('Numpad3') || this.justPressedKeys.has('3');
     const wallPressed = this.justPressedKeys.has('KeyZ');
     const floorPressed = this.justPressedKeys.has('KeyX');
     const rampPressed = this.justPressedKeys.has('KeyC');
@@ -4152,7 +4163,11 @@ export class FortLiteGame {
     actor.healthBarFill.scale.x = healthRatio;
     actor.healthBarFill.position.x = -0.48 + healthRatio * 0.48;
     actor.healthBarRoot.quaternion.copy(this.camera.quaternion);
-    actor.healthBarRoot.visible = actor !== this.player && actor.alive && actor.spawnState === 'grounded';
+    actor.healthBarRoot.visible =
+      actor !== this.player &&
+      actor.alive &&
+      actor.spawnState === 'grounded' &&
+      horizontalDistance(actor.position, this.player.position) < 96;
     actor.shadowMesh.scale.setScalar(actor.spawnState === 'parachuting' ? clamp(1.5 - (actor.position.y / SKYDIVE_ALTITUDE), 0.4, 1) : 1);
     const shadowMaterial = actor.shadowMesh.material as THREE.MeshBasicMaterial;
     shadowMaterial.opacity = actor.spawnState === 'grounded' ? 0.16 : actor.spawnState === 'parachuting' ? 0.08 : 0;
@@ -5754,6 +5769,14 @@ export class FortLiteGame {
     return document.pointerLockElement === this.renderer.domElement;
   }
 
+  private getKeyboardToken(event: KeyboardEvent): string | null {
+    if (event.key.length === 1) {
+      return event.key.toLowerCase();
+    }
+
+    return null;
+  }
+
   private readonly handleResize = (): void => {
     const width = this.root.clientWidth;
     const height = this.root.clientHeight;
@@ -5769,7 +5792,7 @@ export class FortLiteGame {
   }
 
   private applyGraphicsQuality(quality: GraphicsQuality): void {
-    this.maxShotEffects = quality === 'low' ? 4 : quality === 'medium' ? 7 : 10;
+    this.maxShotEffects = quality === 'low' ? 3 : quality === 'medium' ? 5 : 8;
     this.renderer.toneMapping = quality === 'high' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
     this.renderer.toneMappingExposure = quality === 'high' ? 1.02 : 1;
     this.renderer.setPixelRatio(this.getPixelRatioForQuality(quality));
@@ -5777,80 +5800,82 @@ export class FortLiteGame {
   }
 
   private getPixelRatioForQuality(quality: GraphicsQuality): number {
-    const limit = quality === 'low' ? 0.38 : quality === 'medium' ? 0.5 : 0.64;
+    const limit = quality === 'low' ? 0.3 : quality === 'medium' ? 0.42 : 0.56;
     return Math.min(window.devicePixelRatio || 1, limit);
   }
 
   private getAdjustedCount(base: number, minimum: number): number {
-    const multiplier = this.graphicsQuality === 'low' ? 0.3 : this.graphicsQuality === 'medium' ? 0.42 : 0.56;
+    const multiplier = this.graphicsQuality === 'low' ? 0.22 : this.graphicsQuality === 'medium' ? 0.32 : 0.46;
     return Math.max(minimum, Math.round(base * multiplier));
   }
 
   private getAdjustedCoverCount(base: number, minimum: number): number {
-    return Math.max(minimum, Math.round(this.getAdjustedCount(base, minimum) * COVER_DENSITY_MULTIPLIER));
+    const coverMultiplier = this.graphicsQuality === 'low' ? COVER_DENSITY_MULTIPLIER * 0.55 : this.graphicsQuality === 'medium' ? COVER_DENSITY_MULTIPLIER * 0.72 : COVER_DENSITY_MULTIPLIER * 0.86;
+    return Math.max(minimum, Math.round(this.getAdjustedCount(base, minimum) * coverMultiplier));
   }
 
   private getScaledCoverLoopCount(base: number): number {
-    return Math.max(1, Math.round(base * COVER_DENSITY_MULTIPLIER));
+    const coverMultiplier = this.graphicsQuality === 'low' ? COVER_DENSITY_MULTIPLIER * 0.55 : this.graphicsQuality === 'medium' ? COVER_DENSITY_MULTIPLIER * 0.72 : COVER_DENSITY_MULTIPLIER * 0.86;
+    return Math.max(1, Math.round(base * coverMultiplier));
   }
 
   private getAdjustedDistrictDensity(base: number): number {
     if (this.graphicsQuality === 'low') {
-      return Math.max(1, base - 3);
+      return Math.max(1, base - 4);
     }
     if (this.graphicsQuality === 'medium') {
-      return Math.max(1, base - 2);
+      return Math.max(1, base - 3);
     }
     return Math.max(2, base - 1);
   }
 
   private getAdjustedFloorCount(base: number): number {
     if (this.graphicsQuality === 'low') {
-      return Math.max(2, base - 3);
+      return Math.max(1, base - 4);
     }
     if (this.graphicsQuality === 'medium') {
-      return Math.max(2, base - 2);
+      return Math.max(2, base - 3);
     }
     return Math.max(3, base - 1);
   }
 
   private getBotDecisionInterval(): number {
     if (this.graphicsQuality === 'low') {
-      return this.rng.range(0.88, 1.34);
+      return this.rng.range(1.18, 1.8);
     }
     if (this.graphicsQuality === 'medium') {
-      return this.rng.range(0.76, 1.16);
+      return this.rng.range(0.96, 1.42);
     }
-    return this.rng.range(0.66, 1.04);
+    return this.rng.range(0.82, 1.2);
   }
 
   private getBotRepathInterval(): number {
     if (this.graphicsQuality === 'low') {
-      return this.rng.range(1.7, 2.5);
+      return this.rng.range(2.3, 3.4);
     }
     if (this.graphicsQuality === 'medium') {
-      return this.rng.range(1.45, 2.1);
+      return this.rng.range(1.9, 2.8);
     }
-    return this.rng.range(1.2, 1.8);
+    return this.rng.range(1.5, 2.2);
   }
 
   private getBotSenseInterval(engaged: boolean): number {
     if (this.graphicsQuality === 'low') {
-      return engaged ? this.rng.range(0.22, 0.32) : this.rng.range(0.32, 0.48);
+      return engaged ? this.rng.range(0.34, 0.5) : this.rng.range(0.46, 0.68);
     }
     if (this.graphicsQuality === 'medium') {
-      return engaged ? this.rng.range(0.18, 0.26) : this.rng.range(0.26, 0.38);
+      return engaged ? this.rng.range(0.26, 0.38) : this.rng.range(0.38, 0.54);
     }
-    return engaged ? this.rng.range(0.14, 0.22) : this.rng.range(0.2, 0.3);
+    return engaged ? this.rng.range(0.2, 0.3) : this.rng.range(0.3, 0.42);
   }
 
   private getHudUpdateIntervalMs(): number {
     if (this.graphicsQuality === 'low') {
-      return 160;
+      return 220;
     }
     if (this.graphicsQuality === 'medium') {
-      return 110;
+      return 150;
     }
-    return 90;
+    return 120;
   }
 }
