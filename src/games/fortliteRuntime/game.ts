@@ -4,6 +4,7 @@ import type { GraphicsQuality } from '../../types/arcade';
 import { RollingFps } from '../../engine/fps';
 import {
   ACTOR_RADIUS,
+  BOT_COUNT,
   BUILD_COST,
   BUILD_GRID_SIZE,
   FIXED_TIMESTEP,
@@ -407,7 +408,7 @@ export class FortLiteGame {
     this.root.append(this.shell);
 
     this.renderer = new THREE.WebGLRenderer({
-      antialias: false,
+      antialias: true,
       alpha: false,
       powerPreference: 'high-performance',
       stencil: false,
@@ -641,8 +642,8 @@ export class FortLiteGame {
     this.hud.hideEndScreen();
     this.showMessage(
       this.isDuosMode()
-        ? 'FortLite Duos is live. You drop straight from the sky, the storm starts immediately, and right click snaps you into first-person aim.'
-        : 'You now drop straight from the sky with a steerable parachute. The storm starts right away, so land fast, loot up, and use right click to swap from third-person into first-person aim.',
+        ? 'FortLite Duos is live. You drop straight from the sky, the storm starts immediately, and right click or hold E snaps you into first-person aim.'
+        : 'You now drop straight from the sky with a steerable parachute. The storm starts right away, so land fast, loot up, and use right click or hold E to swap from third-person into first-person aim.',
       4
     );
     this.refreshNavigation();
@@ -2537,12 +2538,12 @@ export class FortLiteGame {
   }
 
   private getParticipantCount(): number {
-    const totalParticipants = this.graphicsQuality === 'low' ? 16 : this.graphicsQuality === 'medium' ? 22 : 28;
+    const totalParticipants = BOT_COUNT + 1;
     if (!this.isDuosMode()) {
       return totalParticipants;
     }
 
-    return Math.max(DUOS_TEAM_SIZE * 8, Math.floor(totalParticipants / DUOS_TEAM_SIZE) * DUOS_TEAM_SIZE);
+    return Math.max(DUOS_TEAM_SIZE, totalParticipants - (totalParticipants % DUOS_TEAM_SIZE));
   }
 
   private getBotCount(): number {
@@ -3010,10 +3011,6 @@ export class FortLiteGame {
     this.applyVerticalMotion(actor, dt);
     this.updateCamera();
     this.handlePlayerLoadoutInput();
-
-    if (this.justPressedKeys.has('KeyE')) {
-      this.pickNearestLoot(actor);
-    }
 
     if (!this.isBuildMode() && actor.inventory.mode === 'weapon' && this.mouseDown.has(0)) {
       this.tryFireWeapon(actor, this.getAimDirection(), true);
@@ -4196,16 +4193,6 @@ export class FortLiteGame {
     }
   }
 
-  private pickNearestLoot(actor: Actor): void {
-    const closest = this.findNearestLoot(actor.position, INTERACT_DISTANCE, actor);
-    if (!closest) {
-      this.showMessage('Nothing close enough to pick up.', 1);
-      return;
-    }
-
-    this.collectPickup(actor, closest);
-  }
-
   private collectPickup(actor: Actor, pickup: LootPickup): void {
     if (!this.loot.includes(pickup)) {
       return;
@@ -4483,7 +4470,10 @@ export class FortLiteGame {
   }
 
   private isFirstPersonView(): boolean {
-    return this.player.alive && this.player.spawnState === 'grounded' && this.mouseDown.has(2) && !this.isBuildMode();
+    return this.player.alive &&
+      this.player.spawnState === 'grounded' &&
+      (this.mouseDown.has(2) || this.keysDown.has('KeyE')) &&
+      !this.isBuildMode();
   }
 
   private updatePlayerPerspectiveVisibility(firstPerson: boolean): void {
@@ -4639,7 +4629,7 @@ export class FortLiteGame {
     }
 
     if (!this.isPointerLocked()) {
-      return 'Click once to capture the mouse for unlimited 360 look. FortLite defaults to third-person, and right click switches to first-person aim.';
+      return 'Click once to capture the mouse for unlimited 360 look. FortLite defaults to third-person, and right click or hold E switches to first-person aim.';
     }
 
     if (this.player.spawnState === 'parachuting') {
@@ -4647,9 +4637,7 @@ export class FortLiteGame {
     }
 
     if (nearbyPickup) {
-      return this.shouldAutoPickupForPlayer(this.player, nearbyPickup)
-        ? `Walk over ${this.describePickup(nearbyPickup)} to pick it up automatically.`
-        : `Press E to pick up ${this.describePickup(nearbyPickup)}.`;
+      return `Walk over ${this.describePickup(nearbyPickup)} to pick it up automatically.`;
     }
 
     if (this.isBuildMode()) {
@@ -4668,8 +4656,8 @@ export class FortLiteGame {
     }
 
     return this.isDuosMode()
-      ? 'Stay armed, keep moving, and keep your duo alive. Right click snaps you into first-person aim.'
-      : 'Stay armed, keep moving, and be the last survivor standing. Right click snaps you into first-person aim.';
+      ? 'Stay armed, keep moving, and keep your duo alive. Right click or hold E snaps you into first-person aim.'
+      : 'Stay armed, keep moving, and be the last survivor standing. Right click or hold E snaps you into first-person aim.';
   }
 
   private showMessage(text: string, duration = 1.6): void {
@@ -4701,11 +4689,7 @@ export class FortLiteGame {
   }
 
   private shouldAutoPickupForPlayer(actor: Actor, pickup: LootPickup): boolean {
-    if (pickup.kind === 'ammo' || pickup.kind === 'material') {
-      return true;
-    }
-
-    return pickup.kind === 'medkit' && actor.health < actor.maxHealth;
+    return this.canCollectPickup(actor, pickup);
   }
 
   private canCollectPickup(actor: Actor, pickup: LootPickup): boolean {
@@ -5800,7 +5784,7 @@ export class FortLiteGame {
   }
 
   private getPixelRatioForQuality(quality: GraphicsQuality): number {
-    const limit = quality === 'low' ? 0.3 : quality === 'medium' ? 0.42 : 0.56;
+    const limit = quality === 'low' ? 1 : quality === 'medium' ? 1.25 : 1.5;
     return Math.min(window.devicePixelRatio || 1, limit);
   }
 
