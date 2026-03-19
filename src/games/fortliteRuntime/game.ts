@@ -212,12 +212,12 @@ const PARACHUTE_STEER_SPEED = 32;
 const CAMERA_POSITION_LERP = 0.22;
 const CAMERA_LOOK_LERP = 0.3;
 const CAMERA_COLLISION_PADDING = 0.45;
-const DYNAMIC_RESOLUTION_DROP_FPS = 46;
-const DYNAMIC_RESOLUTION_RECOVER_FPS = 56;
-const DYNAMIC_RESOLUTION_DROP_DELAY = 0.45;
-const DYNAMIC_RESOLUTION_RECOVER_DELAY = 1.4;
-const DYNAMIC_RESOLUTION_DROP_STEP = 0.08;
-const DYNAMIC_RESOLUTION_RECOVER_STEP = 0.05;
+const DYNAMIC_RESOLUTION_DROP_FPS = 50;
+const DYNAMIC_RESOLUTION_RECOVER_FPS = 58;
+const DYNAMIC_RESOLUTION_DROP_DELAY = 0.25;
+const DYNAMIC_RESOLUTION_RECOVER_DELAY = 1.6;
+const DYNAMIC_RESOLUTION_DROP_STEP = 0.12;
+const DYNAMIC_RESOLUTION_RECOVER_STEP = 0.04;
 const BOT_NEAR_PRIORITY_DISTANCE = 72;
 const BOT_MID_PRIORITY_DISTANCE = 120;
 
@@ -3147,7 +3147,7 @@ export class FortLiteGame {
     let visibleEnemy: Actor | null = null;
     if (brain.senseTimer <= 0 || (brain.state === 'engage' && brain.targetActorId)) {
       brain.senseTimer = this.getBotSenseInterval(brain.state === 'engage');
-      visibleEnemy = this.findVisibleEnemy(actor, 52);
+      visibleEnemy = this.findVisibleEnemy(actor, this.getBotVisionRange());
       if (visibleEnemy) {
         brain.targetActorId = visibleEnemy.id;
       } else if (brain.targetActorId) {
@@ -4143,6 +4143,15 @@ export class FortLiteGame {
   private updateActorVisual(actor: Actor): void {
     actor.group.position.copy(actor.position);
     actor.group.rotation.y = actor.yaw;
+    const distanceToPlayer = actor === this.player ? 0 : horizontalDistance(actor.position, this.player.position);
+    const detailedVisualDistance = this.getDetailedActorVisualDistance();
+    const indicatorDistance = this.getIndicatorDistance();
+    const heldItemDistance = this.getHeldItemVisualDistance();
+    const shadowDistance = this.getShadowDistance();
+    const useDetailedAnimation =
+      actor === this.player ||
+      actor.spawnState === 'parachuting' ||
+      distanceToPlayer <= detailedVisualDistance;
     const material = actor.ringMesh.material as THREE.MeshBasicMaterial;
     const frameDistance = horizontalDistance(actor.position, actor.lastPosition);
     const targetMoveBlend = actor.spawnState === 'grounded'
@@ -4154,46 +4163,70 @@ export class FortLiteGame {
     actor.stepTime += FIXED_TIMESTEP * THREE.MathUtils.lerp(2.1, 7.5, actor.moveBlend);
     actor.lastPosition.copy(actor.position);
 
-    const swing = Math.sin(actor.stepTime) * 0.4 * actor.moveBlend;
-    const counterSwing = Math.sin(actor.stepTime + Math.PI) * 0.4 * actor.moveBlend;
-    const idleBreath = Math.sin(this.matchTime * 2.4 + actor.stepTime * 0.16) * (actor.spawnState === 'grounded' ? 0.02 : 0.012);
-    const torsoSway = Math.cos(actor.stepTime * 0.42) * 0.05 * actor.moveBlend;
-    const strideBob = Math.abs(Math.cos(actor.stepTime * 1.5)) * 0.045 * actor.moveBlend;
-    const airborneLean = actor.spawnState === 'parachuting' ? 0.28 : 0;
-    actor.visualRoot.rotation.x = airborneLean;
-    actor.visualRoot.rotation.y = torsoSway * 0.2;
-    actor.visualRoot.rotation.z = actor.spawnState === 'parachuting' ? Math.sin(actor.stepTime * 0.5) * 0.04 : torsoSway * 0.24;
-    actor.visualRoot.position.set(torsoSway * 0.07, idleBreath + strideBob, 0);
-    actor.bodyMesh.rotation.x = actor.spawnState === 'parachuting' ? 0.08 : idleBreath * 0.45 + strideBob * 0.18;
-    actor.bodyMesh.rotation.y = torsoSway * 0.12;
-    actor.bodyMesh.rotation.z = torsoSway * 0.2;
-    actor.headMesh.rotation.x = actor.spawnState === 'parachuting' ? -0.04 : idleBreath * 0.55;
-    actor.headMesh.rotation.y = torsoSway * 0.3;
-    actor.leftArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -0.74 : swing * 0.55 - 0.1;
-    actor.rightArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -0.7 : counterSwing * 0.55 - 0.1;
-    actor.leftArmPivot.rotation.z = actor.spawnState === 'parachuting' ? -0.08 : -0.12 - torsoSway * 0.72;
-    actor.rightArmPivot.rotation.z = actor.spawnState === 'parachuting' ? 0.08 : 0.12 + torsoSway * 0.72;
-    actor.leftLegPivot.rotation.x = actor.spawnState === 'parachuting' ? 0.34 : counterSwing * 0.58 + 0.04;
-    actor.rightLegPivot.rotation.x = actor.spawnState === 'parachuting' ? 0.34 : swing * 0.58 + 0.04;
-    actor.leftLegPivot.rotation.z = actor.spawnState === 'parachuting' ? 0.06 : -0.02 + torsoSway * 0.18;
-    actor.rightLegPivot.rotation.z = actor.spawnState === 'parachuting' ? -0.06 : 0.02 - torsoSway * 0.18;
+    let idleBreath = 0;
+    let torsoSway = 0;
+    let strideBob = 0;
+    let swing = 0;
+    if (useDetailedAnimation) {
+      swing = Math.sin(actor.stepTime) * 0.4 * actor.moveBlend;
+      const counterSwing = Math.sin(actor.stepTime + Math.PI) * 0.4 * actor.moveBlend;
+      idleBreath = Math.sin(this.matchTime * 2.4 + actor.stepTime * 0.16) * (actor.spawnState === 'grounded' ? 0.02 : 0.012);
+      torsoSway = Math.cos(actor.stepTime * 0.42) * 0.05 * actor.moveBlend;
+      strideBob = Math.abs(Math.cos(actor.stepTime * 1.5)) * 0.045 * actor.moveBlend;
+      const airborneLean = actor.spawnState === 'parachuting' ? 0.28 : 0;
+      actor.visualRoot.rotation.x = airborneLean;
+      actor.visualRoot.rotation.y = torsoSway * 0.2;
+      actor.visualRoot.rotation.z = actor.spawnState === 'parachuting' ? Math.sin(actor.stepTime * 0.5) * 0.04 : torsoSway * 0.24;
+      actor.visualRoot.position.set(torsoSway * 0.07, idleBreath + strideBob, 0);
+      actor.bodyMesh.rotation.x = actor.spawnState === 'parachuting' ? 0.08 : idleBreath * 0.45 + strideBob * 0.18;
+      actor.bodyMesh.rotation.y = torsoSway * 0.12;
+      actor.bodyMesh.rotation.z = torsoSway * 0.2;
+      actor.headMesh.rotation.x = actor.spawnState === 'parachuting' ? -0.04 : idleBreath * 0.55;
+      actor.headMesh.rotation.y = torsoSway * 0.3;
+      actor.leftArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -0.74 : swing * 0.55 - 0.1;
+      actor.rightArmPivot.rotation.x = actor.spawnState === 'parachuting' ? -0.7 : counterSwing * 0.55 - 0.1;
+      actor.leftArmPivot.rotation.z = actor.spawnState === 'parachuting' ? -0.08 : -0.12 - torsoSway * 0.72;
+      actor.rightArmPivot.rotation.z = actor.spawnState === 'parachuting' ? 0.08 : 0.12 + torsoSway * 0.72;
+      actor.leftLegPivot.rotation.x = actor.spawnState === 'parachuting' ? 0.34 : counterSwing * 0.58 + 0.04;
+      actor.rightLegPivot.rotation.x = actor.spawnState === 'parachuting' ? 0.34 : swing * 0.58 + 0.04;
+      actor.leftLegPivot.rotation.z = actor.spawnState === 'parachuting' ? 0.06 : -0.02 + torsoSway * 0.18;
+      actor.rightLegPivot.rotation.z = actor.spawnState === 'parachuting' ? -0.06 : 0.02 - torsoSway * 0.18;
+    } else {
+      actor.visualRoot.rotation.set(0, 0, 0);
+      actor.visualRoot.position.set(0, 0, 0);
+      actor.bodyMesh.rotation.set(0, 0, 0);
+      actor.headMesh.rotation.set(0, 0, 0);
+      actor.leftArmPivot.rotation.set(-0.1, 0, -0.12);
+      actor.rightArmPivot.rotation.set(-0.1, 0, 0.12);
+      actor.leftLegPivot.rotation.set(0.04, 0, -0.02);
+      actor.rightLegPivot.rotation.set(0.04, 0, 0.02);
+    }
     actor.parachuteGroup.visible = actor.spawnState === 'parachuting';
     this.syncActorLoadoutVisual(actor);
-    actor.heldItemRoot.position.set(
-      0.58 + torsoSway * 0.05,
-      1.54 + idleBreath + (actor.spawnState === 'grounded' ? strideBob * 0.5 : 0.06),
-      0.24
-    );
-    actor.heldItemRoot.rotation.set(
-      actor.spawnState === 'parachuting' ? 0.42 : 0.16 + swing * 0.08,
-      -0.44,
-      actor.spawnState === 'parachuting' ? -0.26 : 0.08 + torsoSway * 0.28
-    );
+    if (actor !== this.player && distanceToPlayer > heldItemDistance) {
+      actor.heldItemRoot.visible = false;
+    } else {
+      actor.heldItemRoot.position.set(
+        0.58 + torsoSway * 0.05,
+        1.54 + idleBreath + (actor.spawnState === 'grounded' ? strideBob * 0.5 : 0.06),
+        0.24
+      );
+      actor.heldItemRoot.rotation.set(
+        actor.spawnState === 'parachuting' ? 0.42 : 0.16 + swing * 0.08,
+        -0.44,
+        actor.spawnState === 'parachuting' ? -0.26 : 0.08 + torsoSway * 0.28
+      );
+    }
 
     const ringOpacity = actor === this.player
       ? 0
       : 0.26 + (1 - actor.health / actor.maxHealth) * 0.22;
     material.opacity = ringOpacity;
+    actor.ringMesh.visible =
+      actor !== this.player &&
+      actor.alive &&
+      actor.spawnState === 'grounded' &&
+      distanceToPlayer < indicatorDistance + 16;
     const healthRatio = clamp(actor.health / Math.max(1, actor.maxHealth), 0, 1);
     const healthBarMaterial = actor.healthBarFill.material as THREE.MeshBasicMaterial;
     healthBarMaterial.color.setHex(
@@ -4206,10 +4239,15 @@ export class FortLiteGame {
       actor !== this.player &&
       actor.alive &&
       actor.spawnState === 'grounded' &&
-      horizontalDistance(actor.position, this.player.position) < 96;
+      distanceToPlayer < indicatorDistance;
     actor.shadowMesh.scale.setScalar(actor.spawnState === 'parachuting' ? clamp(1.5 - (actor.position.y / SKYDIVE_ALTITUDE), 0.4, 1) : 1);
+    actor.shadowMesh.visible = actor.spawnState === 'parachuting' || distanceToPlayer < shadowDistance;
     const shadowMaterial = actor.shadowMesh.material as THREE.MeshBasicMaterial;
-    shadowMaterial.opacity = actor.spawnState === 'grounded' ? 0.16 : actor.spawnState === 'parachuting' ? 0.08 : 0;
+    shadowMaterial.opacity = actor.spawnState === 'grounded'
+      ? (distanceToPlayer < shadowDistance ? 0.16 : 0)
+      : actor.spawnState === 'parachuting'
+        ? 0.08
+        : 0;
   }
 
   private tryAutoPickup(actor: Actor): void {
@@ -5818,7 +5856,7 @@ export class FortLiteGame {
   }
 
   private applyGraphicsQuality(quality: GraphicsQuality): void {
-    this.maxShotEffects = quality === 'low' ? 3 : quality === 'medium' ? 5 : 8;
+    this.maxShotEffects = quality === 'low' ? 1 : quality === 'medium' ? 3 : 6;
     this.renderer.toneMapping = quality === 'high' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
     this.renderer.toneMappingExposure = quality === 'high' ? 1.02 : 1;
     this.currentPixelRatio = this.getPixelRatioForQuality(quality);
@@ -5828,12 +5866,12 @@ export class FortLiteGame {
   }
 
   private getPixelRatioForQuality(quality: GraphicsQuality): number {
-    const target = quality === 'low' ? 0.85 : quality === 'medium' ? 1 : 1.12;
+    const target = quality === 'low' ? 0.72 : quality === 'medium' ? 0.88 : 1;
     return Math.min(window.devicePixelRatio || 1, target);
   }
 
   private getMinimumPixelRatioForQuality(quality: GraphicsQuality): number {
-    const minimum = quality === 'low' ? 0.68 : quality === 'medium' ? 0.8 : 0.92;
+    const minimum = quality === 'low' ? 0.5 : quality === 'medium' ? 0.62 : 0.78;
     return Math.min(window.devicePixelRatio || 1, minimum);
   }
 
@@ -5878,6 +5916,56 @@ export class FortLiteGame {
 
   private shouldRunBotSimulationThisTick(simulationStep: number, actorIndex: number): boolean {
     return simulationStep <= 1 || (this.simulationTick + actorIndex) % simulationStep === 0;
+  }
+
+  private getBotVisionRange(): number {
+    if (this.graphicsQuality === 'low') {
+      return 40;
+    }
+    if (this.graphicsQuality === 'medium') {
+      return 46;
+    }
+    return 52;
+  }
+
+  private getDetailedActorVisualDistance(): number {
+    if (this.graphicsQuality === 'low') {
+      return 42;
+    }
+    if (this.graphicsQuality === 'medium') {
+      return 74;
+    }
+    return 999;
+  }
+
+  private getIndicatorDistance(): number {
+    if (this.graphicsQuality === 'low') {
+      return 44;
+    }
+    if (this.graphicsQuality === 'medium') {
+      return 64;
+    }
+    return 96;
+  }
+
+  private getHeldItemVisualDistance(): number {
+    if (this.graphicsQuality === 'low') {
+      return 56;
+    }
+    if (this.graphicsQuality === 'medium') {
+      return 88;
+    }
+    return 999;
+  }
+
+  private getShadowDistance(): number {
+    if (this.graphicsQuality === 'low') {
+      return 66;
+    }
+    if (this.graphicsQuality === 'medium') {
+      return 104;
+    }
+    return 999;
   }
 
   private updateDynamicResolution(fps: number, dt: number): void {
@@ -5977,10 +6065,10 @@ export class FortLiteGame {
 
   private getHudUpdateIntervalMs(): number {
     if (this.graphicsQuality === 'low') {
-      return 220;
+      return 320;
     }
     if (this.graphicsQuality === 'medium') {
-      return 150;
+      return 200;
     }
     return 120;
   }
