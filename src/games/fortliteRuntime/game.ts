@@ -253,6 +253,11 @@ export class FortLiteGame {
   private readonly tempVectorA = new THREE.Vector3();
   private readonly tempVectorB = new THREE.Vector3();
   private readonly tempVectorC = new THREE.Vector3();
+  private readonly tempVectorD = new THREE.Vector3();
+  private readonly tempVectorE = new THREE.Vector3();
+  private readonly tempVectorF = new THREE.Vector3();
+  private readonly tempVectorG = new THREE.Vector3();
+  private readonly tempVectorH = new THREE.Vector3();
   private readonly tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private readonly fpsMeter = new RollingFps();
 
@@ -314,6 +319,7 @@ export class FortLiteGame {
   private viewModelMoveBlend = 0;
   private viewModelKick = 0;
   private readonly viewModelSway = new THREE.Vector2();
+  private readonly tempMoveInput = new THREE.Vector2();
   private muzzleFlashTime = 0;
 
   private readonly keysDown = new Set<string>();
@@ -2946,8 +2952,8 @@ export class FortLiteGame {
     }
 
     actor.spawnTimer = Math.min(PARACHUTE_DURATION, actor.spawnTimer + dt);
-    const forward = new THREE.Vector3(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
-    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    const forward = this.tempVectorD.set(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
+    const right = this.tempVectorE.set(-forward.z, 0, forward.x);
     if (steerInput && steerInput.lengthSq() > 0.001) {
       actor.dropTarget
         .addScaledVector(forward, steerInput.y * PARACHUTE_STEER_SPEED * dt)
@@ -2958,7 +2964,7 @@ export class FortLiteGame {
 
     const progress = clamp(actor.spawnTimer / PARACHUTE_DURATION, 0, 1);
     const travelProgress = 1 - Math.pow(1 - progress, 1.15);
-    const horizontalPosition = actor.dropStart.clone().lerp(actor.dropTarget, travelProgress);
+    const horizontalPosition = this.tempVectorF.copy(actor.dropStart).lerp(actor.dropTarget, travelProgress);
     const groundHeight = this.sampleGroundHeight(horizontalPosition.x, horizontalPosition.z, SKYDIVE_ALTITUDE + 6);
     actor.position.set(
       horizontalPosition.x,
@@ -2966,7 +2972,7 @@ export class FortLiteGame {
       horizontalPosition.z
     );
 
-    const facingTarget = actor.dropTarget.clone().sub(actor.position).setY(0);
+    const facingTarget = this.tempVectorG.copy(actor.dropTarget).sub(actor.position).setY(0);
     if (facingTarget.lengthSq() > 0.01) {
       actor.yaw = angleLerp(actor.yaw, Math.atan2(facingTarget.x, facingTarget.z), 0.22);
     }
@@ -2998,7 +3004,7 @@ export class FortLiteGame {
     this.viewModelSway.y = clamp(this.viewModelSway.y + lookDeltaY * 0.00014, -0.038, 0.038);
 
     const isSprinting = this.keysDown.has('ShiftLeft') || this.keysDown.has('ShiftRight');
-    const moveInput = new THREE.Vector2(
+    const moveInput = this.tempMoveInput.set(
       (this.keysDown.has('KeyD') ? 1 : 0) - (this.keysDown.has('KeyA') ? 1 : 0),
       (this.keysDown.has('KeyW') ? 1 : 0) - (this.keysDown.has('KeyS') ? 1 : 0)
     );
@@ -3013,9 +3019,9 @@ export class FortLiteGame {
       return;
     }
 
-    const forward = new THREE.Vector3(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
-    const right = new THREE.Vector3(-forward.z, 0, forward.x);
-    const desired = new THREE.Vector3()
+    const forward = this.tempVectorD.set(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
+    const right = this.tempVectorE.set(-forward.z, 0, forward.x);
+    const desired = this.tempVectorF.set(0, 0, 0)
       .addScaledVector(forward, moveInput.y)
       .addScaledVector(right, moveInput.x);
 
@@ -3614,9 +3620,10 @@ export class FortLiteGame {
     }
 
     const origin = actor.kind === 'player'
-      ? this.camera.position.clone()
-      : actor.position.clone().add(new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0));
-    const visualOrigin = this.getShotVisualOrigin(actor);
+      ? this.tempVectorD.copy(this.camera.position)
+      : this.tempVectorD.copy(actor.position).setY(actor.position.y + PLAYER_EYE_HEIGHT);
+    const renderShotEffects = this.shouldRenderShotEffects(actor);
+    const visualOrigin = renderShotEffects ? this.getShotVisualOrigin(actor) : null;
     let landedImpact = false;
 
     for (let pellet = 0; pellet < weapon.definition.pellets; pellet += 1) {
@@ -3624,7 +3631,7 @@ export class FortLiteGame {
       this.raycaster.set(origin, shotDirection);
       this.raycaster.far = weapon.definition.range;
       const hits = this.raycaster.intersectObjects(this.raycastTargets, true);
-      let impactPoint = origin.clone().addScaledVector(shotDirection, weapon.definition.range);
+      const impactPoint = this.tempVectorE.copy(origin).addScaledVector(shotDirection, weapon.definition.range);
 
       for (const hit of hits) {
         const kind = hit.object.userData.kind as string | undefined;
@@ -3636,7 +3643,7 @@ export class FortLiteGame {
 
         if (!ref) {
           if (kind === 'static' || kind === 'resource') {
-            impactPoint = hit.point.clone();
+            impactPoint.copy(hit.point);
             landedImpact = true;
             break;
           }
@@ -3648,27 +3655,29 @@ export class FortLiteGame {
           if (!target.alive || target.id === actor.id || this.areTeammates(actor, target)) {
             continue;
           }
-          impactPoint = hit.point.clone();
+          impactPoint.copy(hit.point);
           landedImpact = true;
           this.applyDamage(target, weapon.definition.damage, actor, 'weapon');
           break;
         }
 
         if (kind === 'build') {
-          impactPoint = hit.point.clone();
+          impactPoint.copy(hit.point);
           landedImpact = true;
           this.damageBuildPiece(ref as BuildPiece, weapon.definition.damage);
           break;
         }
 
         if (kind === 'resource') {
-          impactPoint = hit.point.clone();
+          impactPoint.copy(hit.point);
           landedImpact = true;
           break;
         }
       }
 
-      this.createShotEffect(visualOrigin, impactPoint, weapon.definition.color);
+      if (renderShotEffects && visualOrigin) {
+        this.createShotEffect(visualOrigin, impactPoint, weapon.definition.color);
+      }
     }
 
     if (playerOwned && landedImpact) {
@@ -4649,19 +4658,19 @@ export class FortLiteGame {
       this.camera.updateProjectionMatrix();
     }
 
-    const aimDirection = this.getInputAimDirection();
-    const horizontalForward = new THREE.Vector3(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
-    const right = new THREE.Vector3(-horizontalForward.z, 0, horizontalForward.x);
+    const aimDirection = this.tempVectorD.copy(this.getInputAimDirection());
+    const horizontalForward = this.tempVectorE.set(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
+    const right = this.tempVectorF.set(-horizontalForward.z, 0, horizontalForward.x);
     const pivotHeight = this.player.spawnState === 'parachuting'
         ? 2.2
         : PLAYER_EYE_HEIGHT;
-    const pivot = this.player.position.clone().add(new THREE.Vector3(0, pivotHeight, 0));
+    const pivot = this.tempVectorG.copy(this.player.position).setY(this.player.position.y + pivotHeight);
     let desiredPosition: THREE.Vector3;
     let lookTarget: THREE.Vector3;
 
     if (firstPerson) {
-      desiredPosition = pivot.clone();
-      lookTarget = pivot.clone().addScaledVector(aimDirection, 24);
+      desiredPosition = this.tempVectorH.copy(pivot);
+      lookTarget = this.tempVectorA.copy(pivot).addScaledVector(aimDirection, 24);
     } else {
       const cameraDistance = this.player.spawnState === 'parachuting'
           ? PARACHUTE_CAMERA_DISTANCE
@@ -4670,12 +4679,14 @@ export class FortLiteGame {
           ? THIRD_PERSON_CAMERA_HEIGHT + 1.35
           : THIRD_PERSON_CAMERA_HEIGHT;
       const shoulderOffset = this.player.spawnState === 'parachuting' ? 0.32 : THIRD_PERSON_CAMERA_SHOULDER;
-      desiredPosition = pivot.clone()
-        .add(new THREE.Vector3(0, cameraHeight, 0))
+      desiredPosition = this.tempVectorH.copy(pivot)
+        .add(this.tempVectorB.set(0, cameraHeight, 0))
         .addScaledVector(horizontalForward, -cameraDistance)
         .addScaledVector(right, shoulderOffset);
-      desiredPosition = this.resolveCameraCollision(pivot.clone().add(new THREE.Vector3(0, 0.55, 0)), desiredPosition);
-      lookTarget = pivot.clone().addScaledVector(aimDirection, this.player.spawnState === 'parachuting' ? 20 : 22);
+      if (this.shouldUseCameraCollision()) {
+        desiredPosition = this.resolveCameraCollision(this.tempVectorC.copy(pivot).add(this.tempVectorB.set(0, 0.55, 0)), desiredPosition);
+      }
+      lookTarget = this.tempVectorA.copy(pivot).addScaledVector(aimDirection, this.player.spawnState === 'parachuting' ? 20 : 22);
     }
 
     if (!this.cameraRigInitialized || this.lastFirstPersonView !== firstPerson) {
@@ -5012,9 +5023,9 @@ export class FortLiteGame {
   }
 
   private hasLineOfSight(from: Actor, to: Actor): boolean {
-    const origin = from.position.clone().add(new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0));
-    const target = to.position.clone().add(new THREE.Vector3(0, 1.35, 0));
-    const direction = target.clone().sub(origin);
+    const origin = this.tempVectorF.copy(from.position).setY(from.position.y + PLAYER_EYE_HEIGHT);
+    const target = this.tempVectorG.copy(to.position).setY(to.position.y + 1.35);
+    const direction = this.tempVectorH.copy(target).sub(origin);
     const distance = direction.length();
     direction.normalize();
 
@@ -5557,13 +5568,13 @@ export class FortLiteGame {
 
   private getShotVisualOrigin(actor: Actor): THREE.Vector3 {
     if (actor.kind !== 'player') {
-      return actor.position.clone().add(new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0));
+      return this.tempVectorF.copy(actor.position).setY(actor.position.y + PLAYER_EYE_HEIGHT);
     }
 
     if (!this.isFirstPersonView()) {
-      const right = new THREE.Vector3(Math.sin(actor.yaw + Math.PI * 0.5), 0, Math.cos(actor.yaw + Math.PI * 0.5));
-      return actor.position.clone()
-        .add(new THREE.Vector3(0, 1.62, 0))
+      const right = this.tempVectorG.set(Math.sin(actor.yaw + Math.PI * 0.5), 0, Math.cos(actor.yaw + Math.PI * 0.5));
+      return this.tempVectorF.copy(actor.position)
+        .add(this.tempVectorH.set(0, 1.62, 0))
         .addScaledVector(right, 0.44);
     }
 
@@ -5571,10 +5582,10 @@ export class FortLiteGame {
     this.viewModelRoot.updateMatrixWorld(true);
     const muzzle = this.viewModelItem.getObjectByName('muzzleFlash');
     if (muzzle) {
-      return muzzle.getWorldPosition(new THREE.Vector3());
+      return muzzle.getWorldPosition(this.tempVectorF);
     }
 
-    return this.camera.position.clone();
+    return this.tempVectorF.copy(this.camera.position);
   }
 
   private createShotEffect(origin: THREE.Vector3, impactPoint: THREE.Vector3, color: number): void {
@@ -5641,7 +5652,7 @@ export class FortLiteGame {
   }
 
   private applyWeaponSpread(direction: THREE.Vector3, spread: number, playerOwned: boolean): THREE.Vector3 {
-    const result = direction.clone();
+    const result = this.tempVectorH.copy(direction);
     const spreadMultiplier = playerOwned ? 0.85 : 1.18;
     const angleX = this.rng.range(-1, 1) * spread * spreadMultiplier;
     const angleY = this.rng.range(-1, 1) * spread * spreadMultiplier;
@@ -5923,6 +5934,26 @@ export class FortLiteGame {
   private applyRendererResolution(): void {
     this.renderer.setPixelRatio(this.currentPixelRatio);
     this.renderer.setSize(this.root.clientWidth, this.root.clientHeight, false);
+  }
+
+  private shouldUseCameraCollision(): boolean {
+    return this.graphicsQuality === 'high';
+  }
+
+  private shouldRenderShotEffects(actor: Actor): boolean {
+    if (actor.kind === 'player') {
+      return true;
+    }
+
+    if (this.graphicsQuality === 'high') {
+      return horizontalDistance(actor.position, this.player.position) < BOT_MID_PRIORITY_DISTANCE;
+    }
+
+    if (this.graphicsQuality === 'medium') {
+      return horizontalDistance(actor.position, this.player.position) < BOT_NEAR_PRIORITY_DISTANCE;
+    }
+
+    return false;
   }
 
   private isHighPriorityBot(actor: Actor): boolean {
