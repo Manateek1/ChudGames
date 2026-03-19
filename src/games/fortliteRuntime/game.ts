@@ -3137,6 +3137,11 @@ export class FortLiteGame {
       return;
     }
 
+    if (!this.shouldUseFullBotLogic(actor)) {
+      this.processSimplifiedBot(actor, dt);
+      return;
+    }
+
     brain.decisionTimer -= dt;
     brain.repathTimer -= dt;
     brain.senseTimer -= dt;
@@ -3221,6 +3226,35 @@ export class FortLiteGame {
       : brain.destination;
 
     this.followBotDestination(actor, destination, dt, brain.state !== 'roam');
+    this.applyVerticalMotion(actor, dt);
+  }
+
+  private processSimplifiedBot(actor: Actor, dt: number): void {
+    const brain = actor.ai!;
+    brain.decisionTimer -= dt;
+    brain.repathTimer = 0;
+    brain.senseTimer = 0;
+    brain.strafeTimer = Math.max(0, brain.strafeTimer - dt);
+    brain.buildCooldown = Math.max(0, brain.buildCooldown - dt);
+    brain.harvestTimer = Math.max(0, brain.harvestTimer - dt);
+    brain.targetActorId = undefined;
+    brain.targetLootId = undefined;
+    brain.targetNodeId = undefined;
+    brain.path = [];
+    brain.pathIndex = 0;
+
+    const shouldRotate = this.shouldRotateToSafeZone(actor.position);
+    if (shouldRotate) {
+      brain.state = 'seekSafeZone';
+      brain.destination.copy(this.getSafeZoneDestination(actor.position));
+    } else if (brain.decisionTimer <= 0 || horizontalDistance(actor.position, brain.destination) < 8) {
+      brain.decisionTimer = this.getSimplifiedBotDecisionInterval();
+      brain.state = 'roam';
+      brain.destination.copy(this.getSimplifiedRoamDestination(actor.position));
+    }
+
+    actor.inventory.mode = this.hasUsableWeapon(actor) ? 'weapon' : 'harvest';
+    this.followBotDestination(actor, brain.destination, dt, shouldRotate || this.hasUsableWeapon(actor));
     this.applyVerticalMotion(actor, dt);
   }
 
@@ -5919,10 +5953,10 @@ export class FortLiteGame {
 
     const distanceToPlayer = horizontalDistance(actor.position, this.player.position);
     if (this.graphicsQuality === 'medium') {
-      return distanceToPlayer < BOT_MID_PRIORITY_DISTANCE ? 1 : 2;
+      return distanceToPlayer < BOT_MID_PRIORITY_DISTANCE ? 2 : 4;
     }
 
-    return distanceToPlayer < BOT_MID_PRIORITY_DISTANCE ? 2 : 3;
+    return distanceToPlayer < BOT_MID_PRIORITY_DISTANCE ? 3 : 6;
   }
 
   private shouldRunBotSimulationThisTick(simulationStep: number, actorIndex: number): boolean {
@@ -5931,12 +5965,46 @@ export class FortLiteGame {
 
   private getBotVisionRange(): number {
     if (this.graphicsQuality === 'low') {
-      return 32;
+      return 24;
     }
     if (this.graphicsQuality === 'medium') {
-      return 40;
+      return 32;
     }
     return 52;
+  }
+
+  private shouldUseFullBotLogic(actor: Actor): boolean {
+    if (this.graphicsQuality === 'high') {
+      return true;
+    }
+
+    const distanceToPlayer = horizontalDistance(actor.position, this.player.position);
+    if (this.graphicsQuality === 'medium') {
+      return this.isHighPriorityBot(actor) || distanceToPlayer < BOT_MID_PRIORITY_DISTANCE;
+    }
+
+    return this.isHighPriorityBot(actor);
+  }
+
+  private getSimplifiedBotDecisionInterval(): number {
+    if (this.graphicsQuality === 'low') {
+      return this.rng.range(2.8, 4.2);
+    }
+    if (this.graphicsQuality === 'medium') {
+      return this.rng.range(2, 3);
+    }
+    return this.rng.range(1.2, 1.8);
+  }
+
+  private getSimplifiedRoamDestination(origin: THREE.Vector3): THREE.Vector3 {
+    const safeBias = this.getSafeZoneDestination(origin);
+    const biasedPoint = origin.clone().lerp(safeBias, this.graphicsQuality === 'low' ? 0.42 : 0.3);
+    biasedPoint.add(new THREE.Vector3(
+      this.rng.range(-18, 18),
+      0,
+      this.rng.range(-18, 18)
+    ));
+    return clampToCircle(biasedPoint, WORLD_CENTER, MAP_RADIUS - 8);
   }
 
   private getDetailedActorVisualDistance(): number {
