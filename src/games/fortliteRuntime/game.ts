@@ -2889,14 +2889,19 @@ export class FortLiteGame {
       this.tryAutoPickup(actor);
     }
 
-    for (const actor of this.actors) {
+    for (let actorIndex = 0; actorIndex < this.actors.length; actorIndex += 1) {
+      const actor = this.actors[actorIndex];
       if (!actor.alive) {
         continue;
       }
 
       this.updateActorTimers(actor, dt);
       this.applyStormDamage(actor, dt);
-      this.updateActorVisual(actor);
+      if (this.shouldUseDetailedActorVisualUpdate(actor, actorIndex)) {
+        this.updateActorVisual(actor);
+      } else {
+        this.syncActorTransformOnly(actor);
+      }
       if (actor === this.player) {
         this.tryAutoPickup(actor);
       }
@@ -3270,7 +3275,9 @@ export class FortLiteGame {
     const strafe = this.tempVectorC.set(-desiredDirection.z, 0, desiredDirection.x).multiplyScalar(brain.strafeDirection);
     const move = new THREE.Vector3();
     const stormPressure = this.getStormPressure(actor.position);
-    const hasSight = this.hasLineOfSight(actor, target);
+    const hasSight = this.shouldUsePreciseBotSight(actor, target)
+      ? this.hasLineOfSight(actor, target)
+      : distance < 28;
 
     if (distance > optimalDistance + 6) {
       move.addScaledVector(desiredDirection, hasSight ? 1 : 1.18);
@@ -3349,7 +3356,7 @@ export class FortLiteGame {
   private followBotDestination(actor: Actor, destination: THREE.Vector3, dt: number, sprint: boolean): void {
     const brain = actor.ai!;
     const directDistance = horizontalDistance(actor.position, destination);
-    const usePathfinding = directDistance > 18;
+    const usePathfinding = this.shouldUseBotPathfinding(actor, directDistance);
     if (usePathfinding) {
       const needsPath = brain.path.length === 0 || brain.repathTimer <= 0 || horizontalDistance(brain.destination, destination) > 5;
       if (needsPath) {
@@ -3419,6 +3426,10 @@ export class FortLiteGame {
   }
 
   private tryBotCombatBuild(actor: Actor, brain: BotBrain, desiredDirection: THREE.Vector3, distance: number, hasLineOfSight: boolean): void {
+    if (!this.shouldAllowBotBuilding(actor)) {
+      return;
+    }
+
     if (brain.buildCooldown > 0 || this.totalMaterials(actor.inventory.materials) < BUILD_COST) {
       return;
     }
@@ -4955,7 +4966,7 @@ export class FortLiteGame {
         }
       }
 
-      if (!this.hasLineOfSight(actor, other)) {
+      if (this.shouldUsePreciseBotSight(actor, other) && !this.hasLineOfSight(actor, other)) {
         continue;
       }
 
@@ -5920,52 +5931,120 @@ export class FortLiteGame {
 
   private getBotVisionRange(): number {
     if (this.graphicsQuality === 'low') {
-      return 40;
+      return 32;
     }
     if (this.graphicsQuality === 'medium') {
-      return 46;
+      return 40;
     }
     return 52;
   }
 
   private getDetailedActorVisualDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 42;
+      return 28;
     }
     if (this.graphicsQuality === 'medium') {
-      return 74;
+      return 56;
     }
     return 999;
   }
 
   private getIndicatorDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 44;
+      return 32;
     }
     if (this.graphicsQuality === 'medium') {
-      return 64;
+      return 52;
     }
     return 96;
   }
 
   private getHeldItemVisualDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 56;
+      return 34;
     }
     if (this.graphicsQuality === 'medium') {
-      return 88;
+      return 64;
     }
     return 999;
   }
 
   private getShadowDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 66;
+      return 42;
     }
     if (this.graphicsQuality === 'medium') {
-      return 104;
+      return 76;
     }
     return 999;
+  }
+
+  private shouldUsePreciseBotSight(actor: Actor, target: Actor): boolean {
+    if (this.graphicsQuality === 'high') {
+      return true;
+    }
+
+    return horizontalDistance(actor.position, this.player.position) < BOT_NEAR_PRIORITY_DISTANCE ||
+      horizontalDistance(target.position, this.player.position) < BOT_NEAR_PRIORITY_DISTANCE;
+  }
+
+  private shouldUseBotPathfinding(actor: Actor, directDistance: number): boolean {
+    if (directDistance <= 18) {
+      return false;
+    }
+
+    if (this.graphicsQuality === 'high') {
+      return true;
+    }
+
+    if (this.graphicsQuality === 'medium') {
+      return this.isHighPriorityBot(actor) || horizontalDistance(actor.position, this.player.position) < BOT_NEAR_PRIORITY_DISTANCE;
+    }
+
+    return this.isHighPriorityBot(actor) && horizontalDistance(actor.position, this.player.position) < BOT_NEAR_PRIORITY_DISTANCE;
+  }
+
+  private shouldAllowBotBuilding(actor: Actor): boolean {
+    if (this.graphicsQuality === 'high') {
+      return true;
+    }
+
+    if (this.graphicsQuality === 'medium') {
+      return this.isHighPriorityBot(actor);
+    }
+
+    return false;
+  }
+
+  private shouldUseDetailedActorVisualUpdate(actor: Actor, actorIndex: number): boolean {
+    if (actor === this.player || actor.spawnState === 'parachuting') {
+      return true;
+    }
+
+    const distanceToPlayer = horizontalDistance(actor.position, this.player.position);
+    if (distanceToPlayer <= this.getDetailedActorVisualDistance()) {
+      return true;
+    }
+
+    if (this.graphicsQuality === 'medium') {
+      return (this.simulationTick + actorIndex) % 2 === 0;
+    }
+
+    return this.graphicsQuality !== 'low' || (this.simulationTick + actorIndex) % 3 === 0;
+  }
+
+  private syncActorTransformOnly(actor: Actor): void {
+    actor.group.position.copy(actor.position);
+    actor.group.rotation.y = actor.yaw;
+    actor.parachuteGroup.visible = actor.spawnState === 'parachuting';
+    actor.lastPosition.copy(actor.position);
+    if (actor !== this.player) {
+      actor.healthBarRoot.visible = false;
+      actor.ringMesh.visible = false;
+    }
+    actor.shadowMesh.visible = actor.spawnState === 'parachuting';
+    const shadowMaterial = actor.shadowMesh.material as THREE.MeshBasicMaterial;
+    shadowMaterial.opacity = actor.spawnState === 'parachuting' ? 0.08 : 0;
   }
 
   private updateDynamicResolution(fps: number, dt: number): void {
