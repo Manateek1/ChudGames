@@ -1,13 +1,13 @@
 import type { MaterialType, StormPhase, WeaponDefinition } from './types';
 
 export const BASE_MAP_RADIUS = 180;
-export const MAP_SCALE = 3;
+export const MAP_SCALE = 2.4;
 export const STORM_SPEED_MULTIPLIER = 4;
 const RELOAD_TIME_MULTIPLIER = 2.5;
 export const MAP_RADIUS = BASE_MAP_RADIUS * MAP_SCALE;
 export const PLAYER_EYE_HEIGHT = 1.7;
 export const ACTOR_RADIUS = 1;
-export const BOT_COUNT = 99;
+export const BOT_COUNT = 80;
 export const BUILD_GRID_SIZE = 4;
 export const BUILD_COST = 20;
 export const MAX_WEAPON_SLOTS = 3;
