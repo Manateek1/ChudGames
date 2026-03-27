@@ -3359,11 +3359,11 @@ export class FortLiteGame {
       actor.inventory.mode = 'weapon';
       actor.inventory.weaponIndex = this.getWeaponSlotIndexById(weapon.definition.id);
       const aimJitter = weapon.definition.id === 'auto-shotgun'
-        ? 0.42
+        ? 0.38
         : weapon.definition.id === 'tactical-smg'
-          ? 0.34
-          : 0.28;
-      const fireChance = weapon.definition.id === 'auto-shotgun' ? 0.22 : 0.15;
+          ? 0.3
+          : 0.24;
+      const fireChance = weapon.definition.id === 'auto-shotgun' ? 0.18 : 0.12;
       if (distance <= weapon.definition.range * 0.9 && hasSight && this.rng.next() > fireChance) {
         const aimTarget = target.position.clone().add(new THREE.Vector3(
           this.rng.range(-aimJitter, aimJitter),
@@ -5660,7 +5660,7 @@ export class FortLiteGame {
 
   private applyWeaponSpread(direction: THREE.Vector3, spread: number, playerOwned: boolean): THREE.Vector3 {
     const result = this.tempVectorH.copy(direction);
-    const spreadMultiplier = playerOwned ? 0.85 : 1.18;
+    const spreadMultiplier = playerOwned ? 0.85 : 1.1;
     const angleX = this.rng.range(-1, 1) * spread * spreadMultiplier;
     const angleY = this.rng.range(-1, 1) * spread * spreadMultiplier;
     result.x += angleX;
@@ -5919,7 +5919,7 @@ export class FortLiteGame {
   }
 
   private applyGraphicsQuality(quality: GraphicsQuality): void {
-    this.maxShotEffects = quality === 'low' ? 1 : quality === 'medium' ? 3 : 6;
+    this.maxShotEffects = quality === 'low' ? 1 : quality === 'medium' ? 2 : 4;
     this.renderer.toneMapping = quality === 'high' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
     this.renderer.toneMappingExposure = quality === 'high' ? 1.02 : 1;
     this.currentPixelRatio = this.getPixelRatioForQuality(quality);
@@ -6047,7 +6047,27 @@ export class FortLiteGame {
 
   private getDetailedActorVisualDistance(): number {
     if (this.graphicsQuality === 'low') {
+      return 24;
+    }
+    if (this.graphicsQuality === 'medium') {
+      return 48;
+    }
+    return 999;
+  }
+
+  private getIndicatorDistance(): number {
+    if (this.graphicsQuality === 'low') {
       return 28;
+    }
+    if (this.graphicsQuality === 'medium') {
+      return 46;
+    }
+    return 96;
+  }
+
+  private getHeldItemVisualDistance(): number {
+    if (this.graphicsQuality === 'low') {
+      return 30;
     }
     if (this.graphicsQuality === 'medium') {
       return 56;
@@ -6055,32 +6075,12 @@ export class FortLiteGame {
     return 999;
   }
 
-  private getIndicatorDistance(): number {
+  private getShadowDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 32;
-    }
-    if (this.graphicsQuality === 'medium') {
-      return 52;
-    }
-    return 96;
-  }
-
-  private getHeldItemVisualDistance(): number {
-    if (this.graphicsQuality === 'low') {
-      return 34;
+      return 36;
     }
     if (this.graphicsQuality === 'medium') {
       return 64;
-    }
-    return 999;
-  }
-
-  private getShadowDistance(): number {
-    if (this.graphicsQuality === 'low') {
-      return 42;
-    }
-    if (this.graphicsQuality === 'medium') {
-      return 76;
     }
     return 999;
   }
@@ -6184,38 +6184,38 @@ export class FortLiteGame {
   }
 
   private getAdjustedCount(base: number, minimum: number): number {
-    const multiplier = this.graphicsQuality === 'low' ? 0.22 : this.graphicsQuality === 'medium' ? 0.32 : 0.46;
+    const multiplier = this.graphicsQuality === 'low' ? 0.18 : this.graphicsQuality === 'medium' ? 0.28 : 0.42;
     return Math.max(minimum, Math.round(base * multiplier));
   }
 
   private getAdjustedCoverCount(base: number, minimum: number): number {
-    const coverMultiplier = this.graphicsQuality === 'low' ? COVER_DENSITY_MULTIPLIER * 0.55 : this.graphicsQuality === 'medium' ? COVER_DENSITY_MULTIPLIER * 0.72 : COVER_DENSITY_MULTIPLIER * 0.86;
+    const coverMultiplier = this.graphicsQuality === 'low' ? COVER_DENSITY_MULTIPLIER * 0.46 : this.graphicsQuality === 'medium' ? COVER_DENSITY_MULTIPLIER * 0.6 : COVER_DENSITY_MULTIPLIER * 0.78;
     return Math.max(minimum, Math.round(this.getAdjustedCount(base, minimum) * coverMultiplier));
   }
 
   private getScaledCoverLoopCount(base: number): number {
-    const coverMultiplier = this.graphicsQuality === 'low' ? COVER_DENSITY_MULTIPLIER * 0.55 : this.graphicsQuality === 'medium' ? COVER_DENSITY_MULTIPLIER * 0.72 : COVER_DENSITY_MULTIPLIER * 0.86;
+    const coverMultiplier = this.graphicsQuality === 'low' ? COVER_DENSITY_MULTIPLIER * 0.46 : this.graphicsQuality === 'medium' ? COVER_DENSITY_MULTIPLIER * 0.6 : COVER_DENSITY_MULTIPLIER * 0.78;
     return Math.max(1, Math.round(base * coverMultiplier));
   }
 
   private getAdjustedDistrictDensity(base: number): number {
     if (this.graphicsQuality === 'low') {
-      return Math.max(1, base - 4);
+      return Math.max(1, base - 5);
     }
     if (this.graphicsQuality === 'medium') {
-      return Math.max(1, base - 3);
+      return Math.max(1, base - 4);
     }
-    return Math.max(2, base - 1);
+    return Math.max(2, base - 2);
   }
 
   private getAdjustedFloorCount(base: number): number {
     if (this.graphicsQuality === 'low') {
-      return Math.max(1, base - 4);
+      return Math.max(1, base - 5);
     }
     if (this.graphicsQuality === 'medium') {
-      return Math.max(2, base - 3);
+      return Math.max(1, base - 4);
     }
-    return Math.max(3, base - 1);
+    return Math.max(2, base - 2);
   }
 
   private getBotDecisionInterval(): number {
