@@ -258,6 +258,7 @@ export class FortLiteGame {
   private readonly tempVectorF = new THREE.Vector3();
   private readonly tempVectorG = new THREE.Vector3();
   private readonly tempVectorH = new THREE.Vector3();
+  private readonly tempVectorI = new THREE.Vector3();
   private readonly tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private readonly fpsMeter = new RollingFps();
 
@@ -292,6 +293,7 @@ export class FortLiteGame {
   private buildPieces: BuildPiece[] = [];
   private shotEffects: ShotEffect[] = [];
   private staticObstacles: ObstacleBox[] = [];
+  private collisionObstacles: ObstacleBox[] = [];
   private walkableSurfaces: WalkableSurface[] = [];
   private terrainMounds: TerrainMound[] = [];
   private waterZones: WaterZone[] = [];
@@ -658,6 +660,7 @@ export class FortLiteGame {
     this.shotEffects = [];
     this.raycastTargets = [];
     this.cameraObstacles = [];
+    this.collisionObstacles = [];
     this.waterZones = [];
 
     this.buildWorld();
@@ -4038,7 +4041,7 @@ export class FortLiteGame {
     const moveX = velocity.x * speedMultiplier * dt;
     const moveZ = velocity.z * speedMultiplier * dt;
 
-    const tryPosition = actor.position.clone();
+    const tryPosition = this.tempVectorI.copy(actor.position);
     tryPosition.x += moveX;
     if (!this.isBlockedAt(tryPosition, actor.radius, actor.position.y + 1.4)) {
       actor.position.x = tryPosition.x;
@@ -4050,8 +4053,15 @@ export class FortLiteGame {
       actor.position.z = tryPosition.z;
     }
 
-    const clamped = clampToCircle(actor.position, WORLD_CENTER, MAP_RADIUS - actor.radius - 1.5);
-    actor.position.copy(clamped);
+    const limit = MAP_RADIUS - actor.radius - 1.5;
+    const offsetX = actor.position.x - WORLD_CENTER.x;
+    const offsetZ = actor.position.z - WORLD_CENTER.z;
+    const distanceSquared = (offsetX * offsetX) + (offsetZ * offsetZ);
+    if (distanceSquared > limit * limit) {
+      const scale = limit / Math.max(0.0001, Math.sqrt(distanceSquared));
+      actor.position.x = WORLD_CENTER.x + offsetX * scale;
+      actor.position.z = WORLD_CENTER.z + offsetZ * scale;
+    }
   }
 
   private applyVerticalMotion(actor: Actor, dt: number): void {
@@ -4135,13 +4145,7 @@ export class FortLiteGame {
       return true;
     }
 
-    const obstacles: ObstacleBox[] = [
-      ...this.staticObstacles,
-      ...this.resourceNodes.map((node) => node.obstacle),
-      ...this.buildPieces.map((piece) => piece.obstacle).filter((entry): entry is ObstacleBox => Boolean(entry))
-    ];
-
-    for (const obstacle of obstacles) {
+    for (const obstacle of this.collisionObstacles) {
       if (height > obstacle.height + 0.2) {
         continue;
       }
@@ -4317,12 +4321,17 @@ export class FortLiteGame {
     }
 
     if (actor.kind === 'player') {
-      const nearbyAutoLoot = this.loot.filter((pickup) =>
-        this.canCollectPickup(actor, pickup) &&
-        this.shouldAutoPickupForPlayer(actor, pickup) &&
-        horizontalDistance(actor.position, pickup.position) <= INTERACT_DISTANCE
-      );
-      for (const pickup of nearbyAutoLoot) {
+      const interactDistanceSquared = INTERACT_DISTANCE * INTERACT_DISTANCE;
+      for (let i = this.loot.length - 1; i >= 0; i -= 1) {
+        const pickup = this.loot[i];
+        if (!pickup || !this.canCollectPickup(actor, pickup) || !this.shouldAutoPickupForPlayer(actor, pickup)) {
+          continue;
+        }
+        const dx = actor.position.x - pickup.position.x;
+        const dz = actor.position.z - pickup.position.z;
+        if ((dx * dx) + (dz * dz) > interactDistanceSquared) {
+          continue;
+        }
         this.collectPickup(actor, pickup);
       }
       return;
@@ -4811,8 +4820,8 @@ export class FortLiteGame {
     const dynamicObstacles = this.buildPieces
       .map((piece) => piece.obstacle)
       .filter((entry): entry is ObstacleBox => Boolean(entry));
-    const obstacles = [...this.staticObstacles, ...this.resourceNodes.map((node) => node.obstacle), ...dynamicObstacles];
-    this.pathfinder.rebuild(obstacles);
+    this.collisionObstacles = [...this.staticObstacles, ...this.resourceNodes.map((node) => node.obstacle), ...dynamicObstacles];
+    this.pathfinder.rebuild(this.collisionObstacles);
   }
 
   private describePickup(pickup: LootPickup): string {
@@ -4882,15 +4891,17 @@ export class FortLiteGame {
 
   private findNearestLoot(position: THREE.Vector3, maxDistance: number, actor?: Actor): LootPickup | null {
     let closest: LootPickup | null = null;
-    let bestDistance = maxDistance;
+    let bestDistanceSquared = maxDistance * maxDistance;
 
     for (const pickup of this.loot) {
       if (actor && !this.canCollectPickup(actor, pickup)) {
         continue;
       }
-      const distance = horizontalDistance(position, pickup.position);
-      if (distance < bestDistance) {
-        bestDistance = distance;
+      const dx = position.x - pickup.position.x;
+      const dz = position.z - pickup.position.z;
+      const distanceSquared = (dx * dx) + (dz * dz);
+      if (distanceSquared < bestDistanceSquared) {
+        bestDistanceSquared = distanceSquared;
         closest = pickup;
       }
     }
@@ -5029,7 +5040,73 @@ export class FortLiteGame {
     return closest;
   }
 
+  private doesSegmentIntersectObstacle2d(
+    fromX: number,
+    fromZ: number,
+    toX: number,
+    toZ: number,
+    obstacle: Pick<ObstacleBox, 'minX' | 'maxX' | 'minZ' | 'maxZ'>
+  ): boolean {
+    const dx = toX - fromX;
+    const dz = toZ - fromZ;
+    let minTime = 0;
+    let maxTime = 1;
+
+    if (Math.abs(dx) < 0.0001) {
+      if (fromX < obstacle.minX || fromX > obstacle.maxX) {
+        return false;
+      }
+    } else {
+      const inverse = 1 / dx;
+      let xStart = (obstacle.minX - fromX) * inverse;
+      let xEnd = (obstacle.maxX - fromX) * inverse;
+      if (xStart > xEnd) {
+        [xStart, xEnd] = [xEnd, xStart];
+      }
+      minTime = Math.max(minTime, xStart);
+      maxTime = Math.min(maxTime, xEnd);
+      if (minTime > maxTime) {
+        return false;
+      }
+    }
+
+    if (Math.abs(dz) < 0.0001) {
+      return fromZ >= obstacle.minZ && fromZ <= obstacle.maxZ;
+    }
+
+    const inverse = 1 / dz;
+    let zStart = (obstacle.minZ - fromZ) * inverse;
+    let zEnd = (obstacle.maxZ - fromZ) * inverse;
+    if (zStart > zEnd) {
+      [zStart, zEnd] = [zEnd, zStart];
+    }
+    minTime = Math.max(minTime, zStart);
+    maxTime = Math.min(maxTime, zEnd);
+    return minTime <= maxTime;
+  }
+
+  private hasCheapLineOfSight(from: Actor, to: Actor): boolean {
+    const originY = from.position.y + PLAYER_EYE_HEIGHT;
+    const targetY = to.position.y + 1.35;
+    const minSightHeight = Math.min(originY, targetY) - 0.08;
+
+    for (const obstacle of this.collisionObstacles) {
+      if (obstacle.height < minSightHeight) {
+        continue;
+      }
+      if (this.doesSegmentIntersectObstacle2d(from.position.x, from.position.z, to.position.x, to.position.z, obstacle)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   private hasLineOfSight(from: Actor, to: Actor): boolean {
+    if (this.graphicsQuality !== 'high') {
+      return this.hasCheapLineOfSight(from, to);
+    }
+
     const origin = this.tempVectorF.copy(from.position).setY(from.position.y + PLAYER_EYE_HEIGHT);
     const target = this.tempVectorG.copy(to.position).setY(to.position.y + 1.35);
     const direction = this.tempVectorH.copy(target).sub(origin);
@@ -5174,12 +5251,14 @@ export class FortLiteGame {
 
   private findNearestResource(position: THREE.Vector3, maxDistance: number): ResourceNode | null {
     let best: ResourceNode | null = null;
-    let bestDistance = maxDistance;
+    let bestDistanceSquared = maxDistance * maxDistance;
 
     for (const node of this.resourceNodes) {
-      const distance = horizontalDistance(position, node.position);
-      if (distance < bestDistance) {
-        bestDistance = distance;
+      const dx = position.x - node.position.x;
+      const dz = position.z - node.position.z;
+      const distanceSquared = (dx * dx) + (dz * dz);
+      if (distanceSquared < bestDistanceSquared) {
+        bestDistanceSquared = distanceSquared;
         best = node;
       }
     }
@@ -5189,12 +5268,14 @@ export class FortLiteGame {
 
   private findNearestBuildPiece(position: THREE.Vector3, maxDistance: number): BuildPiece | null {
     let best: BuildPiece | null = null;
-    let bestDistance = maxDistance;
+    let bestDistanceSquared = maxDistance * maxDistance;
 
     for (const piece of this.buildPieces) {
-      const distance = horizontalDistance(position, piece.position);
-      if (distance < bestDistance) {
-        bestDistance = distance;
+      const dx = position.x - piece.position.x;
+      const dz = position.z - piece.position.z;
+      const distanceSquared = (dx * dx) + (dz * dz);
+      if (distanceSquared < bestDistanceSquared) {
+        bestDistanceSquared = distanceSquared;
         best = piece;
       }
     }
