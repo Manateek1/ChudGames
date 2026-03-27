@@ -1,6 +1,6 @@
 ﻿import { useEffect, useRef } from "react";
 import { setupCanvas } from "../engine/canvas";
-import { RollingFps } from "../engine/fps";
+import { RollingFps, TARGET_FRAME_DELTA_SECONDS, shouldSkipFrame } from "../engine/fps";
 import { clamp, randRange, seededRandom } from "../engine/math";
 import type { GameComponentProps } from "../types/arcade";
 
@@ -247,10 +247,17 @@ export const PongNeon = ({
       ctx.fillText(`Rally ${rally} (best ${longestRally})`, WIDTH * 0.5 - 70, 92);
     };
 
-    let previous = performance.now();
+    let previous = 0;
 
     const frame = (now: number): void => {
-      const dt = Math.min(0.033, (now - previous) / 1000);
+      if (shouldSkipFrame(now, previous)) {
+        if (!endedRef.current) {
+          raf = requestAnimationFrame(frame);
+        }
+        return;
+      }
+
+      const dt = previous === 0 ? 0 : Math.min(TARGET_FRAME_DELTA_SECONDS, (now - previous) / 1000);
       previous = now;
 
       if (!pausedRef.current && !endedRef.current) {

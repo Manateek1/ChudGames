@@ -1,6 +1,6 @@
 ﻿import { useEffect, useRef } from "react";
 import { setupCanvas } from "../engine/canvas";
-import { RollingFps } from "../engine/fps";
+import { RollingFps, TARGET_FRAME_DELTA_SECONDS, shouldSkipFrame } from "../engine/fps";
 import { circleHitsCircle, clamp, randRange, seededRandom, wrap } from "../engine/math";
 import { ParticleSystem } from "../engine/particles";
 import type { GameComponentProps } from "../types/arcade";
@@ -313,10 +313,17 @@ export const AsteroidsPulse = ({
       ctx.fillText(`Lives: ${ship.lives}`, 16, 24);
     };
 
-    let previous = performance.now();
+    let previous = 0;
 
     const frame = (now: number): void => {
-      const dt = Math.min(0.033, (now - previous) / 1000);
+      if (shouldSkipFrame(now, previous)) {
+        if (!endedRef.current) {
+          raf = requestAnimationFrame(frame);
+        }
+        return;
+      }
+
+      const dt = previous === 0 ? 0 : Math.min(TARGET_FRAME_DELTA_SECONDS, (now - previous) / 1000);
       previous = now;
 
       if (!pausedRef.current && !endedRef.current) {

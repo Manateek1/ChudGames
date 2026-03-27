@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { AudioManager } from '../../engine/audio';
 import type { GraphicsQuality } from '../../types/arcade';
-import { RollingFps } from '../../engine/fps';
+import { RollingFps, TARGET_FRAME_DELTA_SECONDS, shouldSkipFrame } from '../../engine/fps';
 import {
   ACTOR_RADIUS,
   BOT_COUNT,
@@ -527,6 +527,13 @@ export class FortLiteGame {
       return;
     }
 
+    if (shouldSkipFrame(time, this.lastFrameTime)) {
+      if (!this.disposed) {
+        this.animationFrame = window.requestAnimationFrame(this.frame);
+      }
+      return;
+    }
+
     if (this.externallyPaused) {
       this.lastFrameTime = time;
       this.render();
@@ -536,7 +543,7 @@ export class FortLiteGame {
       return;
     }
 
-    const deltaSeconds = Math.min(0.1, (time - this.lastFrameTime) / 1000);
+    const deltaSeconds = Math.min(TARGET_FRAME_DELTA_SECONDS, (time - this.lastFrameTime) / 1000);
     const fps = this.fpsMeter.next(time);
     if (fps > 0) {
       this.options.onFpsChange?.(fps);

@@ -1,4 +1,5 @@
 ﻿import { useEffect, useRef } from "react";
+import { shouldSkipFrame } from "../engine/fps";
 import type { ThumbnailRenderer } from "../types/arcade";
 
 interface GameThumbnailProps {
@@ -27,8 +28,17 @@ export const GameThumbnail = ({ renderer, reducedMotion }: GameThumbnailProps): 
 
     let raf = 0;
     const start = performance.now();
+    let previous = 0;
 
     const tick = (time: number): void => {
+      if (shouldSkipFrame(time, previous)) {
+        if (!reducedMotion) {
+          raf = window.requestAnimationFrame(tick);
+        }
+        return;
+      }
+
+      previous = time;
       const elapsed = reducedMotion ? 0 : time - start;
       renderer(ctx, elapsed, width, height);
       if (!reducedMotion) {
