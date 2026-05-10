@@ -178,8 +178,19 @@ export const GameLibrary = ({
       </div>
 
       {games.length === 0 && (
-        <div className="rounded-[1.4rem] border border-sky-100/14 bg-[rgba(7,18,34,0.72)] px-5 py-6 text-center text-sky-50/78">
-          No games matched that filter.
+        <div className="rounded-[1.4rem] border border-sky-100/14 bg-[rgba(7,18,34,0.72)] px-5 py-8 text-center flex flex-col items-center gap-4">
+          <p className="text-sky-50/78 text-lg">No games matched that filter.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setFilter("all");
+            }}
+            className="arcade-btn-secondary"
+            aria-label="Clear all search and genre filters"
+          >
+            Clear Filters
+          </button>
         </div>
       )}
     </section>
