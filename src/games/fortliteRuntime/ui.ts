@@ -47,10 +47,18 @@ export class FortLiteHud {
   private readonly root: HTMLDivElement;
   private readonly topLeftStack: HTMLDivElement;
   private readonly topLeft: HTMLDivElement;
+  private readonly topLeftHealth: HTMLDivElement;
+  private readonly topLeftWeapon: HTMLDivElement;
+  private readonly topLeftAmmo: HTMLDivElement;
+  private readonly topLeftStatus: HTMLDivElement;
+  private readonly topLeftMaterials: HTMLDivElement;
   private readonly minimapCard: HTMLDivElement;
   private readonly minimapCanvas: HTMLCanvasElement;
   private readonly minimapContext: CanvasRenderingContext2D | null;
   private readonly topRight: HTMLDivElement;
+  private readonly topRightPlayers: HTMLDivElement;
+  private readonly topRightElims: HTMLDivElement;
+  private readonly topRightStorm: HTMLDivElement;
   private readonly banner: HTMLDivElement;
   private readonly hotbar: HTMLDivElement;
   private readonly endScreen: HTMLDivElement;
@@ -76,6 +84,34 @@ export class FortLiteHud {
     this.topLeft = document.createElement('div');
     this.topLeft.className = 'hud-card hud-top-left';
 
+    const topLeftTitle = document.createElement('div');
+    topLeftTitle.className = 'hud-title';
+    topLeftTitle.textContent = 'Operator';
+
+    this.topLeftHealth = document.createElement('div');
+    this.topLeftHealth.className = 'hud-value';
+
+    this.topLeftWeapon = document.createElement('div');
+    this.topLeftWeapon.className = 'hud-line hud-accent';
+
+    this.topLeftAmmo = document.createElement('div');
+    this.topLeftAmmo.className = 'hud-line';
+
+    this.topLeftStatus = document.createElement('div');
+    this.topLeftStatus.className = 'hud-line';
+
+    this.topLeftMaterials = document.createElement('div');
+    this.topLeftMaterials.className = 'hud-line';
+
+    this.topLeft.append(
+      topLeftTitle,
+      this.topLeftHealth,
+      this.topLeftWeapon,
+      this.topLeftAmmo,
+      this.topLeftStatus,
+      this.topLeftMaterials
+    );
+
     this.minimapCard = document.createElement('div');
     this.minimapCard.className = 'hud-card hud-minimap-card';
 
@@ -93,6 +129,17 @@ export class FortLiteHud {
 
     this.topRight = document.createElement('div');
     this.topRight.className = 'hud-card hud-top-right';
+
+    this.topRightPlayers = document.createElement('div');
+    this.topRightPlayers.className = 'hud-value';
+
+    this.topRightElims = document.createElement('div');
+    this.topRightElims.className = 'hud-line hud-strong';
+
+    this.topRightStorm = document.createElement('div');
+    this.topRightStorm.className = 'hud-line hud-accent';
+
+    this.topRight.append(this.topRightPlayers, this.topRightElims, this.topRightStorm);
 
     this.banner = document.createElement('div');
     this.banner.className = 'hud-banner';
@@ -143,24 +190,19 @@ export class FortLiteHud {
     ].join('|');
     if (topLeftKey !== this.lastTopLeftKey) {
       this.lastTopLeftKey = topLeftKey;
-      this.topLeft.innerHTML = `
-        <div class="hud-title">Operator</div>
-        <div class="hud-value">${Math.max(0, Math.ceil(snapshot.health))} HP</div>
-        <div class="hud-line hud-accent">${snapshot.weaponName}</div>
-        <div class="hud-line">Ammo ${snapshot.ammoInMag} / ${snapshot.ammoReserve}</div>
-        <div class="hud-line">${snapshot.statusText}</div>
-        <div class="hud-line">Wood ${snapshot.materials.wood} | Stone ${snapshot.materials.stone} | Metal ${snapshot.materials.metal}</div>
-      `;
+      this.topLeftHealth.textContent = `${Math.max(0, Math.ceil(snapshot.health))} HP`;
+      this.topLeftWeapon.textContent = snapshot.weaponName;
+      this.topLeftAmmo.textContent = `Ammo ${snapshot.ammoInMag} / ${snapshot.ammoReserve}`;
+      this.topLeftStatus.textContent = snapshot.statusText;
+      this.topLeftMaterials.textContent = `Wood ${snapshot.materials.wood} | Stone ${snapshot.materials.stone} | Metal ${snapshot.materials.metal}`;
     }
 
     const topRightKey = [snapshot.aliveCount, snapshot.eliminationCount, snapshot.stormText].join('|');
     if (topRightKey !== this.lastTopRightKey) {
       this.lastTopRightKey = topRightKey;
-      this.topRight.innerHTML = `
-        <div class="hud-value">${snapshot.aliveCount} Players Left</div>
-        <div class="hud-line hud-strong">Elims ${snapshot.eliminationCount}</div>
-        <div class="hud-line hud-accent">${snapshot.stormText}</div>
-      `;
+      this.topRightPlayers.textContent = `${snapshot.aliveCount} Players Left`;
+      this.topRightElims.textContent = `Elims ${snapshot.eliminationCount}`;
+      this.topRightStorm.textContent = snapshot.stormText;
     }
 
     if (snapshot.bannerText !== this.lastBannerText) {
@@ -173,13 +215,26 @@ export class FortLiteHud {
       .join('|');
     if (hotbarKey !== this.lastHotbarKey) {
       this.lastHotbarKey = hotbarKey;
-      this.hotbar.innerHTML = snapshot.hotbarItems.map((item) => `
-        <div class="hud-slot${item.active ? ' active' : ''}">
-          <div class="hud-slot-key">${item.key}</div>
-          <div class="hud-slot-label">${item.label}</div>
-          <div class="hud-slot-detail">${item.detail}</div>
-        </div>
-      `).join('');
+      this.hotbar.textContent = '';
+      for (const item of snapshot.hotbarItems) {
+        const slot = document.createElement('div');
+        slot.className = `hud-slot${item.active ? ' active' : ''}`;
+
+        const key = document.createElement('div');
+        key.className = 'hud-slot-key';
+        key.textContent = item.key;
+
+        const label = document.createElement('div');
+        label.className = 'hud-slot-label';
+        label.textContent = item.label;
+
+        const detail = document.createElement('div');
+        detail.className = 'hud-slot-detail';
+        detail.textContent = item.detail;
+
+        slot.append(key, label, detail);
+        this.hotbar.append(slot);
+      }
     }
 
     if (snapshot.pointerLocked !== this.lastCrosshairVisible) {
