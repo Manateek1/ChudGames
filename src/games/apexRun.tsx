@@ -1,100 +1,66 @@
 import { useEffect, useRef } from "react";
-import highwayUrl from "../assets/apex-highway.png";
-import carUrl from "../assets/apex-car.png";
-import { setupCanvas } from "../engine/canvas";
-import { RollingFps, TARGET_FRAME_DELTA_SECONDS, shouldSkipFrame } from "../engine/fps";
+import * as THREE from "three";
+import { RollingFps } from "../engine/fps";
 import { clamp, randRange, seededRandom } from "../engine/math";
 import type { GameComponentProps } from "../types/arcade";
 
-interface Traffic { x: number; y: number; speed: number; color: string }
+interface TrafficCar { mesh: THREE.Group; z: number; speed: number }
+interface BoostGate { mesh: THREE.Group; z: number }
+const WIDTH = 900, HEIGHT = 540, LANES = [-3, 0, 3];
+const TUNING = { easy: { maxSpeed: 116, trafficEvery: 1.8, lives: 3 }, normal: { maxSpeed: 136, trafficEvery: 1.35, lives: 2 }, hard: { maxSpeed: 156, trafficEvery: 1, lives: 1 } };
 
-const WIDTH = 900;
-const HEIGHT = 540;
-const config = {
-  easy: { pace: 190, traffic: 1.45, lives: 3 },
-  normal: { pace: 225, traffic: 1.1, lives: 2 },
-  hard: { pace: 260, traffic: 0.8, lives: 1 },
+const makeCar = (color: number, scale = 1): THREE.Group => {
+  const car = new THREE.Group();
+  const body = new THREE.MeshStandardMaterial({ color, metalness: .58, roughness: .23 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x101827, metalness: .7, roughness: .12 });
+  const tire = new THREE.MeshStandardMaterial({ color: 0x0a0b0e, roughness: .88 });
+  const light = new THREE.MeshStandardMaterial({ color: 0xff263f, emissive: 0xb30018, emissiveIntensity: 2.2 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.7, .42, 3.05), body); base.position.y = .48; car.add(base);
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(1.55, .2, 1.05), body); hood.position.set(0, .7, -.73); car.add(hood);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.28, .56, 1.25), glass); cabin.position.set(0, .92, .25); car.add(cabin);
+  for (const x of [-.82, .82]) for (const z of [-.88, .88]) { const wheel = new THREE.Mesh(new THREE.CylinderGeometry(.31, .31, .28, 12), tire); wheel.rotation.z = Math.PI / 2; wheel.position.set(x, .32, z); car.add(wheel); }
+  for (const x of [-.53, .53]) { const lamp = new THREE.Mesh(new THREE.BoxGeometry(.35, .1, .08), light); lamp.position.set(x, .57, 1.56); car.add(lamp); }
+  car.scale.setScalar(scale); return car;
 };
 
 export const ApexRun = ({ difficulty, seed, paused, input, audio, onScore, onFps, onPauseToggle, onGameOver }: GameComponentProps): React.JSX.Element => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const pausedRef = useRef(paused);
-  const endedRef = useRef(false);
+  const mountRef = useRef<HTMLDivElement | null>(null); const pausedRef = useRef(paused); const endedRef = useRef(false);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
-
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = setupCanvas(canvas, WIDTH, HEIGHT);
-    const background = new Image(); background.src = highwayUrl;
-    const playerImage = new Image(); playerImage.src = carUrl;
-    const random = seededRandom(seed);
-    const fps = new RollingFps();
-    const tuning = config[difficulty];
-    const traffic: Traffic[] = [];
-    const player = { x: WIDTH / 2, y: HEIGHT - 116, vx: 0, boost: 1, lives: tuning.lives };
-    let score = 0, distance = 0, timer = 0, flash = 0, previous = 0, raf = 0, uiTimer = 0;
-
-    const finish = (): void => {
-      if (endedRef.current) return;
-      endedRef.current = true;
-      onGameOver({ score: Math.round(score), won: false, stats: { distance: Math.round(distance), topSpeed: Math.round(tuning.pace * player.boost) } });
-    };
-    const spawn = (): void => {
-      traffic.push({ x: randRange(215, 685, random), y: -90, speed: randRange(0.7, 1.1, random), color: ["#137ec4", "#ffc21d", "#f5f7fb", "#1d2736"][Math.floor(random() * 4)] });
-    };
+    const mount = mountRef.current; if (!mount) return;
+    const cfg = TUNING[difficulty], random = seededRandom(seed), fps = new RollingFps();
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(0x68b5e5); scene.fog = new THREE.Fog(0x9bd5ee, 48, 175);
+    const camera = new THREE.PerspectiveCamera(58, WIDTH / HEIGHT, .1, 260); camera.position.set(0, 6.3, 10.8); camera.lookAt(0, .65, -33);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" }); renderer.setSize(WIDTH, HEIGHT, false); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; mount.appendChild(renderer.domElement);
+    scene.add(new THREE.HemisphereLight(0xdaf5ff, 0x283120, 2.3)); const sun = new THREE.DirectionalLight(0xffdfae, 4.6); sun.position.set(-28, 38, 18); sun.castShadow = true; scene.add(sun);
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(360, 420), new THREE.MeshStandardMaterial({ color: 0x315c34, roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.position.z = -78; ground.receiveShadow = true; scene.add(ground);
+    const mountainMat = new THREE.MeshStandardMaterial({ color: 0x42606c, roughness: .92, flatShading: true });
+    for (let i = 0; i < 35; i += 1) { const mountain = new THREE.Mesh(new THREE.ConeGeometry(randRange(7, 20, random), randRange(16, 52, random), 5), mountainMat); mountain.position.set((i % 2 ? -1 : 1) * randRange(15, 60, random), randRange(6, 18, random), -25 - i * 7); mountain.rotation.y = random() * Math.PI; scene.add(mountain); }
+    const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x20242a, roughness: .78 }), roads: THREE.Mesh[] = [], stripes: THREE.Mesh[] = [];
+    for (let i = 0; i < 18; i += 1) { const road = new THREE.Mesh(new THREE.PlaneGeometry(10.4, 16), roadMaterial); road.rotation.x = -Math.PI / 2; road.position.z = 4 - i * 16; road.receiveShadow = true; scene.add(road); roads.push(road); }
+    const stripeMaterial = new THREE.MeshBasicMaterial({ color: 0xf8fbff });
+    for (let i = 0; i < 30; i += 1) for (const x of [-1.5, 1.5]) { const stripe = new THREE.Mesh(new THREE.PlaneGeometry(.18, 4.5), stripeMaterial); stripe.rotation.x = -Math.PI / 2; stripe.position.set(x, .012, 7 - i * 9); scene.add(stripe); stripes.push(stripe); }
+    const railMaterial = new THREE.MeshStandardMaterial({ color: 0x9daeb9, metalness: .8, roughness: .28 });
+    for (const side of [-1, 1]) for (let i = 0; i < 24; i += 1) { const rail = new THREE.Mesh(new THREE.BoxGeometry(.18, .45, 11), railMaterial); rail.position.set(side * 5.45, .65, 2 - i * 13); scene.add(rail); }
+    const player = makeCar(0xe72d3e, 1.08); player.position.set(0, 0, 3); player.rotation.y = Math.PI; scene.add(player);
+    const traffic: TrafficCar[] = [], gates: BoostGate[] = [];
+    let speed = cfg.maxSpeed * .52, nitro = .72, score = 0, distance = 0, lives = cfg.lives, trafficTimer = 0, gateTimer = 0, previous = 0, raf = 0, uiTimer = 0, shake = 0;
+    const addTraffic = (): void => { const mesh = makeCar([0x1368aa, 0xf7bb2a, 0xffffff, 0x161c27][Math.floor(random() * 4)], randRange(.86, 1.05, random)); mesh.position.set(LANES[Math.floor(random() * LANES.length)], 0, -128); mesh.rotation.y = Math.PI; scene.add(mesh); traffic.push({ mesh, z: -128, speed: randRange(.45, .82, random) }); };
+    const addGate = (): void => { const group = new THREE.Group(), material = new THREE.MeshStandardMaterial({ color: 0x00d9ff, emissive: 0x0077ff, emissiveIntensity: 2.5 }); for (const x of [-1.35, 1.35]) { const post = new THREE.Mesh(new THREE.BoxGeometry(.16, 2.4, .16), material); post.position.x = x; group.add(post); } const top = new THREE.Mesh(new THREE.BoxGeometry(2.85, .16, .16), material); top.position.y = 1.2; group.add(top); group.position.set(LANES[Math.floor(random() * LANES.length)], 1.2, -140); scene.add(group); gates.push({ mesh: group, z: -140 }); };
+    const finish = (): void => { if (endedRef.current) return; endedRef.current = true; onGameOver({ score: Math.round(score), won: false, stats: { distance: Math.round(distance), topSpeed: Math.round(speed) } }); };
     const update = (dt: number): void => {
-      if (input.consumePress("pause")) onPauseToggle();
-      const steer = (input.isDown("right") ? 1 : 0) - (input.isDown("left") ? 1 : 0);
-      const accelerate = input.isDown("up");
-      const brake = input.isDown("down");
-      player.boost = clamp(player.boost + ((accelerate ? 1 : brake ? -2 : -0.35) * dt), 0.42, 1.45);
-      player.vx += steer * 720 * dt;
-      player.vx *= 0.88;
-      player.x = clamp(player.x + player.vx * dt, 220, 680);
-      const speed = tuning.pace * player.boost;
-      distance += speed * dt; score += speed * dt * 0.18;
-      timer += dt;
-      if (timer > tuning.traffic / Math.max(0.75, player.boost)) { timer = 0; spawn(); }
-      for (let i = traffic.length - 1; i >= 0; i -= 1) {
-        const car = traffic[i]; car.y += (speed * 0.76 + 115 * car.speed) * dt;
-        if (Math.abs(car.x - player.x) < 57 && Math.abs(car.y - player.y) < 67) {
-          traffic.splice(i, 1); player.lives -= 1; flash = 0.55; audio.explosion();
-          if (player.lives <= 0) { finish(); return; }
-          player.x = WIDTH / 2; player.vx = 0; player.boost = 0.55;
-          continue;
-        }
-        if (car.y > HEIGHT + 100) { traffic.splice(i, 1); score += 65; audio.power(); }
-      }
-      flash = Math.max(0, flash - dt);
-      uiTimer += dt; if (uiTimer > 0.16) { onScore(Math.round(score)); uiTimer = 0; }
+      if (input.consumePress("pause")) onPauseToggle(); const steering = (input.isDown("right") ? 1 : 0) - (input.isDown("left") ? 1 : 0), throttle = input.isDown("up"), braking = input.isDown("down"), boost = input.isDown("action") && nitro > .04;
+      speed = clamp(speed + (throttle ? 48 : braking ? -115 : -9) * dt + (boost ? 40 : 0) * dt, 45, cfg.maxSpeed + 42); nitro = clamp(nitro + (boost ? -.34 : .075) * dt, 0, 1);
+      player.position.x = clamp(player.position.x + steering * (7.4 + speed * .017) * dt, -3.85, 3.85); player.rotation.z = THREE.MathUtils.lerp(player.rotation.z, -steering * .18, .13); player.rotation.y = Math.PI + THREE.MathUtils.lerp(player.rotation.y - Math.PI, steering * .05, .08);
+      const scroll = speed * dt; distance += scroll; score += scroll * (boost ? 2.4 : 1.1); trafficTimer += dt; gateTimer += dt; if (trafficTimer >= cfg.trafficEvery * (boost ? .8 : 1)) { trafficTimer = 0; addTraffic(); } if (gateTimer > 6.6) { gateTimer = 0; addGate(); }
+      for (const road of roads) { road.position.z += scroll; if (road.position.z > 18) road.position.z -= 288; } for (const stripe of stripes) { stripe.position.z += scroll; if (stripe.position.z > 16) stripe.position.z -= 270; }
+      for (let i = traffic.length - 1; i >= 0; i -= 1) { const car = traffic[i]; car.z += scroll * (.72 + car.speed); car.mesh.position.z = car.z; if (Math.abs(car.mesh.position.x - player.position.x) < 1.25 && car.z > .3 && car.z < 5.1) { lives -= 1; speed *= .48; shake = .55; audio.explosion(); scene.remove(car.mesh); traffic.splice(i, 1); if (lives <= 0) { finish(); return; } continue; } if (car.z > 14) { scene.remove(car.mesh); traffic.splice(i, 1); score += 90; audio.power(); } }
+      for (let i = gates.length - 1; i >= 0; i -= 1) { const gate = gates[i]; gate.z += scroll; gate.mesh.position.z = gate.z; gate.mesh.rotation.y += dt * 1.4; if (gate.z > 1.2 && gate.z < 5 && Math.abs(gate.mesh.position.x - player.position.x) < 1.65) { nitro = 1; score += 350; audio.power(); scene.remove(gate.mesh); gates.splice(i, 1); continue; } if (gate.z > 15) { scene.remove(gate.mesh); gates.splice(i, 1); } }
+      shake = Math.max(0, shake - dt); camera.position.x = (Math.random() - .5) * shake * .3; uiTimer += dt; if (uiTimer > .12) { onScore(Math.round(score)); uiTimer = 0; }
     };
-    const roadOverlay = (time: number): void => {
-      ctx.save(); ctx.globalAlpha = 0.2; ctx.fillStyle = "#071226"; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-      ctx.globalAlpha = 0.78; ctx.strokeStyle = "rgba(255,255,255,.8)"; ctx.lineWidth = 5;
-      const scroll = (time * (0.15 + player.boost * 0.25)) % 78;
-      for (let y = 255 - scroll; y < HEIGHT; y += 78) { const p = (y - 190) / 350; const half = 21 + p * 10; ctx.beginPath(); ctx.moveTo(WIDTH/2-half, y); ctx.lineTo(WIDTH/2+half, y); ctx.stroke(); }
-      ctx.restore();
-    };
-    const drawTraffic = (car: Traffic): void => {
-      const scale = clamp(0.33 + car.y / 800, 0.25, 0.85); const w = 80 * scale, h = 120 * scale;
-      ctx.save(); ctx.translate(car.x, car.y); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(-w*.5+6,h*.38,w-12,h*.18);
-      ctx.fillStyle = car.color; ctx.beginPath(); ctx.roundRect(-w/2,-h/2,w,h,10*scale); ctx.fill();
-      ctx.fillStyle = "#c9efff"; ctx.fillRect(-w*.29,-h*.3,w*.58,h*.24); ctx.fillStyle = "#ff3d3d"; ctx.fillRect(-w*.32,h*.29,w*.18,h*.1); ctx.fillRect(w*.14,h*.29,w*.18,h*.1); ctx.restore();
-    };
-    const draw = (time: number): void => {
-      if (background.complete) ctx.drawImage(background, 0, 0, WIDTH, HEIGHT); else { ctx.fillStyle = "#587eb5"; ctx.fillRect(0,0,WIDTH,HEIGHT); }
-      roadOverlay(time); traffic.forEach(drawTraffic);
-      ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.vx / 155);
-      ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = 18; ctx.shadowOffsetY = 10;
-      if (playerImage.complete) ctx.drawImage(playerImage, -70, -72, 140, 112); else { ctx.fillStyle = "#e63946"; ctx.fillRect(-34,-48,68,96); }
-      ctx.restore();
-      ctx.fillStyle = "rgba(4,11,23,.78)"; ctx.fillRect(22, 20, 204, 69); ctx.fillStyle = "#f7fbff"; ctx.font = "700 15px Inter, sans-serif"; ctx.fillText(`SPEED  ${Math.round(tuning.pace * player.boost)} km/h`, 38, 47); ctx.fillStyle = "#f5bd39"; ctx.fillRect(38, 60, 160 * player.boost / 1.45, 7); ctx.fillStyle = "#f7fbff"; ctx.fillText(`LIVES  ${"●".repeat(player.lives)}${"○".repeat(tuning.lives-player.lives)}`, 38, 81);
-      ctx.textAlign = "right"; ctx.fillStyle = "rgba(4,11,23,.78)"; ctx.fillRect(684,20,194,69); ctx.fillStyle = "#f7fbff"; ctx.font = "700 15px Inter, sans-serif"; ctx.fillText(`DISTANCE  ${Math.floor(distance / 10)} m`, 862, 47); ctx.fillStyle = "#8de4ff"; ctx.fillText("WASD  DRIVE  •  P  PAUSE", 862, 76); ctx.textAlign = "left";
-      if (flash > 0) { ctx.fillStyle = `rgba(255,66,56,${flash * .36})`; ctx.fillRect(0,0,WIDTH,HEIGHT); }
-    };
-    const loop = (now: number): void => { const dt = Math.min((now - previous) / 1000 || TARGET_FRAME_DELTA_SECONDS, TARGET_FRAME_DELTA_SECONDS * 2); const skip = shouldSkipFrame(now, previous); previous = now; if (!pausedRef.current && !endedRef.current && !skip) update(dt); draw(now); onFps(fps.next(now)); raf = requestAnimationFrame(loop); };
-    raf = requestAnimationFrame(loop); return () => cancelAnimationFrame(raf);
+    const loop = (now: number): void => { const dt = Math.min((now - previous) / 1000 || 1 / 60, .05); previous = now; if (!pausedRef.current && !endedRef.current) update(dt); renderer.render(scene, camera); onFps(fps.next(now)); raf = requestAnimationFrame(loop); };
+    raf = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(raf); renderer.dispose(); mount.removeChild(renderer.domElement); };
   }, [difficulty, seed, input, audio, onScore, onFps, onPauseToggle, onGameOver]);
-  return <canvas ref={canvasRef} className="mx-auto block max-w-full rounded-[1rem]" aria-label="Apex Run racing game" />;
+  return <div ref={mountRef} className="mx-auto aspect-[5/3] w-full max-w-[900px] overflow-hidden rounded-[1rem] bg-slate-950" aria-label="Apex Run 3D racing game" />;
 };

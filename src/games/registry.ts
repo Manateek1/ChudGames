@@ -216,7 +216,7 @@ const fortLiteThumb = createThumbnail((ctx, elapsed, width, height) => {
 
 export const gameRegistry: GameDefinition[] = [
   {
-    id: "apex-run", title: "Apex Run", genre: "action", shortDescription: "Thread traffic on a sunlit mountain highway.", description: "A cinematic arcade highway run: build speed, overtake traffic, and survive every corner.", controls: ["Steer: A / D or Arrow Keys", "Throttle: W / Up", "Brake: S / Down", "Pause: P / Esc"], tutorial: ["Hold W to build speed and use A/D for precise lane changes.", "Pass traffic cleanly to earn distance and score bonuses.", "Crashes cost a life; your run ends when the final light goes out."], tags: ["racing", "cars", "arcade"], difficulties: ["easy", "normal", "hard"], usesCanvas: true, isNew: true, thumbnail: apexThumb, component: ApexRun,
+    id: "apex-run", title: "Apex Run", genre: "action", shortDescription: "Thread traffic through a real 3D mountain highway.", description: "An arcade highway racer with responsive driving, dynamic traffic, boost gates, collisions, and escalating speed.", controls: ["Steer: A / D or Arrow Keys", "Throttle: W / Up", "Brake: S / Down", "Nitro: Space / Enter", "Pause: P / Esc"], tutorial: ["Hold W to build speed and use A/D for precise lane changes.", "Drive through blue nitro gates, then hold Space for a speed burst.", "Pass traffic cleanly to build score; crashes cost a life."], tags: ["racing", "cars", "3d"], difficulties: ["easy", "normal", "hard"], usesCanvas: true, isNew: true, thumbnail: apexThumb, component: ApexRun,
   },
   {
     id: "neon-dodger",
