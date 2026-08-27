@@ -1,5 +1,6 @@
 ﻿import type { GameDefinition, ThumbnailRenderer } from "../types/arcade";
 import { AsteroidsPulse } from "./asteroidsPulse";
+import { ApexRun } from "./apexRun";
 import { BrickBreakerBlitz } from "./brickBreakerBlitz";
 import { FortLite } from "./fortlite";
 import { Game2048 } from "./game2048";
@@ -40,6 +41,13 @@ const neonThumb = createThumbnail((ctx, elapsed, width, height) => {
   ctx.beginPath();
   ctx.arc(width * 0.68, height * 0.72, 16, 0, Math.PI * 2);
   ctx.fill();
+});
+
+const apexThumb = createThumbnail((ctx, elapsed, width, height) => {
+  const t = elapsed * 0.003;
+  const sky = ctx.createLinearGradient(0, 0, 0, height); sky.addColorStop(0, "#efb26a"); sky.addColorStop(0.5, "#578bc2"); sky.addColorStop(0.51, "#212a34"); sky.addColorStop(1, "#090e16"); ctx.fillStyle = sky; ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#151a21"; ctx.beginPath(); ctx.moveTo(width*.26,height); ctx.lineTo(width*.46,height*.43); ctx.lineTo(width*.54,height*.43); ctx.lineTo(width*.74,height); ctx.fill();
+  ctx.fillStyle = "#dc2738"; ctx.fillRect(width*.43 + Math.sin(t)*5,height*.62, width*.14,height*.23); ctx.fillStyle = "#ffeded"; ctx.fillRect(width*.46 + Math.sin(t)*5,height*.78,width*.03,height*.035); ctx.fillRect(width*.51 + Math.sin(t)*5,height*.78,width*.03,height*.035);
 });
 
 const asteroidThumb = createThumbnail((ctx, elapsed, width, height) => {
@@ -207,6 +215,9 @@ const fortLiteThumb = createThumbnail((ctx, elapsed, width, height) => {
 });
 
 export const gameRegistry: GameDefinition[] = [
+  {
+    id: "apex-run", title: "Apex Run", genre: "action", shortDescription: "Thread traffic on a sunlit mountain highway.", description: "A cinematic arcade highway run: build speed, overtake traffic, and survive every corner.", controls: ["Steer: A / D or Arrow Keys", "Throttle: W / Up", "Brake: S / Down", "Pause: P / Esc"], tutorial: ["Hold W to build speed and use A/D for precise lane changes.", "Pass traffic cleanly to earn distance and score bonuses.", "Crashes cost a life; your run ends when the final light goes out."], tags: ["racing", "cars", "arcade"], difficulties: ["easy", "normal", "hard"], usesCanvas: true, isNew: true, thumbnail: apexThumb, component: ApexRun,
+  },
   {
     id: "neon-dodger",
     title: "Neon Dodger",
