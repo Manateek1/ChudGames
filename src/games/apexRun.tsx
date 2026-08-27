@@ -40,7 +40,9 @@ export const ApexRun = ({ difficulty, seed, paused, input, audio, onScore, onFps
       endedRef.current = true;
       onGameOver({ score: Math.round(score), won: false, stats: { distance: Math.round(distance), topSpeed: Math.round(tuning.pace * player.boost) } });
     };
-    const spawn = (): void => traffic.push({ x: randRange(215, 685, random), y: -90, speed: randRange(0.7, 1.1, random), color: ["#137ec4", "#ffc21d", "#f5f7fb", "#1d2736"][Math.floor(random() * 4)] });
+    const spawn = (): void => {
+      traffic.push({ x: randRange(215, 685, random), y: -90, speed: randRange(0.7, 1.1, random), color: ["#137ec4", "#ffc21d", "#f5f7fb", "#1d2736"][Math.floor(random() * 4)] });
+    };
     const update = (dt: number): void => {
       if (input.consumePress("pause")) onPauseToggle();
       const steer = (input.isDown("right") ? 1 : 0) - (input.isDown("left") ? 1 : 0);
@@ -91,7 +93,7 @@ export const ApexRun = ({ difficulty, seed, paused, input, audio, onScore, onFps
       ctx.textAlign = "right"; ctx.fillStyle = "rgba(4,11,23,.78)"; ctx.fillRect(684,20,194,69); ctx.fillStyle = "#f7fbff"; ctx.font = "700 15px Inter, sans-serif"; ctx.fillText(`DISTANCE  ${Math.floor(distance / 10)} m`, 862, 47); ctx.fillStyle = "#8de4ff"; ctx.fillText("WASD  DRIVE  •  P  PAUSE", 862, 76); ctx.textAlign = "left";
       if (flash > 0) { ctx.fillStyle = `rgba(255,66,56,${flash * .36})`; ctx.fillRect(0,0,WIDTH,HEIGHT); }
     };
-    const loop = (now: number): void => { const dt = Math.min((now - previous) / 1000 || TARGET_FRAME_DELTA_SECONDS, TARGET_FRAME_DELTA_SECONDS * 2); previous = now; if (!pausedRef.current && !endedRef.current && !shouldSkipFrame(dt)) update(dt); draw(now); fps.push(dt); onFps(fps.value); raf = requestAnimationFrame(loop); };
+    const loop = (now: number): void => { const dt = Math.min((now - previous) / 1000 || TARGET_FRAME_DELTA_SECONDS, TARGET_FRAME_DELTA_SECONDS * 2); const skip = shouldSkipFrame(now, previous); previous = now; if (!pausedRef.current && !endedRef.current && !skip) update(dt); draw(now); onFps(fps.next(now)); raf = requestAnimationFrame(loop); };
     raf = requestAnimationFrame(loop); return () => cancelAnimationFrame(raf);
   }, [difficulty, seed, input, audio, onScore, onFps, onPauseToggle, onGameOver]);
   return <canvas ref={canvasRef} className="mx-auto block max-w-full rounded-[1rem]" aria-label="Apex Run racing game" />;
