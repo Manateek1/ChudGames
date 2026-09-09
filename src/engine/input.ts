@@ -33,7 +33,15 @@ export class InputManager {
 
   private attached = false;
 
+  private onBlur = (): void => {
+    this.down.clear();
+    this.pressed.clear();
+    this.virtual.clear();
+  };
+
   private onKeyDown = (event: KeyboardEvent): void => {
+    const target = event.target;
+    if (target instanceof HTMLElement && (["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName) || target.isContentEditable || (target.tagName === "BUTTON" && event.key === "Enter"))) return;
     const action = KEY_TO_ACTION[event.key] ?? KEY_TO_ACTION[event.key.toLowerCase()];
     if (!action) {
       return;
@@ -61,6 +69,7 @@ export class InputManager {
 
     window.addEventListener("keydown", this.onKeyDown, { passive: false });
     window.addEventListener("keyup", this.onKeyUp, { passive: false });
+    window.addEventListener("blur", this.onBlur);
     this.attached = true;
   }
 
@@ -70,6 +79,7 @@ export class InputManager {
     }
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
+    window.removeEventListener("blur", this.onBlur);
     this.attached = false;
     this.down.clear();
     this.pressed.clear();

@@ -1,31 +1,608 @@
 import { useEffect, useRef, useState } from "react";
-import * as THREE from "three";
-import { RollingFps } from "../engine/fps";
-import { clamp, seededRandom } from "../engine/math";
 import type { GameComponentProps } from "../types/arcade";
+import type { ApexRuntime, Telemetry } from "./apex/runtime";
+import { formatTime } from "./apex/race";
+import { loadApexSettings, persistSettings } from "./apex/settings";
+import type { ApexSettings, Quality } from "./apex/settings";
+import { mapPoints, TRACK_LENGTH } from "./apex/track";
+import "./apexRun.css";
 
-type Hud = { speed: number; lap: number; checkpoint: number; nitro: number; position: number };
-const VIEW_W = 960, VIEW_H = 540;
-const TUNING = { easy: { maxSpeed: 52, rivals: 4 }, normal: { maxSpeed: 61, rivals: 6 }, hard: { maxSpeed: 70, rivals: 8 } };
-const track = [new THREE.Vector3(-18,0,26),new THREE.Vector3(36,0,24),new THREE.Vector3(72,0,-2),new THREE.Vector3(68,0,-52),new THREE.Vector3(30,0,-82),new THREE.Vector3(-18,0,-76),new THREE.Vector3(-66,0,-44),new THREE.Vector3(-78,0,10),new THREE.Vector3(-50,0,48),new THREE.Vector3(-4,0,58),new THREE.Vector3(30,0,45)];
-const lerpTrack = (t: number): { position: THREE.Vector3; heading: number } => { const f = (((t % 1) + 1) % 1) * track.length, i = Math.floor(f), a = track[i], b = track[(i + 1) % track.length]; return { position: a.clone().lerp(b, f - i), heading: Math.atan2(b.x - a.x, b.z - a.z) }; };
-
-const makeCar = (color: number, scale = 1): THREE.Group => {
-  const car = new THREE.Group(), paint = new THREE.MeshStandardMaterial({ color, metalness: .72, roughness: .2 }), dark = new THREE.MeshStandardMaterial({ color: 0x0a1018, metalness: .55, roughness: .25 }), tire = new THREE.MeshStandardMaterial({ color: 0x07090d, roughness: .94 }), red = new THREE.MeshStandardMaterial({ color: 0xff1f35, emissive: 0xa80016, emissiveIntensity: 2 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2.05,.42,4.15),paint); body.position.y=.48; car.add(body); const nose = new THREE.Mesh(new THREE.BoxGeometry(1.92,.25,1.4),paint); nose.position.set(0,.66,-1.23); car.add(nose); const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.48,.66,1.62),dark); cabin.position.set(0,.97,.16); car.add(cabin); const splitter = new THREE.Mesh(new THREE.BoxGeometry(2.14,.12,1.05),dark); splitter.position.set(0,.26,-1.68); car.add(splitter);
-  for (const x of [-1.02,1.02]) for (const z of [-1.22,1.18]) { const wheel = new THREE.Mesh(new THREE.CylinderGeometry(.38,.38,.28,14),tire); wheel.rotation.z=Math.PI/2; wheel.position.set(x,.38,z); car.add(wheel); }
-  for (const x of [-.62,.62]) { const lamp = new THREE.Mesh(new THREE.BoxGeometry(.45,.11,.1),red); lamp.position.set(x,.6,2.1); car.add(lamp); } car.scale.setScalar(scale); return car;
+const emptyHud: Telemetry = {
+  phase: "menu",
+  speed: 0,
+  rpm: 950,
+  gear: 1,
+  time: 0,
+  best: Infinity,
+  sector: 0,
+  progress: 0,
+  x: 0,
+  z: 0,
+  heading: 0,
+  countdown: 3,
+  message: "",
+  fps: 60,
+  calls: 0,
+  triangles: 0,
+  camera: "Chase",
+  newBest: false,
+  resolution: 1,
+  storageFailed: false,
 };
-
-const addRoad = (scene: THREE.Scene): void => { const roadMat = new THREE.MeshStandardMaterial({ color: 0x24282c, roughness: .92 }), edgeMat = new THREE.MeshBasicMaterial({ color: 0xf4f0dd }), centreMat = new THREE.MeshBasicMaterial({ color: 0xf1bd32 }); for (let i=0;i<track.length;i+=1) { const a=track[i], b=track[(i+1)%track.length], length=a.distanceTo(b), angle=Math.atan2(b.x-a.x,b.z-a.z), mid=a.clone().lerp(b,.5), road=new THREE.Mesh(new THREE.PlaneGeometry(11,length+1.5),roadMat); road.rotation.set(-Math.PI/2,0,-angle); road.position.copy(mid); road.receiveShadow=true; scene.add(road); for (const side of [-1,1]) { const edge=new THREE.Mesh(new THREE.PlaneGeometry(.18,length),edgeMat); edge.rotation.set(-Math.PI/2,0,-angle); edge.position.copy(mid).add(new THREE.Vector3(Math.cos(angle)*side*5.05,.012,-Math.sin(angle)*side*5.05)); scene.add(edge); } for(let d=4;d<length;d+=7) { const mark=new THREE.Mesh(new THREE.PlaneGeometry(.24,3.1),centreMat); mark.rotation.set(-Math.PI/2,0,-angle); mark.position.copy(a).lerp(b,d/length); mark.position.y=.015; scene.add(mark); } } };
-
-export const ApexRun = ({ difficulty, seed, paused, input, audio, onScore, onFps, onPauseToggle, onGameOver }: GameComponentProps): React.JSX.Element => {
-  const mountRef=useRef<HTMLDivElement|null>(null), pausedRef=useRef(paused), endedRef=useRef(false); const [hud,setHud]=useState<Hud>({speed:0,lap:1,checkpoint:1,nitro:100,position:1}); useEffect(()=>{pausedRef.current=paused;},[paused]);
-  useEffect(()=>{ const mount=mountRef.current; if(!mount)return; const cfg=TUNING[difficulty], random=seededRandom(seed), fps=new RollingFps(), scene=new THREE.Scene(); scene.background=new THREE.Color(0x78bce3); scene.fog=new THREE.Fog(0x9ed1dd,90,220); const camera=new THREE.PerspectiveCamera(68,VIEW_W/VIEW_H,.1,400), renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"}); renderer.setSize(VIEW_W,VIEW_H,false); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap; mount.appendChild(renderer.domElement); scene.add(new THREE.HemisphereLight(0xd8f4ff,0x344124,2.4)); const sun=new THREE.DirectionalLight(0xffd7a6,4.2); sun.position.set(-85,100,35); sun.castShadow=true; sun.shadow.mapSize.set(1024,1024); scene.add(sun);
-    const land=new THREE.Mesh(new THREE.PlaneGeometry(320,320),new THREE.MeshStandardMaterial({color:0x416b36,roughness:1})); land.rotation.x=-Math.PI/2; land.receiveShadow=true; scene.add(land); const lake=new THREE.Mesh(new THREE.CircleGeometry(42,48),new THREE.MeshStandardMaterial({color:0x2989b8,metalness:.65,roughness:.16,transparent:true,opacity:.8})); lake.rotation.x=-Math.PI/2; lake.position.set(35,.04,-7); scene.add(lake); const mountainMat=new THREE.MeshStandardMaterial({color:0x4f675c,roughness:1,flatShading:true}); for(let i=0;i<38;i+=1){const angle=i/38*Math.PI*2,radius=115+random()*35,mountain=new THREE.Mesh(new THREE.ConeGeometry(9+random()*16,28+random()*56,6),mountainMat); mountain.position.set(Math.cos(angle)*radius,mountain.geometry.parameters.height/2-1,Math.sin(angle)*radius); mountain.rotation.y=random()*Math.PI; scene.add(mountain);} addRoad(scene);
-    const trunk=new THREE.MeshStandardMaterial({color:0x63432d,roughness:1}),pine=new THREE.MeshStandardMaterial({color:0x18462e,roughness:.92}); for(let i=0;i<140;i+=1){const x=-130+random()*260,z=-130+random()*260;if(Math.hypot(x-35,z+7)<47)continue;const tree=new THREE.Group(),h=4+random()*6,stem=new THREE.Mesh(new THREE.CylinderGeometry(.24,.34,h*.42,7),trunk),crown=new THREE.Mesh(new THREE.ConeGeometry(h*.32,h,8),pine);stem.position.y=h*.21;crown.position.y=h*.68;tree.add(stem,crown);tree.position.set(x,0,z);tree.scale.setScalar(.72+random()*.65);scene.add(tree);} const houseMat=new THREE.MeshStandardMaterial({color:0xe6d5bb,roughness:.85}),roofMat=new THREE.MeshStandardMaterial({color:0xb34a31,roughness:.8});for(let i=0;i<18;i+=1){const h=3+random()*4,house=new THREE.Group(),base=new THREE.Mesh(new THREE.BoxGeometry(4+random()*2,h,4+random()*2),houseMat),roof=new THREE.Mesh(new THREE.ConeGeometry(3.8,2.3,4),roofMat);base.position.y=h/2;roof.position.y=h+1.1;roof.rotation.y=Math.PI/4;house.add(base,roof);house.position.set(52+random()*29,0,-35+random()*45);scene.add(house);}
-    const player=makeCar(0x0d90ec,1.12); player.position.copy(track[0]);player.rotation.y=lerpTrack(0).heading;scene.add(player);const checkpoints:THREE.Group[]=[];for(const percent of [.18,.38,.58,.78]){const {position,heading}=lerpTrack(percent),gate=new THREE.Group(),glow=new THREE.MeshStandardMaterial({color:0x00eaff,emissive:0x007ecb,emissiveIntensity:2.8});for(const side of [-1,1]){const p=new THREE.Mesh(new THREE.BoxGeometry(.28,4.2,.28),glow);p.position.x=side*5;p.position.y=2.1;gate.add(p);}const top=new THREE.Mesh(new THREE.BoxGeometry(10.3,.28,.28),glow);top.position.y=4.2;gate.add(top);gate.position.copy(position);gate.rotation.y=heading;scene.add(gate);checkpoints.push(gate);}const rivals:{mesh:THREE.Group;progress:number;pace:number}[]=[];const colors=[0xd83c3c,0xf0ae35,0xf5f7ff,0x8327c8,0x27a86b,0x283341,0xe65897,0x55b9e8];for(let i=0;i<cfg.rivals;i+=1){const mesh=makeCar(colors[i],.86),progress=.06+i/cfg.rivals*.82,s=lerpTrack(progress);mesh.position.copy(s.position);mesh.rotation.y=s.heading;scene.add(mesh);rivals.push({mesh,progress,pace:.033+random()*.009});}
-    let speed=0,heading=lerpTrack(0).heading,nitro=1,nextCheckpoint=0,lap=1,playerProgress=0,lastTime=0,raf=0,hudTimer=0,score=0; const nearestTrack=():number=>{let closest=0,distance=Infinity;for(let i=0;i<160;i+=1){const p=lerpTrack(i/160).position,d=p.distanceToSquared(player.position);if(d<distance){distance=d;closest=i/160;}}return closest;}; const finish=():void=>{if(endedRef.current)return;endedRef.current=true;onGameOver({score:Math.round(score),won:true,stats:{lap,checkpoints:8,topSpeed:Math.round(speed*3.6)}});};
-    const update=(dt:number):void=>{if(input.consumePress("pause"))onPauseToggle();const throttle=input.isDown("up"),brake=input.isDown("down"),turn=(input.isDown("right")?1:0)-(input.isDown("left")?1:0),boost=input.isDown("action")&&nitro>.02&&speed>8,roadProgress=nearestTrack(),onRoad=player.position.distanceTo(lerpTrack(roadProgress).position)<6.3;speed=clamp(speed+(throttle?28:-10)*dt-(brake?46:0)*dt+(boost?20:0)*dt-(!onRoad?18:0)*dt,0,cfg.maxSpeed+14);nitro=clamp(nitro+(boost?-.3:.075)*dt,0,1);heading+=turn*(.65+speed*.014)*dt;player.rotation.y=heading;player.rotation.z=THREE.MathUtils.lerp(player.rotation.z,-turn*.12,.13);player.position.x+=Math.sin(heading)*speed*dt;player.position.z+=Math.cos(heading)*speed*dt;player.position.x=clamp(player.position.x,-145,145);player.position.z=clamp(player.position.z,-145,145);playerProgress=roadProgress;score+=speed*dt*(onRoad?1.3:.45);for(const rival of rivals){rival.progress=(rival.progress+rival.pace*dt)%1;const r=lerpTrack(rival.progress);rival.mesh.position.copy(r.position);rival.mesh.rotation.y=r.heading;}const gate=checkpoints[nextCheckpoint];if(player.position.distanceTo(gate.position)<7.2){score+=850;audio.power();nextCheckpoint+=1;if(nextCheckpoint===checkpoints.length){nextCheckpoint=0;lap+=1;if(lap>2){finish();return;}}}const forward=new THREE.Vector3(Math.sin(heading),0,Math.cos(heading)),desired=player.position.clone().add(new THREE.Vector3(0,5.1,0)).add(forward.clone().multiplyScalar(-10.5));camera.position.lerp(desired,1-Math.exp(-dt*5));camera.lookAt(player.position.clone().add(new THREE.Vector3(0,1.25,0)).add(forward.multiplyScalar(14)));hudTimer+=dt;if(hudTimer>.1){const place=1+rivals.filter(r=>r.progress>playerProgress+.025).length;setHud({speed:Math.round(speed*3.6),lap,checkpoint:nextCheckpoint+1,nitro:Math.round(nitro*100),position:place});onScore(Math.round(score));hudTimer=0;}}; const loop=(time:number):void=>{const dt=Math.min((time-lastTime)/1000||1/60,.05);lastTime=time;if(!pausedRef.current&&!endedRef.current)update(dt);renderer.render(scene,camera);onFps(fps.next(time));raf=requestAnimationFrame(loop);};raf=requestAnimationFrame(loop);return()=>{cancelAnimationFrame(raf);renderer.dispose();mount.removeChild(renderer.domElement);};},[difficulty,seed,input,audio,onScore,onFps,onPauseToggle,onGameOver]);
-  const rivals=TUNING[difficulty].rivals+1; return <div className="relative mx-auto aspect-[16/9] w-full max-w-[960px] overflow-hidden rounded-[1rem] bg-slate-950" aria-label="Apex Run open world racing game"><div ref={mountRef} className="h-full w-full"/><div className="pointer-events-none absolute inset-0 p-3 text-white [text-shadow:0_2px_5px_rgba(0,0,0,.8)] sm:p-5"><div className="flex justify-between"><div className="rounded-xl border border-white/25 bg-slate-950/55 px-3 py-2 backdrop-blur"><span className="text-[10px] font-bold uppercase tracking-[.22em] text-cyan-200">Velocity</span><div className="text-3xl font-black leading-none">{hud.speed}<span className="ml-1 text-xs text-slate-300">km/h</span></div></div><div className="text-center"><div className="text-xs font-bold tracking-[.18em] text-cyan-100">APEX RUN</div><div className="text-xl font-black">LAP {hud.lap} / 2</div><div className="text-xs text-white/80">CHECKPOINT {hud.checkpoint} / 4</div></div><div className="rounded-full border-2 border-cyan-200/75 bg-slate-950/55 px-4 py-3 text-center backdrop-blur"><div className="text-[10px] font-bold tracking-[.16em] text-cyan-100">POSITION</div><div className="text-2xl font-black">{hud.position}<span className="text-sm"> / {rivals}</span></div></div></div><div className="absolute bottom-4 left-4 rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-xs font-semibold backdrop-blur"><div className="mb-1 text-[10px] tracking-[.16em] text-cyan-100">NITRO</div><div className="h-2 w-28 overflow-hidden rounded-full bg-white/20"><div className="h-full bg-cyan-300" style={{width:`${hud.nitro}%`}}/></div><div className="mt-2 text-white/85">WASD drive · SPACE boost</div></div><div className="absolute bottom-4 right-4 h-24 w-24 rounded-full border-2 border-cyan-100/60 bg-emerald-950/65 shadow-inner"><div className="absolute left-[49%] top-[12%] h-[76%] w-1 -rotate-[24deg] rounded bg-slate-300/80"/><div className="absolute left-[47%] top-[44%] h-4 w-4 rounded-full bg-cyan-300 shadow-[0_0_16px_5px_rgba(103,232,249,.7)]"/><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-bold">MAP</span></div></div></div>;
+export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
+  const viewport = useRef<HTMLDivElement>(null),
+    mount = useRef<HTMLDivElement>(null),
+    runtime = useRef<ApexRuntime | null>(null),
+    callbacks = useRef(props);
+  const [settings, setSettings] = useState(() =>
+    loadApexSettings(
+      props.settings.graphicsQuality,
+      props.settings.reducedMotion ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    ),
+  );
+  const settingsRef = useRef(settings);
+  const [debug, setDebug] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [hud, setHud] = useState(emptyHud),
+    [panel, setPanel] = useState<"settings" | "controls" | "car" | null>(null),
+    [ready, setReady] = useState(false),
+    [error, setError] = useState(""),
+    [epoch, setEpoch] = useState(0),
+    [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => {
+    callbacks.current = props;
+  }, [props]);
+  useEffect(() => {
+    settingsRef.current = settings;
+    runtime.current?.applySettings({
+      ...settings,
+      sound: settings.sound && props.settings.sound,
+      reducedMotion: settings.reducedMotion || props.settings.reducedMotion,
+    });
+    persistSettings(settings);
+  }, [settings, props.settings.sound, props.settings.reducedMotion]);
+  useEffect(() => {
+    let canceled = false;
+    const element = mount.current;
+    if (!element) return;
+    void import("./apex/runtime")
+      .then(({ ApexRuntime }) => {
+        if (canceled) return;
+        try {
+          const current = callbacks.current;
+          runtime.current = new ApexRuntime(
+            element,
+            {
+              ...settingsRef.current,
+              sound: settingsRef.current.sound && current.settings.sound,
+            },
+            {
+              input: current.input,
+              difficulty: current.difficulty,
+              onHud: setHud,
+              onScore: (score) => callbacks.current.onScore(score),
+              onFps: (fps) => callbacks.current.onFps(fps),
+              onPause: () => callbacks.current.onPauseToggle(),
+              onFinish: (result) => callbacks.current.onGameOver(result),
+              onError: setError,
+            },
+          );
+          runtime.current.setPaused(current.paused);
+          setReady(true);
+        } catch (e) {
+          setError(
+            `Unable to start 3D graphics. ${e instanceof Error ? e.message : "Please try restarting the game."}`,
+          );
+        }
+      })
+      .catch(() =>
+        setError("The game could not load. Check your connection and retry."),
+      );
+    return () => {
+      canceled = true;
+      runtime.current?.dispose();
+      runtime.current = null;
+    };
+  }, [props.input, props.difficulty, epoch]);
+  useEffect(() => {
+    runtime.current?.setPaused(props.paused);
+  }, [props.paused]);
+  useEffect(() => {
+    const change = () =>
+      setFullscreen(document.fullscreenElement === viewport.current);
+    document.addEventListener("fullscreenchange", change);
+    return () => document.removeEventListener("fullscreenchange", change);
+  }, []);
+  useEffect(() => {
+    const toggle = (e: KeyboardEvent) => {
+      if (e.code === "F8" && !e.repeat) {
+        e.preventDefault();
+        setDebug((value) => !value);
+      }
+    };
+    window.addEventListener("keydown", toggle);
+    return () => window.removeEventListener("keydown", toggle);
+  }, []);
+  const changeSetting = <K extends keyof ApexSettings>(
+    key: K,
+    value: ApexSettings[K],
+  ) => setSettings((s) => ({ ...s, [key]: value }));
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await viewport.current?.requestFullscreen();
+    } catch {
+      setNotice(
+        "Fullscreen is unavailable in this browser window. The game can still run here.",
+      );
+    }
+  };
+  const start = () => {
+    setPanel(null);
+    if (props.paused) props.onPauseToggle();
+    runtime.current?.start();
+  };
+  const controls = (
+    <dl className="apex-controls-list">
+      <div>
+        <dt>W / ↑</dt>
+        <dd>Accelerate</dd>
+      </div>
+      <div>
+        <dt>S / ↓</dt>
+        <dd>Brake · hold to reverse</dd>
+      </div>
+      <div>
+        <dt>A D / ← →</dt>
+        <dd>Steer</dd>
+      </div>
+      <div>
+        <dt>SPACE</dt>
+        <dd>Handbrake</dd>
+      </div>
+      <div>
+        <dt>C</dt>
+        <dd>Change camera</dd>
+      </div>
+      <div>
+        <dt>R</dt>
+        <dd>Recover to sector · +3 sec</dd>
+      </div>
+      <div>
+        <dt>ESC / P</dt>
+        <dd>Pause / resume</dd>
+      </div>
+    </dl>
+  );
+  return (
+    <div
+      className="apex-game"
+      ref={viewport}
+      aria-label="Apex Run mountain time attack"
+    >
+      <div ref={mount} className="apex-canvas" />
+      <div className="apex-vignette" />
+      {!ready && !error && (
+        <div className="apex-loading" role="status">
+          <span className="apex-wordmark">
+            APEX<span>RUN</span>
+          </span>
+          <div className="apex-load-line" />
+          <p>Preparing Solstice Pass</p>
+        </div>
+      )}
+      {ready && (
+        <>
+          <div className="apex-topline">
+            <span className="apex-wordmark small">
+              APEX<span>RUN</span>
+            </span>
+            <span className="apex-location">
+              SOLSTICE PASS <i /> GOLDEN HOUR
+            </span>
+            <div className="apex-tools">
+              <button
+                onClick={() => runtime.current?.changeCamera()}
+                title="Change camera (C)"
+                aria-label="Change camera"
+              >
+                {hud.camera}
+              </button>
+              {document.fullscreenEnabled && (
+                <button
+                  onClick={() => void toggleFullscreen()}
+                  aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+                >
+                  {fullscreen ? "Window" : "Fullscreen"}
+                </button>
+              )}
+              {hud.phase !== "menu" && (
+                <button
+                  onClick={props.onPauseToggle}
+                  aria-label={props.paused ? "Resume race" : "Pause race"}
+                >
+                  {props.paused ? "Resume" : "Pause"}
+                </button>
+              )}
+            </div>
+          </div>
+          {hud.phase === "menu" && !panel && (
+            <div className="apex-menu">
+              <p className="apex-eyebrow">THE MOUNTAIN IS YOURS.</p>
+              <h1>
+                Find your
+                <br />
+                <em>limit.</em>
+              </h1>
+              <p className="apex-menu-description">
+                One car. One perfect lap.
+                <br />
+                Chase the light through Solstice Pass.
+              </p>
+              <button className="apex-primary" onClick={start}>
+                DRIVE NOW <span aria-hidden="true">↗</span>
+              </button>
+              <nav aria-label="Apex Run menu">
+                <button onClick={() => setPanel("car")}>Car</button>
+                <button onClick={() => setPanel("settings")}>Settings</button>
+                <button onClick={() => setPanel("controls")}>
+                  How to play
+                </button>
+              </nav>
+              <div className="apex-route-info">
+                <span>
+                  <strong>{(TRACK_LENGTH / 1000).toFixed(2)}</strong> KM CIRCUIT
+                </span>
+                <span>
+                  <strong>08</strong> SECTORS
+                </span>
+                <span>
+                  <strong>01</strong> PERFECT LAP
+                </span>
+              </div>
+            </div>
+          )}
+          {hud.phase === "menu" && !panel && (
+            <div className="apex-car-caption">
+              <span>SOLSTICE GT</span>
+              <p>Rear-wheel drive / 6-speed / twin turbo</p>
+            </div>
+          )}
+          {(hud.phase === "race" || hud.phase === "countdown") && (
+            <div className="apex-hud">
+              <div className="apex-timing">
+                <span>TIME ATTACK</span>
+                <strong aria-label="Race time">{formatTime(hud.time)}</strong>
+                <p>
+                  PERSONAL BEST <b>{formatTime(hud.best)}</b>
+                </p>
+                <div className="apex-sector">
+                  <span>
+                    SECTOR{" "}
+                    {String(Math.min(8, hud.sector + 1)).padStart(2, "0")} / 08
+                  </span>
+                  <div>
+                    <i
+                      style={{ width: `${Math.min(100, hud.progress * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="apex-minimap">
+                <svg viewBox="0 0 150 180" aria-label="Circuit map">
+                  <polyline
+                    points={mapPoints}
+                    fill="none"
+                    stroke="rgba(0,0,0,.4)"
+                    strokeWidth="6"
+                  />
+                  <polyline
+                    points={mapPoints}
+                    fill="none"
+                    stroke="#dfdfce"
+                    strokeWidth="2"
+                  />
+                  <circle cx={280 / 4.5} cy={420 / 4.5} r="3" fill="#eab26f" />
+                  <g
+                    transform={`translate(${(hud.x + 280) / 4.5} ${(hud.z + 420) / 4.5}) rotate(${(-hud.heading * 180) / Math.PI})`}
+                  >
+                    <path
+                      d="M 0 5 L -3.5 -4 L 0 -2 L 3.5 -4 Z"
+                      fill="#f4be7c"
+                      stroke="#111"
+                      strokeWidth=".6"
+                    />
+                  </g>
+                </svg>
+                <span>SOLSTICE PASS</span>
+              </div>
+              <div className="apex-speedometer">
+                <div className="apex-rpm">
+                  {Array.from({ length: 28 }, (_, i) => (
+                    <i
+                      key={i}
+                      className={
+                        (hud.rpm / 8000) * 28 > i
+                          ? i > 23
+                            ? "hot"
+                            : "lit"
+                          : ""
+                      }
+                    />
+                  ))}
+                </div>
+                <div className="apex-speed">
+                  <span className="apex-gear">
+                    {hud.gear < 0 ? "R" : hud.gear}
+                    <small>GEAR</small>
+                  </span>
+                  <strong aria-label="Speed">
+                    {hud.speed.toString().padStart(3, "0")}
+                  </strong>
+                  <span className="apex-unit">KM/H</span>
+                </div>
+                <div className="apex-assists">
+                  <span>
+                    {settings.assists && props.difficulty !== "hard"
+                      ? "STABILITY ASSIST"
+                      : "SPORT HANDLING"}
+                  </span>
+                  <span>ABS</span>
+                </div>
+              </div>
+              <div className="apex-driving-hint">
+                WASD DRIVE <i /> SPACE HANDBRAKE <i /> R RECOVER
+              </div>
+              {hud.message && (
+                <div className="apex-message" role="status">
+                  {hud.message}
+                </div>
+              )}
+              {hud.phase === "countdown" && (
+                <div className="apex-countdown" role="status">
+                  <span>MAKE IT COUNT</span>
+                  <strong key={hud.countdown}>{hud.countdown}</strong>
+                </div>
+              )}
+            </div>
+          )}
+          {hud.phase === "finish" && !panel && (
+            <div className="apex-finish">
+              <p className="apex-eyebrow">
+                {hud.newBest ? "A NEW PERSONAL BEST" : "LAP COMPLETE"}
+              </p>
+              <h2>
+                That’s your
+                <br />
+                <em>benchmark.</em>
+              </h2>
+              <strong>{formatTime(hud.time)}</strong>
+              <p>
+                {hud.storageFailed
+                  ? "Best run kept for this session. Browser storage is unavailable."
+                  : hud.newBest
+                    ? "Your ghost is ready. Give it something to chase."
+                    : `Personal best ${formatTime(hud.best)}. There’s more in it.`}
+              </p>
+              <button className="apex-primary" onClick={start}>
+                RACE AGAIN <span aria-hidden="true">↗</span>
+              </button>
+              <button
+                className="apex-text-button"
+                onClick={() => setPanel("settings")}
+              >
+                Tune settings
+              </button>
+            </div>
+          )}
+          {props.paused && hud.phase !== "finish" && !panel && (
+            <div className="apex-overlay">
+              <div className="apex-panel">
+                <p className="apex-eyebrow">TAKE A BREATH</p>
+                <h2>Paused.</h2>
+                <button className="apex-primary" onClick={props.onPauseToggle}>
+                  RESUME DRIVE
+                </button>
+                <button onClick={start}>Restart time attack</button>
+                <button onClick={() => setPanel("settings")}>Settings</button>
+                <button onClick={() => setPanel("controls")}>
+                  How to play
+                </button>
+              </div>
+            </div>
+          )}
+          {panel && (
+            <div className="apex-overlay">
+              <div className="apex-panel">
+                <div className="apex-panel-heading">
+                  <h2>
+                    {panel === "settings"
+                      ? "Your setup."
+                      : panel === "car"
+                        ? "Solstice GT."
+                        : "Own the road."}
+                  </h2>
+                  <button
+                    onClick={() => setPanel(null)}
+                    aria-label="Close panel"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {panel === "settings" && (
+                  <>
+                    <label className="apex-setting">
+                      Graphics
+                      <select
+                        aria-label="Graphics"
+                        value={settings.quality}
+                        onChange={(e) =>
+                          changeSetting("quality", e.target.value as Quality)
+                        }
+                      >
+                        {["low", "medium", "high", "ultra"].map((q) => (
+                          <option key={q} value={q}>
+                            {q[0].toUpperCase() + q.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p className="apex-setting-note">
+                      Resolution adapts to keep driving responsive.
+                    </p>
+                    {(
+                      [
+                        ["assists", "Stability assist"],
+                        ["sound", "Engine & world audio"],
+                        ["reducedMotion", "Reduced camera motion"],
+                        ["ghost", "Personal best ghost"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <label className="apex-setting" key={key}>
+                        {label}
+                        <input
+                          type="checkbox"
+                          checked={settings[key]}
+                          onChange={(e) => changeSetting(key, e.target.checked)}
+                        />
+                      </label>
+                    ))}
+                    {props.difficulty === "hard" && (
+                      <p className="apex-setting-note">
+                        Hard difficulty uses sport handling with stability
+                        assist disabled.
+                      </p>
+                    )}
+                  </>
+                )}
+                {panel === "car" && (
+                  <>
+                    <p className="apex-panel-copy">
+                      An original grand tourer built for the mountain. Sculpted
+                      aero, rear-wheel drive, and a six-speed automatic.
+                    </p>
+                    <label className="apex-setting">
+                      Body colour
+                      <input
+                        type="color"
+                        value={settings.paint}
+                        onChange={(e) => changeSetting("paint", e.target.value)}
+                      />
+                    </label>
+                    <div className="apex-paints">
+                      {[
+                        "#c73d26",
+                        "#c9b887",
+                        "#285951",
+                        "#9baeb8",
+                        "#24292e",
+                      ].map((color) => (
+                        <button
+                          key={color}
+                          aria-label={`Paint ${color}`}
+                          aria-pressed={settings.paint === color}
+                          style={{ background: color }}
+                          onClick={() => changeSetting("paint", color)}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+                {panel === "controls" && (
+                  <>
+                    {controls}
+                    <p className="apex-panel-copy">
+                      Brake before the corner, ease into the apex, then
+                      accelerate out. Pass all eight sectors in order. Recovery
+                      adds three seconds.
+                    </p>
+                    <p className="apex-setting-note">
+                      Gamepad: left stick steer · RT accelerate · LT brake · A
+                      handbrake · Y camera · X recover · Menu pause.
+                    </p>
+                  </>
+                )}
+                <button className="apex-primary" onClick={() => setPanel(null)}>
+                  BACK TO{" "}
+                  {props.paused
+                    ? "PAUSE"
+                    : hud.phase === "finish"
+                      ? "RESULTS"
+                      : "CAR"}
+                </button>
+              </div>
+            </div>
+          )}
+          {(props.settings.showFps || debug) && (
+            <output className="apex-debug">
+              {hud.fps} FPS · {hud.calls} draws ·{" "}
+              {(hud.triangles / 1000).toFixed(0)}k tris · {settings.quality} ·{" "}
+              {Math.round(hud.resolution * 100)}% adaptive
+            </output>
+          )}
+          {(hud.phase === "race" || hud.phase === "countdown") &&
+            !props.paused && (
+              <div className="apex-touch">
+                {(
+                  [
+                    ["left", "←"],
+                    ["right", "→"],
+                    ["action", "Slide"],
+                    ["down", "Brake"],
+                    ["up", "Gas"],
+                  ] as const
+                ).map(([action, label]) => (
+                  <button
+                    key={action}
+                    aria-label={label}
+                    onPointerDown={(e) => {
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      props.input.setVirtual(action, true);
+                    }}
+                    onPointerUp={() => props.input.setVirtual(action, false)}
+                    onPointerCancel={() =>
+                      props.input.setVirtual(action, false)
+                    }
+                    onLostPointerCapture={() =>
+                      props.input.setVirtual(action, false)
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+        </>
+      )}
+      {notice && (
+        <div className="apex-notice" role="status">
+          {notice}
+        </div>
+      )}
+      {error && (
+        <div className="apex-overlay" role="alert">
+          <div className="apex-panel">
+            <h2>Let’s reset.</h2>
+            <p>{error}</p>
+            <button
+              className="apex-primary"
+              onClick={() => {
+                setError("");
+                setReady(false);
+                setEpoch((n) => n + 1);
+              }}
+            >
+              RELOAD GAME
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };

@@ -216,7 +216,12 @@ const fortLiteThumb = createThumbnail((ctx, elapsed, width, height) => {
 
 export const gameRegistry: GameDefinition[] = [
   {
-    id: "apex-run", title: "Apex Run", genre: "action", shortDescription: "Free-roam a 3D mountain lake circuit and race the field.", description: "Drive a full loop around an alpine lake, cut across the open terrain, hit sequential checkpoints, manage nitro, and beat the rival pack over two laps.", controls: ["Steer: A / D or Arrow Keys", "Throttle: W / Up", "Brake / Reverse: S / Down", "Nitro: Space / Enter", "Pause: P / Esc"], tutorial: ["The whole valley is drivable: stay on the blacktop for maximum speed, or cut across grass to recover a missed gate.", "Follow the glowing blue checkpoint gates in order; four gates complete each lap.", "Hold Space once moving to burn nitro, then finish two laps ahead of the field."], tags: ["open-world", "racing", "cars", "3d"], difficulties: ["easy", "normal", "hard"], usesCanvas: true, isNew: true, thumbnail: apexThumb, component: ApexRun,
+    id: "apex-run", title: "Apex Run", genre: "action",
+    shortDescription: "Chase your perfect lap through a golden-hour mountain pass.",
+    description: "Take the original Solstice GT through an alpine circuit of climbing bends, a lakeside viaduct, and a covered mountain gallery. Beat eight sectors, save your best lap, and race your own ghost. Sculpted bodywork, cinematic cameras, and responsive simcade handling bring Solstice Pass to life.",
+    controls: ["Accelerate: W / Up", "Brake / Reverse: S / Down", "Steer: A / D or Left / Right", "Handbrake: Space", "Camera: C · Recover: R (+3 sec)", "Pause / Resume: Esc / P", "Gamepad: left stick, RT / LT, A handbrake"],
+    tutorial: ["Brake before corners, steer toward the apex, then ease onto the throttle.", "Pass eight sectors in order to set a lap. Your best run becomes a ghost.", "Use R to recover to the last sector with a three-second penalty. Graphics and paint are adjustable in the game menu."],
+    tags: ["time-attack", "racing", "cars", "3d", "ghost"], difficulties: ["easy", "normal", "hard"], usesCanvas: true, isNew: true, thumbnail: apexThumb, component: ApexRun,
   },
   {
     id: "neon-dodger",

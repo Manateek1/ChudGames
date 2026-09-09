@@ -1,0 +1,796 @@
+.apex-game {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  min-height: 480px;
+  overflow: hidden;
+  background: #141b1c;
+  color: #f8f1e7;
+  font-family: Arial, Helvetica, sans-serif;
+  isolation: isolate;
+  border-radius: 14px;
+  --apex-accent: #edbd7c;
+}
+.apex-game:fullscreen {
+  height: 100dvh;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+.apex-canvas,
+.apex-canvas canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.apex-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(9, 17, 19, 0.5),
+    transparent 19%,
+    transparent 68%,
+    rgba(8, 15, 18, 0.6)
+  );
+  z-index: 1;
+}
+.apex-game button,
+.apex-game select {
+  font: inherit;
+  cursor: pointer;
+}
+.apex-game button:focus-visible,
+.apex-game select:focus-visible,
+.apex-game input:focus-visible {
+  outline: 2px solid var(--apex-accent);
+  outline-offset: 5px;
+}
+.apex-game button {
+  transition:
+    background 0.2s,
+    color 0.2s,
+    transform 0.2s;
+}
+.apex-game button:hover {
+  color: var(--apex-accent);
+}
+.apex-topline {
+  position: absolute;
+  z-index: 3;
+  top: 28px;
+  left: 34px;
+  right: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.apex-wordmark {
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -2px;
+  font-style: italic;
+  white-space: nowrap;
+}
+.apex-wordmark span {
+  font-weight: 400;
+  letter-spacing: -1.5px;
+  margin-left: 4px;
+}
+.apex-wordmark.small {
+  font-size: 23px;
+}
+.apex-location {
+  font-size: 9px;
+  letter-spacing: 2px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  opacity: 0.85;
+}
+.apex-location i,
+.apex-driving-hint i {
+  width: 3px;
+  height: 3px;
+  display: inline-block;
+  background: var(--apex-accent);
+  border-radius: 50%;
+}
+.apex-tools {
+  display: flex;
+  gap: 14px;
+}
+.apex-tools button {
+  font-size: 10px;
+  color: #eee8dd;
+  background: none;
+  border: 0;
+  padding: 8px 0;
+}
+.apex-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 13% 0 0 6%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(9, 19, 22, 0.83),
+    rgba(9, 19, 22, 0.3) 40%,
+    transparent 62%
+  );
+}
+.apex-menu button,
+.apex-menu nav {
+  pointer-events: auto;
+}
+.apex-eyebrow {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2.8px;
+  color: var(--apex-accent);
+  margin: 0 0 18px;
+}
+.apex-menu h1,
+.apex-finish h2 {
+  font-size: clamp(50px, 6.3vw, 88px);
+  line-height: 0.96;
+  font-weight: 600;
+  letter-spacing: -5px;
+  margin: 0 0 22px;
+}
+.apex-menu h1 em,
+.apex-finish h2 em {
+  font-weight: 400;
+  color: #efe5d5;
+}
+.apex-menu-description {
+  font-size: 12px;
+  color: #c1c7c6;
+  line-height: 1.75;
+  margin: 0 0 25px;
+}
+.apex-game .apex-primary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 35px;
+  background: #edbd7c;
+  color: #182326;
+  padding: 16px 22px;
+  border: 1px solid #edbd7c;
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  font-weight: 700;
+  min-width: 202px;
+  text-align: left;
+  border-radius: 2px;
+}
+.apex-game .apex-primary:hover {
+  background: #f9d7a8;
+  color: #142123;
+  transform: translateY(-1px);
+}
+.apex-primary span {
+  font-size: 20px;
+  line-height: 15px;
+}
+.apex-menu nav {
+  display: flex;
+  gap: 25px;
+  margin-top: 20px;
+}
+.apex-menu nav button,
+.apex-text-button {
+  font-size: 10px;
+  border: 0;
+  background: none;
+  color: #d0d3d0;
+  padding: 5px 0;
+}
+.apex-route-info {
+  display: flex;
+  gap: 26px;
+  position: absolute;
+  left: 6%;
+  bottom: 28px;
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: #aebcba;
+}
+.apex-route-info strong {
+  font-size: 16px;
+  display: block;
+  color: #f0eade;
+  font-weight: 400;
+  margin-bottom: 7px;
+  letter-spacing: 0.5px;
+}
+.apex-car-caption {
+  position: absolute;
+  bottom: 29px;
+  right: 34px;
+  z-index: 2;
+  text-align: right;
+}
+.apex-car-caption span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2px;
+}
+.apex-car-caption p {
+  font-size: 8px;
+  letter-spacing: 0.8px;
+  color: #b3bfbb;
+  margin: 8px 0 0;
+}
+.apex-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  text-shadow: 0 2px 8px #10201b99;
+}
+.apex-timing {
+  position: absolute;
+  top: 100px;
+  left: 34px;
+  padding: 16px 25px 18px 16px;
+  margin: -16px 0 0 -16px;
+  background: linear-gradient(90deg, #142222a8, #14222248 75%, transparent);
+}
+.apex-timing > span {
+  font-size: 9px;
+  letter-spacing: 2.5px;
+  color: var(--apex-accent);
+}
+.apex-timing > strong {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  font-size: 30px;
+  font-weight: 400;
+  margin: 8px 0 10px;
+  letter-spacing: 1px;
+}
+.apex-timing p {
+  font-size: 8px;
+  color: #e2e3d5;
+  letter-spacing: 1px;
+}
+.apex-timing b {
+  font-weight: 400;
+  margin-left: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.apex-sector {
+  margin-top: 24px;
+}
+.apex-sector span {
+  font-size: 9px;
+  letter-spacing: 1.4px;
+}
+.apex-sector > div {
+  height: 2px;
+  background: #ffffff30;
+  margin-top: 10px;
+  width: 168px;
+}
+.apex-sector i {
+  display: block;
+  height: 100%;
+  background: var(--apex-accent);
+  transition: width 0.1s;
+}
+.apex-minimap {
+  position: absolute;
+  bottom: 60px;
+  left: 30px;
+  width: 120px;
+  opacity: 0.9;
+}
+.apex-minimap svg {
+  width: 100%;
+  height: 128px;
+}
+.apex-minimap span {
+  font-size: 8px;
+  letter-spacing: 1.6px;
+  display: block;
+  text-align: center;
+  margin-top: 8px;
+}
+.apex-speedometer {
+  position: absolute;
+  bottom: 55px;
+  right: 36px;
+  width: 252px;
+}
+.apex-rpm {
+  display: flex;
+  gap: 3px;
+  transform: skewX(-15deg);
+  height: 7px;
+}
+.apex-rpm i {
+  flex: 1;
+  background: #ffffff27;
+}
+.apex-rpm .lit {
+  background: var(--apex-accent);
+}
+.apex-rpm .hot {
+  background: #fa755a;
+}
+.apex-speed {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 8px;
+}
+.apex-speed strong {
+  font-size: 76px;
+  line-height: 1.1;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -4px;
+  font-variant-numeric: tabular-nums;
+}
+.apex-gear {
+  font-size: 33px;
+  color: var(--apex-accent);
+  text-align: center;
+}
+.apex-gear small {
+  display: block;
+  font-size: 7px;
+  letter-spacing: 1px;
+  margin-top: 3px;
+}
+.apex-unit {
+  font-size: 9px;
+  align-self: flex-end;
+  padding-bottom: 14px;
+  margin-left: -7px;
+}
+.apex-assists {
+  display: flex;
+  justify-content: space-between;
+  font-size: 7px;
+  letter-spacing: 1.4px;
+  color: #cbdbd2;
+  border-top: 1px solid #ffffff30;
+  padding-top: 10px;
+}
+.apex-driving-hint {
+  position: absolute;
+  bottom: 25px;
+  left: 34px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 7px;
+  letter-spacing: 1.2px;
+  color: #bac8c2;
+}
+.apex-message {
+  position: absolute;
+  top: 24%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  letter-spacing: 2px;
+  background: #16252199;
+  padding: 12px 20px;
+  white-space: nowrap;
+  color: #f4d7a6;
+}
+.apex-countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  background: #10201b15;
+}
+.apex-countdown span {
+  font-size: 10px;
+  letter-spacing: 4px;
+}
+.apex-countdown strong {
+  font-size: 112px;
+  font-weight: 300;
+  color: #f4d6ad;
+  animation: apex-count 0.9s ease-out;
+}
+.apex-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  background: #101c20a6;
+  backdrop-filter: blur(10px);
+  padding: 22px;
+}
+.apex-panel {
+  background: #172225ed;
+  border: 1px solid #b8c4b526;
+  padding: 30px;
+  width: min(450px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  box-shadow: 0 25px 90px #0005;
+}
+.apex-panel h2 {
+  font-size: 34px;
+  letter-spacing: -1.4px;
+  font-weight: 400;
+  margin: 0 0 24px;
+}
+.apex-panel > button {
+  display: block;
+  font-size: 12px;
+  padding: 12px 0;
+}
+.apex-panel > .apex-primary {
+  margin-top: 24px;
+  width: 100%;
+  padding: 16px 20px;
+}
+.apex-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.apex-panel-heading button {
+  padding: 7px;
+  color: #adbdb7;
+  font-size: 15px;
+}
+.apex-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #bac1b91a;
+}
+.apex-setting select {
+  background: #253337;
+  padding: 8px 10px;
+  border: 1px solid #ffffff20;
+  color: #f1eee3;
+  font-size: 12px;
+}
+.apex-setting input[type="checkbox"] {
+  accent-color: var(--apex-accent);
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+}
+.apex-setting-note {
+  font-size: 10px;
+  color: #a2b3ad;
+  line-height: 1.6;
+  margin: 10px 0;
+}
+.apex-panel-copy {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #c2cdc7;
+}
+.apex-paints {
+  display: flex;
+  gap: 14px;
+  padding-top: 20px;
+}
+.apex-paints button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  box-shadow: 0 0 0 1px #ffffff30;
+}
+.apex-paints button[aria-pressed="true"] {
+  border-color: #eee1c6;
+}
+.apex-controls-list {
+  font-size: 11px;
+}
+.apex-controls-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #ffffff12;
+  padding: 9px 0;
+}
+.apex-controls-list dt {
+  color: var(--apex-accent);
+  font-size: 10px;
+}
+.apex-controls-list dd {
+  margin: 0;
+  color: #c4cdc5;
+}
+.apex-finish {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  padding: 12% 6%;
+  background: linear-gradient(90deg, #111f20e6, transparent);
+}
+.apex-finish h2 {
+  font-size: clamp(44px, 5.3vw, 70px);
+}
+.apex-finish > strong {
+  display: block;
+  font-weight: 300;
+  font-size: 44px;
+  font-variant-numeric: tabular-nums;
+  color: var(--apex-accent);
+}
+.apex-finish > p:not(.apex-eyebrow) {
+  font-size: 12px;
+  color: #c0cbc4;
+  margin: 16px 0 24px;
+}
+.apex-finish > .apex-text-button {
+  margin-top: 14px;
+}
+.apex-debug {
+  position: absolute;
+  right: 20px;
+  bottom: 9px;
+  z-index: 9;
+  font: 10px monospace;
+  background: #0008;
+  padding: 4px 8px;
+}
+.apex-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: #142023;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+.apex-loading p {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #bcc8bf;
+}
+.apex-load-line {
+  width: 160px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #edbd7c, transparent);
+  margin: 28px 0 10px;
+  animation: apex-load 1s infinite alternate;
+}
+.apex-touch {
+  display: none;
+}
+.apex-notice {
+  position: absolute;
+  z-index: 9;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 85%);
+  padding: 12px 18px;
+  background: #142225ed;
+  color: #edbd7c;
+  font-size: 12px;
+  text-align: center;
+  pointer-events: none;
+}
+@keyframes apex-count {
+  from {
+    opacity: 0.4;
+    transform: scale(1.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes apex-load {
+  to {
+    opacity: 0.2;
+    transform: scaleX(0.3);
+  }
+}
+@media (min-width: 1600px) {
+  .apex-menu {
+    padding-top: 12%;
+  }
+  .apex-menu h1 {
+    font-size: 96px;
+  }
+  .apex-menu-description {
+    font-size: 15px;
+  }
+  .apex-topline {
+    top: 35px;
+  }
+  .apex-route-info {
+    bottom: 40px;
+  }
+}
+@media (max-width: 850px) {
+  .apex-topline {
+    top: 18px;
+    left: 22px;
+    right: 22px;
+  }
+  .apex-location {
+    display: none;
+  }
+  .apex-menu {
+    padding-top: 95px;
+  }
+  .apex-menu h1 {
+    font-size: 58px;
+    letter-spacing: -3px;
+  }
+  .apex-menu-description {
+    margin-bottom: 18px;
+  }
+  .apex-eyebrow {
+    font-size: 8px;
+    margin-bottom: 13px;
+  }
+  .apex-route-info {
+    gap: 20px;
+    bottom: 20px;
+  }
+  .apex-car-caption {
+    bottom: 22px;
+    right: 22px;
+  }
+  .apex-speedometer {
+    width: 205px;
+    right: 22px;
+  }
+  .apex-speed strong {
+    font-size: 62px;
+  }
+  .apex-timing {
+    top: 75px;
+    left: 22px;
+  }
+  .apex-timing > strong {
+    font-size: 26px;
+  }
+  .apex-minimap {
+    width: 100px;
+    left: 18px;
+  }
+  .apex-driving-hint {
+    left: 22px;
+    font-size: 6px;
+  }
+  .apex-message {
+    top: 32%;
+  }
+  .apex-finish {
+    padding-top: 100px;
+  }
+}
+@media (max-width: 540px) {
+  .apex-game {
+    aspect-ratio: 3/4;
+    min-height: 580px;
+  }
+  .apex-menu {
+    padding: 110px 24px 0;
+    background: linear-gradient(90deg, #102023dd, #10202335);
+  }
+  .apex-menu h1 {
+    font-size: 65px;
+  }
+  .apex-tools {
+    gap: 12px;
+  }
+  .apex-tools button {
+    font-size: 9px;
+  }
+  .apex-wordmark.small {
+    font-size: 20px;
+  }
+  .apex-car-caption {
+    display: none;
+  }
+  .apex-route-info {
+    left: 24px;
+    bottom: 28px;
+  }
+  .apex-panel {
+    padding: 22px;
+  }
+  .apex-speedometer {
+    bottom: 95px;
+    width: 183px;
+    right: 20px;
+  }
+  .apex-speed {
+    gap: 12px;
+  }
+  .apex-speed strong {
+    font-size: 56px;
+  }
+  .apex-minimap {
+    bottom: 106px;
+    width: 88px;
+  }
+  .apex-minimap svg {
+    height: 110px;
+  }
+  .apex-driving-hint {
+    display: none;
+  }
+  .apex-timing {
+    top: 80px;
+  }
+  .apex-sector {
+    margin-top: 18px;
+  }
+  .apex-message {
+    font-size: 8px;
+    padding: 10px;
+    top: 42%;
+  }
+  .apex-finish {
+    padding: 120px 24px 0;
+  }
+  .apex-finish h2 {
+    font-size: 54px;
+    letter-spacing: -3px;
+  }
+  .apex-finish > p:not(.apex-eyebrow) {
+    max-width: 260px;
+    line-height: 1.6;
+  }
+  .apex-touch {
+    display: flex;
+    position: absolute;
+    bottom: 22px;
+    left: 18px;
+    right: 18px;
+    justify-content: space-between;
+    gap: 9px;
+    z-index: 4;
+  }
+  .apex-touch button {
+    touch-action: none;
+    padding: 15px 10px;
+    flex: 1;
+    background: #1d3035ba;
+    border: 1px solid #c6d0c14d;
+    color: #f4d3a2;
+    font-size: 10px;
+    border-radius: 4px;
+  }
+  .apex-touch button:active {
+    background: #edbd7c;
+    color: #142023;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .apex-game * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+.reduced-motion .apex-game * {
+  animation: none !important;
+  transition: none !important;
+}

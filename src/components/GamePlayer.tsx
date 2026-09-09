@@ -39,7 +39,7 @@ export const GamePlayer = ({
   const [score, setScore] = useState(0);
   const [fps, setFps] = useState(0);
   const [paused, setPaused] = useState(false);
-  const [tutorialOpen, setTutorialOpen] = useState(tutorialOpenByDefault);
+  const [tutorialOpen, setTutorialOpen] = useState(tutorialOpenByDefault && game.id !== "apex-run");
   const [finalResult, setFinalResult] = useState<GameResult | null>(null);
 
   useEffect(() => {
@@ -55,7 +55,7 @@ export const GamePlayer = ({
   }, [settings.sound, settings.music, audio]);
 
   useEffect(() => {
-    if (!settings.music) {
+    if (!settings.music || game.id === "apex-run") {
       audio.stopMusic();
       return;
     }
@@ -65,7 +65,7 @@ export const GamePlayer = ({
     } else {
       audio.stopMusic();
     }
-  }, [settings.music, paused, tutorialOpen, finalResult, seed, audio]);
+  }, [settings.music, paused, tutorialOpen, finalResult, seed, audio, game.id]);
 
   useEffect(() => {
     return () => {
@@ -144,6 +144,19 @@ export const GamePlayer = ({
   const isFortLite = game.id === "fortlite";
   const placementText = score > 0 ? `#${score}` : "--";
   const finalPlacement = finalResult?.stats?.placement ?? 0;
+
+  // Apex owns its cinematic menu, pause and finish presentation. Keep the shared
+  // progress callback, input lifetime and launcher navigation around that surface.
+  if (game.id === "apex-run") {
+    return <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3 px-1 text-xs text-sky-50/75">
+        <button type="button" onClick={onQuit} className="px-2 py-2 hover:text-white">← Back to library</button>
+        <span className="uppercase tracking-[.2em]">{difficulty} · Time attack</span>
+        <button type="button" onClick={restart} className="px-2 py-2 hover:text-white">Restart game</button>
+      </div>
+      <GameComponent key={componentKey} gameId={game.id} difficulty={difficulty} mode={mode} seed={seed} settings={settings} paused={paused} input={input} audio={audio} onScore={setScore} onFps={setFps} onPauseToggle={handlePauseToggle} onGameOver={onComplete}/>
+    </section>;
+  }
 
   return (
     <section className="space-y-3">
