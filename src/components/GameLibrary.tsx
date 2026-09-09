@@ -29,8 +29,8 @@ export const GameLibrary = ({
   reducedMotion,
   dailyGameId,
 }: GameLibraryProps): React.JSX.Element => {
-  const featuredGame = games.find((game) => game.id === "fortlite");
-  const miniGames = games.filter((game) => game.id !== "fortlite");
+  const featuredGame = games.find((game) => game.id === "apex-run");
+  const miniGames = games.filter((game) => game.id !== "apex-run");
 
   return (
     <section className="space-y-6">
@@ -44,7 +44,7 @@ export const GameLibrary = ({
               id="game-search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search FortLite or mini games"
+              placeholder="Search the collection"
               className="w-full rounded-xl border border-sky-100/18 bg-[rgba(255,255,255,0.08)] px-4 py-3 text-slate-50 placeholder:text-sky-100/38 focus:border-sky-200/42 focus:outline-none"
             />
           </div>
@@ -106,10 +106,10 @@ export const GameLibrary = ({
               </div>
               <div className="flex flex-wrap gap-3">
                 <button type="button" onClick={() => onOpen(featuredGame.id)} className="arcade-btn-primary">
-                  Play FortLite
+                  Play Apex Run
                 </button>
                 <span className="self-center text-sm text-sky-100/70">
-                  Battle royale first. Mini games below.
+                  Mountain time attack. More games below.
                 </span>
               </div>
             </div>

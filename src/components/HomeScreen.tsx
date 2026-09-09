@@ -1,77 +1,76 @@
-﻿import type { DailyChallenge, GameDefinition, ProgressState } from "../types/arcade";
+import { GameThumbnail } from "./GameThumbnail";
+import type { GameDefinition } from "../types/arcade";
+import "./HomeScreen.css";
 
 interface HomeScreenProps {
-  onPlay: () => void;
-  onDaily: () => void;
-  daily: DailyChallenge;
-  dailyGame?: GameDefinition;
-  progress: ProgressState;
+  games: GameDefinition[];
+  reducedMotion: boolean;
+  onBrowse: () => void;
+  onOpen: (gameId: string) => void;
 }
 
-export const HomeScreen = ({ onPlay, onDaily, daily, dailyGame, progress }: HomeScreenProps): React.JSX.Element => {
-  const sessions = Object.values(progress.stats).reduce((sum, item) => sum + item.plays, 0);
-  const wins = Object.values(progress.stats).reduce((sum, item) => sum + item.wins, 0);
-  const ebtBucks = progress.ebtBucks ?? 0;
+const Arrow = (): React.JSX.Element => (
+  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+    <path d="M4 12h15M14 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+export const HomeScreen = ({ games, reducedMotion, onBrowse, onOpen }: HomeScreenProps): React.JSX.Element => {
+  const homeGames = games.filter((game) => game.id !== "fortlite").slice(0, 4);
+  const apex = games.find((game) => game.id === "apex-run") ?? homeGames[0];
 
   return (
-    <section className="space-y-8">
-      <div className="relative overflow-hidden rounded-[2rem] border border-sky-200/28 bg-[linear-gradient(145deg,rgba(8,20,38,0.94),rgba(18,39,66,0.9))] p-8 shadow-[0_36px_90px_-42px_rgba(7,20,42,0.92)] md:p-12">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_18%,rgba(113,202,255,0.3),transparent_42%),radial-gradient(circle_at_82%_26%,rgba(255,205,124,0.22),transparent_36%),radial-gradient(circle_at_50%_100%,rgba(110,167,89,0.22),transparent_44%)]" />
-        <div className="absolute inset-y-0 right-0 w-[40%] bg-[linear-gradient(180deg,rgba(153,214,255,0.12),rgba(255,198,103,0.06),transparent)]" />
-        <div className="relative z-10 space-y-5 text-slate-50">
-          <p className="arcade-kicker">CHUDGAMES</p>
-          <h1 className="font-display text-4xl text-white md:text-6xl">
-            FortLite leads the drop. The rest are quick-hit mini games.
-          </h1>
-          <p className="max-w-2xl text-lg text-sky-50/82">
-            Jump into the featured battle royale, then cool down with the smaller arcade cabinets.
-            Everything stays local, fast, and ready on desktop or mobile.
-          </p>
-          <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.22em] text-sky-100/72">
-            <span>Featured FortLite</span>
-            <span>Mini-Game Library</span>
-            <span>Daily Seeds</span>
-            <span>Offline Progress</span>
+    <div className="chud-home">
+      <header className="chud-home__header">
+        <button type="button" className="chud-home__wordmark" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+          chudgames
+        </button>
+        <nav aria-label="Main navigation" className="chud-home__nav">
+          <button type="button" onClick={onBrowse}>Games</button>
+          <a href="#about">About</a>
+        </nav>
+        <button type="button" className="chud-home__browse chud-home__browse--top" onClick={onBrowse}>Browse games</button>
+      </header>
+
+      <div>
+        <section className="chud-home__hero" aria-labelledby="home-title">
+          <div className="chud-home__hero-copy">
+            <h1 id="home-title">good games.<br />no nonsense.</h1>
+            <p>A small collection of browser games with quick starts, sharp controls, and no downloads.</p>
+            <div className="chud-home__hero-actions">
+              <button type="button" className="chud-home__play" onClick={() => apex && onOpen(apex.id)}>Play something</button>
+              <button type="button" className="chud-home__collection-link" onClick={onBrowse}>See the collection <Arrow /></button>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={onPlay} className="arcade-btn-primary">
-              Open Library
-            </button>
-            <button type="button" onClick={onDaily} className="arcade-btn-secondary">
-              Daily Challenge
-            </button>
+          <div className="chud-home__hero-image" aria-label="A mountain road at night from Apex Run" role="img" />
+        </section>
+
+        <section id="about" className="chud-home__about" aria-labelledby="about-title">
+          <h2 id="about-title">Built for the browser.</h2>
+          <p>Pick a game, start playing, and get into it. No downloads, no accounts, no waiting around.</p>
+        </section>
+
+        <section className="chud-home__games" aria-labelledby="games-title">
+          <div className="chud-home__games-heading">
+            <h2 id="games-title">Start here.</h2>
+            <button type="button" onClick={onBrowse}>All games <Arrow /></button>
           </div>
-        </div>
+          <div className="chud-home__game-list">
+            {homeGames.map((game) => (
+              <button type="button" className="chud-home__game-row" key={game.id} onClick={() => onOpen(game.id)}>
+                <span className="chud-home__game-thumb"><GameThumbnail renderer={game.thumbnail} reducedMotion={reducedMotion} /></span>
+                <span className="chud-home__game-meta"><strong>{game.title}</strong><small>{game.shortDescription}</small></span>
+                <span className="chud-home__arrow"><Arrow /></span>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-5">
-        <article className="arcade-card">
-          <p className="arcade-kicker">Daily Challenge</p>
-          <h3 className="mt-2 text-xl font-semibold text-slate-50">{dailyGame?.title ?? "Loading"}</h3>
-          <p className="mt-1 text-sm text-sky-100/72">{daily.dateKey}</p>
-          <p className="mt-3 text-sm text-sky-50/82">Best today: {progress.dailyBest[daily.dateKey]?.score ?? 0}</p>
-        </article>
-        <article className="arcade-card">
-          <p className="arcade-kicker">Achievements</p>
-          <h3 className="mt-2 font-display text-4xl text-slate-50">{progress.achievements.length}</h3>
-          <p className="mt-2 text-sm text-sky-100/72">Unlocked badges</p>
-        </article>
-        <article className="arcade-card">
-          <p className="arcade-kicker">EBT Bucks</p>
-          <h3 className="mt-2 font-display text-4xl text-slate-50">{ebtBucks}</h3>
-          <p className="mt-2 text-sm text-sky-100/72">Earn 1 for every win</p>
-        </article>
-        <article className="arcade-card">
-          <p className="arcade-kicker">Sessions</p>
-          <h3 className="mt-2 font-display text-4xl text-slate-50">{sessions}</h3>
-          <p className="mt-2 text-sm text-sky-100/72">Total drops and runs</p>
-        </article>
-        <article className="arcade-card">
-          <p className="arcade-kicker">Wins</p>
-          <h3 className="mt-2 font-display text-4xl text-slate-50">{wins}</h3>
-          <p className="mt-2 text-sm text-sky-100/72">Victory screens hit</p>
-        </article>
-      </div>
-    </section>
+      <footer className="chud-home__footer">
+        <span>chudgames</span>
+        <div><button type="button" onClick={onBrowse}>Games</button><a href="#about">About</a></div>
+      </footer>
+    </div>
   );
 };

@@ -30,7 +30,7 @@ const preferredDifficulty = (difficulties: Difficulty[]): Difficulty =>
   difficulties.includes("normal") ? "normal" : difficulties[0];
 const defaultModeForGame = (game: (typeof gameRegistry)[number]): string =>
   game.defaultMode ?? game.modes?.[0]?.id ?? "single";
-const defaultGameId = gameMap.get("fortlite")?.id ?? gameRegistry[0].id;
+const defaultGameId = gameMap.get("apex-run")?.id ?? gameRegistry[0].id;
 
 function App(): React.JSX.Element {
   const [settings, setSettings] = useState(loadSettings);
@@ -89,10 +89,10 @@ function App(): React.JSX.Element {
       })
       .sort((a, b) => {
         if (a.id === "fortlite") {
-          return -1;
+          return 1;
         }
         if (b.id === "fortlite") {
-          return 1;
+          return -1;
         }
         return a.title.localeCompare(b.title);
       });
@@ -188,7 +188,7 @@ function App(): React.JSX.Element {
       </div>
       <div className="mt-2 flex flex-wrap gap-3 text-xs uppercase tracking-[0.24em] text-sky-100/70">
         <span>{daily.dateKey}</span>
-        <span>Featured: FortLite</span>
+        <span>Featured: Apex Run</span>
         <span>Daily: {dailyGame?.title ?? "..."}</span>
         <span>Achievements: {progress.achievements.length}</span>
         <span>EBT Bucks: {progress.ebtBucks}</span>
@@ -199,15 +199,12 @@ function App(): React.JSX.Element {
   return (
     <div className="min-h-screen text-sky-950">
       <AnimatedBackground settings={settings} />
-      <main className="relative mx-auto w-full max-w-[1260px] px-4 pb-16 pt-6 md:px-8">
-        {sharedHeader}
+      <main className={screen === "home" ? "relative w-full" : "relative mx-auto w-full max-w-[1260px] px-4 pb-16 pt-6 md:px-8"}>
+        {screen !== "home" && sharedHeader}
 
         {screen === "home" && (
           <PageTransition reducedMotion={settings.reducedMotion}>
-            <div className="grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">
-              <HomeScreen onPlay={() => setScreen("library")} onDaily={startDaily} daily={daily} dailyGame={dailyGame} progress={progress} />
-              <AchievementPanel unlocked={progress.achievements} />
-            </div>
+            <HomeScreen games={gameRegistry} reducedMotion={settings.reducedMotion} onBrowse={() => setScreen("library")} onOpen={openGame} />
           </PageTransition>
         )}
 
