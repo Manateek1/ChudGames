@@ -148,7 +148,7 @@ export const GamePlayer = ({
   // Apex owns its cinematic menu, pause and finish presentation. Keep the shared
   // progress callback, input lifetime and launcher navigation around that surface.
   if (game.id === "apex-run") {
-    return <section className="space-y-3">
+    return <section className="game-player space-y-3">
       <div className="flex items-center justify-between gap-3 px-1 text-xs text-sky-50/75">
         <button type="button" onClick={onQuit} className="px-2 py-2 hover:text-white">← Back to library</button>
         <span className="uppercase tracking-[.2em]">{difficulty} · Time attack</span>
@@ -159,7 +159,7 @@ export const GamePlayer = ({
   }
 
   return (
-    <section className="space-y-3">
+    <section className="game-player space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] border border-sky-200/24 bg-[rgba(7,18,34,0.82)] px-4 py-3 text-slate-50 shadow-[0_24px_54px_-32px_rgba(7,18,34,0.96)]">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="font-display text-2xl text-white">{game.title}</h2>

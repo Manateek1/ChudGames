@@ -31,7 +31,7 @@ export const GameDetail = ({
   const isFortLite = game.id === "fortlite";
 
   return (
-    <section className="grid gap-6 lg:grid-cols-[1.1fr,1fr]">
+    <section className="game-detail grid gap-6 lg:grid-cols-[1.1fr,1fr]">
       <article className="rounded-[1.9rem] border border-sky-200/24 bg-[rgba(7,18,34,0.82)] p-4 text-slate-50 shadow-[0_28px_60px_-38px_rgba(7,18,34,0.95)]">
         <GameThumbnail renderer={game.thumbnail} reducedMotion={reducedMotion} />
         <div className="mt-4 flex items-start justify-between gap-4">

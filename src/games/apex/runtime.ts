@@ -64,6 +64,8 @@ export const initialTelemetry: Telemetry = {
   resolution: 1,
   storageFailed: false,
 };
+export const keyboardSteer = (left: boolean, right: boolean): number =>
+  Number(left) - Number(right);
 interface Hooks {
   input: InputManager;
   difficulty: Difficulty;
@@ -327,7 +329,7 @@ export class ApexRuntime {
       c = this.controls;
     c.throttle = Number(input.isDown("up"));
     c.brake = Number(input.isDown("down"));
-    c.steer = Number(input.isDown("right")) - Number(input.isDown("left"));
+    c.steer = keyboardSteer(input.isDown("left"), input.isDown("right"));
     c.handbrake = input.isDown("action");
     if (input.consumePress("pause")) this.hooks.onPause();
     const pads = navigator.getGamepads?.(),

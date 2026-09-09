@@ -9,7 +9,6 @@ interface GameLibraryProps {
   setFilter: (value: GameGenre | "all") => void;
   onOpen: (gameId: string) => void;
   reducedMotion: boolean;
-  dailyGameId: string;
 }
 
 const filters: Array<{ value: GameGenre | "all"; label: string }> = [
@@ -27,13 +26,12 @@ export const GameLibrary = ({
   setFilter,
   onOpen,
   reducedMotion,
-  dailyGameId,
 }: GameLibraryProps): React.JSX.Element => {
   const featuredGame = games.find((game) => game.id === "apex-run");
   const miniGames = games.filter((game) => game.id !== "apex-run");
 
   return (
-    <section className="space-y-6">
+    <section className="library-page space-y-6">
       <div className="rounded-[1.6rem] border border-sky-200/28 bg-[rgba(7,18,34,0.78)] p-4 shadow-[0_24px_54px_-34px_rgba(7,18,34,0.96)] backdrop-blur-xl">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="w-full md:max-w-sm">
@@ -72,37 +70,13 @@ export const GameLibrary = ({
           <div className="grid gap-5 lg:grid-cols-[1.15fr,0.85fr]">
             <div className="relative">
               <GameThumbnail renderer={featuredGame.thumbnail} reducedMotion={reducedMotion} />
-              <div className="absolute left-3 top-3 flex gap-2">
-                <span className="rounded-full bg-amber-300 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-950">
-                  Main Feature
-                </span>
-                {featuredGame.id === dailyGameId && (
-                  <span className="rounded-full bg-sky-300 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-950">
-                    Daily
-                  </span>
-                )}
-              </div>
             </div>
             <div className="flex flex-col justify-between gap-4 rounded-[1.6rem] border border-sky-100/12 bg-[rgba(255,255,255,0.05)] p-5 text-slate-50">
               <div className="space-y-3">
-                <p className="arcade-kicker">Featured Drop</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-display text-4xl text-white">{featuredGame.title}</h3>
-                  <span className="rounded-full border border-emerald-200/24 bg-emerald-300/18 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100">
-                    {featuredGame.genre}
-                  </span>
                 </div>
                 <p className="text-base text-sky-50/82">{featuredGame.description}</p>
-                <div className="flex flex-wrap gap-2">
-                  {featuredGame.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full border border-amber-200/20 bg-amber-300/12 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-amber-100"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
               </div>
               <div className="flex flex-wrap gap-3">
                 <button type="button" onClick={() => onOpen(featuredGame.id)} className="arcade-btn-primary">
@@ -119,8 +93,7 @@ export const GameLibrary = ({
 
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="arcade-kicker">Mini Games</p>
-          <h3 className="font-display text-3xl text-slate-50">Side Cabinets</h3>
+          <h3 className="font-display text-3xl text-slate-50">More games</h3>
         </div>
         <span className="rounded-full border border-sky-100/16 bg-[rgba(255,255,255,0.06)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-100/72">
           {miniGames.length} loaded
@@ -135,42 +108,14 @@ export const GameLibrary = ({
           >
             <div className="relative">
               <GameThumbnail renderer={game.thumbnail} reducedMotion={reducedMotion} />
-              <div className="absolute left-2 top-2 flex gap-2">
-                <span className="rounded-full bg-[rgba(7,18,34,0.82)] px-2 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-sky-50">
-                  Mini
-                </span>
-                {game.isNew && (
-                  <span className="rounded-full bg-amber-300 px-2 py-1 text-[11px] font-bold text-slate-950">
-                    NEW
-                  </span>
-                )}
-                {game.id === dailyGameId && (
-                  <span className="rounded-full bg-sky-300 px-2 py-1 text-[11px] font-bold text-slate-950">
-                    DAILY
-                  </span>
-                )}
-              </div>
             </div>
             <div className="space-y-2 p-2">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="font-display text-2xl text-white">{game.title}</h3>
-                <span className="rounded-full border border-sky-100/16 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-sky-100/78">
-                  {game.genre}
-                </span>
               </div>
               <p className="text-sm text-sky-50/78">{game.shortDescription}</p>
-              <div className="flex flex-wrap gap-2">
-                {game.tags.slice(0, 3).map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full border border-emerald-200/16 bg-emerald-300/10 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-emerald-100/84"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
               <button type="button" onClick={() => onOpen(game.id)} className="arcade-btn-secondary mt-2 w-full">
-                Open Mini Game
+                Open game
               </button>
             </div>
           </article>

@@ -7,6 +7,7 @@ import { GamePlayer } from "./components/GamePlayer";
 import { HomeScreen } from "./components/HomeScreen";
 import { PageTransition } from "./components/PageTransition";
 import { SettingsModal } from "./components/SettingsModal";
+import "./components/ArcadeShell.css";
 import { evaluateAchievements } from "./engine/achievements";
 import { pickDailyChallenge } from "./engine/daily";
 import {
@@ -52,8 +53,6 @@ function App(): React.JSX.Element {
     () => pickDailyChallenge(gameRegistry.map((game) => game.id)),
     [],
   );
-  const dailyGame = gameMap.get(daily.gameId);
-
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
@@ -169,35 +168,28 @@ function App(): React.JSX.Element {
   };
 
   const sharedHeader = (
-    <header className="mb-6 rounded-[1.6rem] border border-sky-200/35 bg-[rgba(7,18,34,0.74)] px-4 py-3 text-slate-50 shadow-[0_26px_60px_-34px_rgba(11,33,64,0.8)] backdrop-blur-xl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <header className="site-header">
+      <div>
         <button
           type="button"
           onClick={() => setScreen("home")}
           className="font-display text-2xl tracking-[0.16em] text-white"
         >
-          ChudGames
+          chudgames
         </button>
 
-        <nav className="flex flex-wrap items-center gap-2 text-sm">
+        <nav>
           <button type="button" className="arcade-btn-secondary" onClick={() => setScreen("home")}>Home</button>
-          <button type="button" className="arcade-btn-secondary" onClick={() => setScreen("library")}>Library</button>
+          <button type="button" className="arcade-btn-secondary" onClick={() => setScreen("library")}>Games</button>
           <button type="button" className="arcade-btn-secondary" onClick={startDaily}>Daily</button>
           <button type="button" className="arcade-btn-secondary" onClick={() => setShowSettings(true)}>Settings</button>
         </nav>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-3 text-xs uppercase tracking-[0.24em] text-sky-100/70">
-        <span>{daily.dateKey}</span>
-        <span>Featured: Apex Run</span>
-        <span>Daily: {dailyGame?.title ?? "..."}</span>
-        <span>Achievements: {progress.achievements.length}</span>
-        <span>EBT Bucks: {progress.ebtBucks}</span>
       </div>
     </header>
   );
 
   return (
-    <div className="min-h-screen text-sky-950">
+    <div className="app-shell">
       <AnimatedBackground settings={settings} />
       <main className={screen === "home" ? "relative w-full" : "relative mx-auto w-full max-w-[1260px] px-4 pb-16 pt-6 md:px-8"}>
         {screen !== "home" && sharedHeader}
@@ -219,7 +211,6 @@ function App(): React.JSX.Element {
                 setFilter={setFilter}
                 onOpen={openGame}
                 reducedMotion={settings.reducedMotion}
-                dailyGameId={daily.gameId}
               />
               <AchievementPanel unlocked={progress.achievements} />
             </div>
@@ -266,7 +257,7 @@ function App(): React.JSX.Element {
       <SettingsModal open={showSettings} settings={settings} onChange={setSettings} onClose={() => setShowSettings(false)} />
 
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-2xl border border-amber-200/40 bg-[rgba(7,18,34,0.92)] px-4 py-3 text-sm text-slate-50 shadow-[0_22px_44px_-22px_rgba(4,12,24,0.85)]">
+        <div className="toast fixed bottom-4 right-4 z-50 rounded-2xl border border-amber-200/40 bg-[rgba(7,18,34,0.92)] px-4 py-3 text-sm text-slate-50 shadow-[0_22px_44px_-22px_rgba(4,12,24,0.85)]">
           {toast}
         </div>
       )}

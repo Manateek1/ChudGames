@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { keyboardSteer } from "../runtime";
 import { createVehicle, stepVehicle, FIXED_STEP } from "../physics";
 import {
   advanceRace,
@@ -11,6 +12,12 @@ import {
 import { TRACK_LENGTH, trackPoint, locateRoad, TRACK_VERSION } from "../track";
 
 describe("Solstice Pass racing", () => {
+  it("maps A / left input to left steering and D / right input to right steering", () => {
+    expect(keyboardSteer(true, false)).toBe(1);
+    expect(keyboardSteer(false, true)).toBe(-1);
+    expect(keyboardSteer(false, false)).toBe(0);
+  });
+
   it("projects road elevation and lateral offsets consistently", () => {
     for (const progress of [0, 0.17, 0.45, 0.72, 0.99]) {
       const p = trackPoint(progress),
