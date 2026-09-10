@@ -99,6 +99,7 @@ export class FortLiteHud {
 
     this.topLeftStatus = document.createElement('div');
     this.topLeftStatus.className = 'hud-line';
+    this.topLeftStatus.setAttribute('aria-live', 'polite');
 
     this.topLeftMaterials = document.createElement('div');
     this.topLeftMaterials.className = 'hud-line';
@@ -143,12 +144,16 @@ export class FortLiteHud {
 
     this.banner = document.createElement('div');
     this.banner.className = 'hud-banner';
+    this.banner.setAttribute('role', 'status');
+    this.banner.setAttribute('aria-live', 'polite');
 
     this.hotbar = document.createElement('div');
     this.hotbar.className = 'hud-hotbar';
+    this.hotbar.setAttribute('aria-label', 'Equipment slots');
 
     this.crosshair = document.createElement('div');
     this.crosshair.className = 'hud-crosshair';
+    this.crosshair.setAttribute('aria-hidden', 'true');
 
     this.help = document.createElement('div');
     this.help.className = 'hud-help';
@@ -219,6 +224,8 @@ export class FortLiteHud {
       for (const item of snapshot.hotbarItems) {
         const slot = document.createElement('div');
         slot.className = `hud-slot${item.active ? ' active' : ''}`;
+        slot.dataset.active = item.active ? 'true' : 'false';
+        slot.setAttribute('aria-label', `${item.key}: ${item.label}, ${item.detail}${item.active ? ', equipped' : ''}`);
 
         const key = document.createElement('div');
         key.className = 'hud-slot-key';

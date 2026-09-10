@@ -128,6 +128,31 @@ export const GamePlayer = ({
     setPaused((value) => !value);
   }, []);
 
+  useEffect(() => {
+    if (game.id === "apex-run" || tutorialOpen || finalResult) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.repeat || (event.code !== "Escape" && event.code !== "KeyP")) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (target && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable)) {
+        return;
+      }
+
+      event.preventDefault();
+      handlePauseToggle();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [game.id, tutorialOpen, finalResult, handlePauseToggle]);
+
   const handleGameOver = useCallback(
     (result: GameResult) => {
       setFinalResult((current) => current ?? result);

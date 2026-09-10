@@ -29,6 +29,7 @@ export const GameDetail = ({
   onBack,
 }: GameDetailProps): React.JSX.Element => {
   const isFortLite = game.id === "fortlite";
+  const isAvailable = game.isAvailable !== false;
 
   return (
     <section className="game-detail grid gap-6 lg:grid-cols-[1.1fr,1fr]">
@@ -37,7 +38,9 @@ export const GameDetail = ({
         <div className="mt-4 flex items-start justify-between gap-4">
           <div>
             <p className="arcade-kicker">{game.genre} cabinet</p>
-            <h2 className="font-display text-3xl text-white">{game.title}</h2>
+            <h2 className="font-display text-3xl text-white">
+              {game.title}{!isAvailable && " (Temporarily unavailable)"}
+            </h2>
           </div>
           <div className="flex flex-wrap gap-2">
             {isFortLite && <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-semibold text-slate-950">Main Feature</span>}
@@ -112,8 +115,13 @@ export const GameDetail = ({
         </ul>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          <button type="button" onClick={onStart} className="arcade-btn-primary">
-            Start Game
+          <button
+            type="button"
+            onClick={onStart}
+            className="arcade-btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!isAvailable}
+          >
+            {isAvailable ? "Start Game" : "Temporarily unavailable"}
           </button>
           <button type="button" onClick={onBack} className="arcade-btn-secondary">
             Back

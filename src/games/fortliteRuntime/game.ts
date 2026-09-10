@@ -24,6 +24,7 @@ import {
 } from './content';
 import { angleLerp, clamp, clampToCircle, horizontalDistance, randomPointInCircle, SeededRandom, snap, yawToDirection } from './math';
 import { GridPathfinder } from './pathfinding';
+import { getRequestedBuildPiece, getRequestedWeaponSlot } from './controls';
 import type {
   ActorKind,
   BuildPiece,
@@ -77,6 +78,7 @@ interface Actor {
   inventory: InventoryState;
   fireCooldown: number;
   reloadTimer: number;
+  reloadWeaponId: string | null;
   harvestCooldown: number;
   eliminationCount: number;
   moveBlend: number;
@@ -306,6 +308,7 @@ export class FortLiteGame {
   private selectedBuildPiece: BuildPieceType = 'wall';
   private buildRotation = 0;
   private buildMode = false;
+  private buildPlacementValid = false;
 
   private cameraYaw = Math.PI;
   private cameraPitch = 0.06;
@@ -347,6 +350,11 @@ export class FortLiteGame {
   private simulationTick = 0;
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    const target = event.target as HTMLElement | null;
+    if (target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)) {
+      return;
+    }
+
     if (event.code === 'Tab') {
       event.preventDefault();
       if (!event.repeat) {
@@ -377,14 +385,15 @@ export class FortLiteGame {
   };
 
   private readonly handleMouseDown = (event: MouseEvent): void => {
+    if (event.button === 0 && !this.externallyPaused && !this.isPointerLocked() && this.state === 'inProgress') {
+      void this.renderer.domElement.requestPointerLock().catch(() => this.handlePointerLockChange());
+      return;
+    }
+
     if (!this.mouseDown.has(event.button)) {
       this.justPressedMouseButtons.add(event.button);
     }
     this.mouseDown.add(event.button);
-
-    if (event.button === 0 && !this.externallyPaused && !this.isPointerLocked() && this.state === 'inProgress') {
-      this.renderer.domElement.requestPointerLock();
-    }
   };
 
   private readonly handleMouseUp = (event: MouseEvent): void => {
@@ -414,6 +423,25 @@ export class FortLiteGame {
 
   private readonly handleContextMenu = (event: MouseEvent): void => {
     event.preventDefault();
+  };
+
+  private readonly handleInputReset = (): void => {
+    this.keysDown.clear();
+    this.justPressedKeys.clear();
+    this.mouseDown.clear();
+    this.justPressedMouseButtons.clear();
+    this.pendingLookDeltaX = 0;
+    this.pendingLookDeltaY = 0;
+    this.wheelDirection = 0;
+    this.wheelAccumulator = 0;
+    this.wheelCooldown = 0;
+  };
+
+  private readonly handlePointerLockChange = (): void => {
+    if (!this.isPointerLocked()) {
+      this.mouseDown.clear();
+      this.justPressedMouseButtons.clear();
+    }
   };
 
   constructor(root: HTMLDivElement, options: FortLiteGameOptions = {}) {
@@ -588,6 +616,8 @@ export class FortLiteGame {
     this.renderer.domElement.addEventListener('mousedown', this.handleMouseDown);
     document.addEventListener('mouseup', this.handleMouseUp);
     document.addEventListener('mousemove', this.handleMouseMove);
+    document.addEventListener('pointerlockchange', this.handlePointerLockChange);
+    window.addEventListener('blur', this.handleInputReset);
     this.renderer.domElement.addEventListener('wheel', this.handleWheel, { passive: false });
     this.renderer.domElement.addEventListener('contextmenu', this.handleContextMenu);
   }
@@ -599,6 +629,8 @@ export class FortLiteGame {
     this.renderer.domElement.removeEventListener('mousedown', this.handleMouseDown);
     document.removeEventListener('mouseup', this.handleMouseUp);
     document.removeEventListener('mousemove', this.handleMouseMove);
+    document.removeEventListener('pointerlockchange', this.handlePointerLockChange);
+    window.removeEventListener('blur', this.handleInputReset);
     this.renderer.domElement.removeEventListener('wheel', this.handleWheel);
     this.renderer.domElement.removeEventListener('contextmenu', this.handleContextMenu);
   }
@@ -611,6 +643,7 @@ export class FortLiteGame {
 
   private resetMatch(): void {
     this.releasePointerLock();
+    this.handleInputReset();
 
     this.matchIndex += 1;
     this.rng = new SeededRandom((this.options.seedBase ?? 1337) + (this.matchIndex - 1) * 4099);
@@ -621,6 +654,7 @@ export class FortLiteGame {
     this.selectedBuildPiece = 'wall';
     this.buildRotation = 0;
     this.buildMode = false;
+    this.buildPlacementValid = false;
     this.cameraYaw = Math.PI;
     this.cameraPitch = 0.06;
     this.helpVisible = false;
@@ -2490,6 +2524,7 @@ export class FortLiteGame {
       inventory,
       fireCooldown: 0,
       reloadTimer: 0,
+      reloadWeaponId: null,
       harvestCooldown: 0,
       eliminationCount: 0,
       moveBlend: 0,
@@ -3023,6 +3058,8 @@ export class FortLiteGame {
       moveInput.normalize();
     }
 
+    this.handlePlayerLoadoutInput();
+
     if (this.updateActorSpawnState(actor, dt, moveInput)) {
       actor.yaw = angleLerp(actor.yaw, this.cameraYaw, 0.18);
       this.viewModelMoveBlend = 0;
@@ -3054,7 +3091,6 @@ export class FortLiteGame {
 
     this.applyVerticalMotion(actor, dt);
     this.updateCamera();
-    this.handlePlayerLoadoutInput();
 
     if (!this.isBuildMode() && actor.inventory.mode === 'weapon' && this.mouseDown.has(0)) {
       this.tryFireWeapon(actor, this.getAimDirection(), true);
@@ -3081,63 +3117,54 @@ export class FortLiteGame {
   private handlePlayerLoadoutInput(): void {
     const actor = this.player;
     const pickaxePressed = this.justPressedKeys.has('KeyG') || this.justPressedKeys.has('g');
-    const riflePressed = this.justPressedKeys.has('Digit1') || this.justPressedKeys.has('Numpad1') || this.justPressedKeys.has('1');
-    const shotgunPressed = this.justPressedKeys.has('Digit2') || this.justPressedKeys.has('Numpad2') || this.justPressedKeys.has('2');
-    const smgPressed = this.justPressedKeys.has('Digit3') || this.justPressedKeys.has('Numpad3') || this.justPressedKeys.has('3');
-    const wallPressed = this.justPressedKeys.has('KeyZ');
-    const floorPressed = this.justPressedKeys.has('KeyX');
-    const rampPressed = this.justPressedKeys.has('KeyC');
+    const requestedWeaponSlot = getRequestedWeaponSlot(this.justPressedKeys);
+    const requestedBuildPiece = getRequestedBuildPiece(this.justPressedKeys);
 
-    if (this.justPressedKeys.has('KeyQ')) {
+    if (this.justPressedKeys.has('KeyQ') && actor.spawnState !== 'grounded') {
+      this.showMessage('Land before entering build mode.', 1.2);
+    } else if (this.justPressedKeys.has('KeyQ')) {
       this.buildMode = !this.buildMode;
+      this.cancelReload(actor);
+      this.showMessage(this.buildMode ? 'Build mode enabled. Choose Z, X, or C.' : 'Build mode disabled.', 1.1);
     }
 
     if (pickaxePressed) {
       this.buildMode = false;
       actor.inventory.mode = 'harvest';
+      this.cancelReload(actor);
+      this.showMessage('Pickaxe equipped.', 0.9);
     }
 
-    if (riflePressed) {
+    if (requestedWeaponSlot !== null) {
       this.buildMode = false;
-      this.selectWeaponSlot(actor, 0);
+      const definition = WEAPON_DEFINITIONS[requestedWeaponSlot];
+      if (this.selectWeaponSlot(actor, requestedWeaponSlot)) {
+        this.showMessage(`${definition.name} equipped.`, 0.9);
+      } else {
+        this.showMessage(`${definition.name} slot is empty. Walk over one to pick it up.`, 1.4);
+      }
     }
 
-    if (shotgunPressed) {
-      this.buildMode = false;
-      this.selectWeaponSlot(actor, 1);
-    }
-
-    if (smgPressed) {
-      this.buildMode = false;
-      this.selectWeaponSlot(actor, 2);
-    }
-
-    if (wallPressed && this.isBuildMode()) {
-      this.setBuildPieceType('wall');
-    }
-
-    if (floorPressed && this.isBuildMode()) {
-      this.setBuildPieceType('floor');
-    }
-
-    if (rampPressed && this.isBuildMode()) {
-      this.setBuildPieceType('ramp');
+    if (requestedBuildPiece && this.isBuildMode()) {
+      this.setBuildPieceType(requestedBuildPiece);
+      this.showMessage(`${requestedBuildPiece[0].toUpperCase()}${requestedBuildPiece.slice(1)} selected.`, 0.9);
     }
 
     if (this.wheelDirection !== 0 && !this.isBuildMode()) {
       const ownedSlots = this.getOwnedWeaponSlots(actor);
       if (ownedSlots.length === 0) {
         actor.inventory.mode = 'harvest';
+        this.cancelReload(actor);
       } else if (actor.inventory.mode === 'harvest') {
-        actor.inventory.mode = 'weapon';
-        actor.inventory.weaponIndex = this.wheelDirection > 0 ? ownedSlots[ownedSlots.length - 1] : ownedSlots[0];
+        this.selectWeaponSlot(actor, this.wheelDirection > 0 ? ownedSlots[ownedSlots.length - 1] : ownedSlots[0]);
       } else {
         const currentIndex = ownedSlots.indexOf(actor.inventory.weaponIndex);
         const next = (currentIndex === -1 ? 0 : currentIndex) + (this.wheelDirection > 0 ? 1 : -1);
         if (next < 0 || next >= ownedSlots.length) {
           actor.inventory.mode = 'harvest';
+          this.cancelReload(actor);
         } else {
-          actor.inventory.weaponIndex = ownedSlots[next];
+          this.selectWeaponSlot(actor, ownedSlots[next]);
         }
       }
     }
@@ -3707,13 +3734,18 @@ export class FortLiteGame {
     }
 
     actor.reloadTimer = weapon.definition.reloadDuration;
+    actor.reloadWeaponId = weapon.definition.id;
     if (actor.kind === 'player') {
       this.showMessage(`Reloading ${weapon.definition.name}...`, 1.1);
     }
   }
 
   private finishReload(actor: Actor): void {
-    const weapon = this.getEquippedWeapon(actor);
+    const reloadWeaponId = actor.reloadWeaponId;
+    actor.reloadWeaponId = null;
+    const weapon = reloadWeaponId
+      ? actor.inventory.weapons.find((entry) => entry.definition.id === reloadWeaponId) ?? null
+      : null;
     if (!weapon) {
       return;
     }
@@ -3870,14 +3902,11 @@ export class FortLiteGame {
 
     if (!this.player.alive || !this.isBuildMode()) {
       this.previewMesh.visible = false;
+      this.buildPlacementValid = false;
       return;
     }
 
     const placement = this.computeBuildPlacement(this.player, this.selectedBuildPiece);
-    if (!placement.valid) {
-      this.previewMesh.visible = false;
-      return;
-    }
 
     if (this.previewMesh.userData.pieceType !== this.selectedBuildPiece) {
       this.ensurePreviewMesh();
@@ -3890,6 +3919,11 @@ export class FortLiteGame {
     this.previewMesh.visible = true;
     this.previewMesh.position.copy(placement.position);
     this.previewMesh.rotation.set(this.selectedBuildPiece === 'ramp' ? RAMP_ANGLE : 0, placement.yaw, 0);
+    this.buildPlacementValid = placement.valid;
+    const material = this.previewMesh.material as THREE.MeshStandardMaterial;
+    material.color.setHex(placement.valid ? 0x7be0f6 : 0xff5a67);
+    material.emissive.setHex(placement.valid ? 0x123843 : 0x4a0c12);
+    material.opacity = placement.valid ? 0.45 : 0.34;
   }
 
   private computeBuildPlacement(actor: Actor, pieceType: BuildPieceType, forcedWorldPosition?: THREE.Vector3, forcedYaw?: number): { position: THREE.Vector3; yaw: number; valid: boolean } {
@@ -4362,6 +4396,8 @@ export class FortLiteGame {
           magAmmo: pickup.weapon.magSize
         };
 
+        this.cancelReload(actor);
+
         if (actor.inventory.weapons.length < MAX_WEAPON_SLOTS) {
           actor.inventory.weapons.push(instance);
           this.sortWeaponsByHotbarOrder(actor);
@@ -4563,7 +4599,9 @@ export class FortLiteGame {
         : this.player.reloadTimer > 0 && weapon
           ? `Reloading ${weapon.definition.name}`
           : this.isBuildMode()
-            ? `Ready to place ${this.selectedBuildPiece}`
+            ? this.buildPlacementValid
+              ? `Placement clear: ${this.selectedBuildPiece}`
+              : `Placement blocked: ${this.selectedBuildPiece}`
             : this.isPointInWater(this.player.position)
               ? 'Wading through water'
               : this.player.inventory.mode === 'harvest'
@@ -4794,9 +4832,12 @@ export class FortLiteGame {
 
     if (this.isBuildMode()) {
       const material = this.getAvailableBuildMaterial(this.player);
-      return material
-        ? `Build mode: ${this.selectedBuildPiece}. Left click to place, R to rotate, Q to exit.`
-        : 'Build mode active, but you need at least 20 materials to place a piece.';
+      if (!material) {
+        return 'Build mode active, but you need at least 20 materials to place a piece.';
+      }
+      return this.buildPlacementValid
+        ? `Valid ${this.selectedBuildPiece} placement. Left click to place, R to rotate, Q to exit.`
+        : `Blocked ${this.selectedBuildPiece} placement. Aim at clear terrain or rotate with R.`;
     }
 
     if (this.isOutsideStorm(this.player.position)) {
@@ -4884,9 +4925,18 @@ export class FortLiteGame {
       return false;
     }
 
+    const switchingWeapons = actor.inventory.mode !== 'weapon' || actor.inventory.weaponIndex !== slotIndex;
+    if (switchingWeapons) {
+      this.cancelReload(actor);
+    }
     actor.inventory.mode = 'weapon';
     actor.inventory.weaponIndex = slotIndex;
     return true;
+  }
+
+  private cancelReload(actor: Actor): void {
+    actor.reloadTimer = 0;
+    actor.reloadWeaponId = null;
   }
 
   private findNearestLoot(position: THREE.Vector3, maxDistance: number, actor?: Actor): LootPickup | null {

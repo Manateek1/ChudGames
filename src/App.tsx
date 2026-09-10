@@ -115,6 +115,11 @@ function App(): React.JSX.Element {
   };
 
   const startFromDetail = (): void => {
+    if (selectedGame.isAvailable === false) {
+      setToast(`${selectedGame.title} is temporarily unavailable while Phase 1 is being stabilized.`);
+      return;
+    }
+
     setRunSeed(randomSeed());
     setDailyRun(false);
     setScreen("play");
@@ -123,6 +128,12 @@ function App(): React.JSX.Element {
   const startDaily = (): void => {
     setSelectedGameId(daily.gameId);
     const targetGame = gameMap.get(daily.gameId) ?? gameRegistry[0];
+    if (targetGame.isAvailable === false) {
+      setToast(`${targetGame.title} is temporarily unavailable while Phase 1 is being stabilized.`);
+      setScreen("detail");
+      return;
+    }
+
     setDifficulty(preferredDifficulty(targetGame.difficulties));
     setMode(defaultModeForGame(targetGame));
     setRunSeed(daily.seed);

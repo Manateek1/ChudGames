@@ -312,6 +312,7 @@ export const gameRegistry: GameDefinition[] = [
       }
     ],
     defaultMode: "solo",
+    isAvailable: false,
     usesCanvas: false,
     isNew: true,
     thumbnail: fortLiteThumb,

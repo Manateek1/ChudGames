@@ -75,12 +75,23 @@ export const GameLibrary = ({
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-display text-4xl text-white">{game.title}</h3>
+                  {game.isAvailable === false && (
+                    <span className="rounded-full border border-amber-200/30 bg-amber-300/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-100">
+                      Temporarily unavailable
+                    </span>
+                  )}
                 </div>
                 <p className="text-base text-sky-50/82">{game.description}</p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <button type="button" onClick={() => onOpen(game.id)} className="arcade-btn-primary">
-                  Play {game.title}
+                <button
+                  type="button"
+                  onClick={() => onOpen(game.id)}
+                  className="arcade-btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={game.isAvailable === false}
+                  aria-disabled={game.isAvailable === false}
+                >
+                  {game.isAvailable === false ? `${game.title} (Temporarily unavailable)` : `Play ${game.title}`}
                 </button>
                 <span className="self-center text-sm text-sky-100/70">
                   {game.id === "apex-run" ? "Mountain time attack." : "Third-person battle royale."}

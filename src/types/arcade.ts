@@ -63,6 +63,7 @@ export interface GameDefinition {
   difficulties: Difficulty[];
   modes?: GameMode[];
   defaultMode?: string;
+  isAvailable?: boolean;
   isNew?: boolean;
   usesCanvas: boolean;
   thumbnail: ThumbnailRenderer;
