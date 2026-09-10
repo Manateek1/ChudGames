@@ -221,7 +221,7 @@ export const gameRegistry: GameDefinition[] = [
     description: "Take the original Solstice GT through an alpine circuit of climbing bends, a lakeside viaduct, and a covered mountain gallery. Beat eight sectors, save your best lap, and race your own ghost. Sculpted bodywork, cinematic cameras, and responsive simcade handling bring Solstice Pass to life.",
     controls: ["Accelerate: W / Up", "Brake / Reverse: S / Down", "Steer: A / D or Left / Right", "Handbrake: Space", "Camera: C · Recover: R (+3 sec)", "Pause / Resume: Esc / P", "Gamepad: left stick, RT / LT, A handbrake"],
     tutorial: ["Brake before corners, steer toward the apex, then ease onto the throttle.", "Pass eight sectors in order to set a lap. Your best run becomes a ghost.", "Use R to recover to the last sector with a three-second penalty. Graphics and paint are adjustable in the game menu."],
-    tags: ["time-attack", "racing", "cars", "3d", "ghost"], difficulties: ["easy", "normal", "hard"], usesCanvas: true, isNew: true, thumbnail: apexThumb, component: ApexRun,
+    tags: ["time-attack", "racing", "cars", "3d", "ghost"], difficulties: ["normal"], usesCanvas: true, isNew: true, thumbnail: apexThumb, component: ApexRun,
   },
   {
     id: "neon-dodger",

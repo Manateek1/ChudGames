@@ -151,7 +151,7 @@ export const GamePlayer = ({
     return <section className="game-player space-y-3">
       <div className="flex items-center justify-between gap-3 px-1 text-xs text-sky-50/75">
         <button type="button" onClick={onQuit} className="px-2 py-2 hover:text-white">← Back to library</button>
-        <span className="uppercase tracking-[.2em]">{difficulty} · Time attack</span>
+        <span className="uppercase tracking-[.2em]">Time attack</span>
         <button type="button" onClick={restart} className="px-2 py-2 hover:text-white">Restart game</button>
       </div>
       <GameComponent key={componentKey} gameId={game.id} difficulty={difficulty} mode={mode} seed={seed} settings={settings} paused={paused} input={input} audio={audio} onScore={setScore} onFps={setFps} onPauseToggle={handlePauseToggle} onGameOver={onComplete}/>

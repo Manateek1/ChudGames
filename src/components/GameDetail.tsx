@@ -47,7 +47,7 @@ export const GameDetail = ({
         <p className="mt-3 text-sky-50/80">{game.description}</p>
 
         <div className="mt-4 space-y-4 rounded-[1.5rem] border border-sky-100/12 bg-[rgba(255,255,255,0.05)] p-4">
-          <div>
+          {game.difficulties.length > 1 && <div>
             <p className="arcade-kicker">Difficulty</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {game.difficulties.map((option) => (
@@ -65,7 +65,7 @@ export const GameDetail = ({
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
 
           {game.modes && game.modes.length > 0 && (
             <div>
