@@ -184,15 +184,15 @@ export class FortLiteHud {
 
     this.topRight.append(this.topRightPlayers, this.topRightElims, this.topRightStorm, this.pingBadge);
 
-    // Concept layout: Top-Center = Compass / Status Banner
+    // Status Banner
     this.banner = document.createElement('div');
-    this.banner.className = 'hud-banner hud-top-center';
+    this.banner.className = 'hud-banner';
     this.banner.setAttribute('role', 'status');
     this.banner.setAttribute('aria-live', 'polite');
 
-    // Concept layout: Bottom-Right = Weapon and Equipment Slots
+    // Bottom-center weapon and equipment hotbar
     this.hotbar = document.createElement('div');
-    this.hotbar.className = 'hud-hotbar hud-bottom-right';
+    this.hotbar.className = 'hud-hotbar';
     this.hotbar.setAttribute('aria-label', 'Equipment slots');
 
     this.crosshair = document.createElement('div');

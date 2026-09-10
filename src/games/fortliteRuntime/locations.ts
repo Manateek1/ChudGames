@@ -46,7 +46,7 @@ function makeWall(pos: THREE.Vector3, width: number, height: number, thickness: 
     maxX: pos.x + boundX / 2,
     minZ: pos.z - boundZ / 2,
     maxZ: pos.z + boundZ / 2,
-    height: height,
+    height: pos.y + height,
     mesh
   };
   return { mesh, obstacle };
@@ -60,7 +60,7 @@ function makeFloor(pos: THREE.Vector3, sizeX: number, sizeZ: number, thickness: 
     maxX: pos.x + sizeX / 2,
     minZ: pos.z - sizeZ / 2,
     maxZ: pos.z + sizeZ / 2,
-    height: thickness,
+    height: pos.y + thickness / 2,
     mesh
   };
   const walkable: WalkableSurface = {
@@ -307,7 +307,7 @@ export function createLighthouseOverlook(center: THREE.Vector3, rng: SeededRando
     maxX: center.x + 3.5,
     minZ: center.z - 3.5,
     maxZ: center.z + 3.5,
-    height: 22,
+    height: baseHeight + 22,
     mesh: towerMesh
   };
   result.obstacles.push(obstacle);
@@ -359,7 +359,7 @@ export function createLighthouseOverlook(center: THREE.Vector3, rng: SeededRando
       maxX: rx + scale,
       minZ: rz - scale,
       maxZ: rz + scale,
-      height: scale * 2,
+      height: ry + scale * 2,
       mesh: rockMesh
     });
   }

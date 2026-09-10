@@ -13,32 +13,41 @@ function lerp(a: number, b: number, t: number): number {
 
 // Simple value noise
 class SimpleNoise {
-    private rng: SeededRandom;
-    private table: number[];
-    private readonly size = 256;
+    private perm: Uint8Array;
+    private values: Float32Array;
 
     constructor(seedRng: SeededRandom) {
-        this.rng = new SeededRandom(seedRng.next()); 
-        this.table = new Array(this.size * 2);
-        for (let i = 0; i < this.size; i++) {
-            this.table[i] = this.rng.next();
-            this.table[i + this.size] = this.table[i];
+        this.perm = new Uint8Array(512);
+        this.values = new Float32Array(256);
+        const p = new Uint8Array(256);
+        for (let i = 0; i < 256; i++) {
+            p[i] = i;
+            this.values[i] = seedRng.next() * 2 - 1;
+        }
+        for (let i = 255; i > 0; i--) {
+            const j = Math.floor(seedRng.next() * (i + 1));
+            const tmp = p[i];
+            p[i] = p[j];
+            p[j] = tmp;
+        }
+        for (let i = 0; i < 512; i++) {
+            this.perm[i] = p[i & 255];
         }
     }
 
     public noise2D(x: number, y: number): number {
-        const xi = Math.floor(x) & (this.size - 1);
-        const yi = Math.floor(y) & (this.size - 1);
+        const xi = Math.floor(x) & 255;
+        const yi = Math.floor(y) & 255;
         const xf = x - Math.floor(x);
         const yf = y - Math.floor(y);
 
         const u = smoothstep(0, 1, xf);
         const v = smoothstep(0, 1, yf);
 
-        const aa = this.table[this.table[xi] + yi];
-        const ab = this.table[this.table[xi] + yi + 1];
-        const ba = this.table[this.table[xi + 1] + yi];
-        const bb = this.table[this.table[xi + 1] + yi + 1];
+        const aa = this.values[this.perm[this.perm[xi] + yi]];
+        const ab = this.values[this.perm[this.perm[xi] + yi + 1]];
+        const ba = this.values[this.perm[this.perm[xi + 1] + yi]];
+        const bb = this.values[this.perm[this.perm[xi + 1] + yi + 1]];
 
         const x1 = lerp(aa, ba, u);
         const x2 = lerp(ab, bb, u);

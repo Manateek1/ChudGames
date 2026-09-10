@@ -257,7 +257,6 @@ const PARACHUTE_DURATION = 10;
 const STORM_START_DELAY = 0;
 const SKYDIVE_ALTITUDE = 92;
 const COVER_DENSITY_MULTIPLIER = 1.5;
-const RENDER_DISTANCE_MULTIPLIER = 0.25;
 const LARGE_BUILDING_SCALE = 2;
 const THIRD_PERSON_CAMERA_DISTANCE = 6.8;
 const THIRD_PERSON_CAMERA_HEIGHT = 1.9;
@@ -552,16 +551,18 @@ export class FortLiteGame {
     this.renderer.shadowMap.enabled = this.graphicsQuality !== 'low';
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.currentPixelRatio = this.getPixelRatioForQuality(this.graphicsQuality);
+    this.renderer.setClearColor(0xc6dff0, 1);
     this.applyRendererResolution();
     this.renderer.domElement.className = 'fortlite-canvas';
     this.shell.append(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.skyDome = createSkyDome(MAP_RADIUS * 2.1);
+    this.scene.background = new THREE.Color(0xc6dff0);
+    this.skyDome = createSkyDome(MAP_RADIUS * 2.2);
     this.scene.add(this.skyDome);
     this.scene.fog = createAtmosphericFog(MAP_RADIUS);
 
-    this.camera = new THREE.PerspectiveCamera(DEFAULT_CAMERA_FOV, Math.max(1, this.root.clientWidth / Math.max(1, this.root.clientHeight)), 0.05, MAP_RADIUS * 2.2 * RENDER_DISTANCE_MULTIPLIER);
+    this.camera = new THREE.PerspectiveCamera(DEFAULT_CAMERA_FOV, Math.max(1, this.root.clientWidth / Math.max(1, this.root.clientHeight)), 0.05, MAP_RADIUS * 2.6);
     this.camera.rotation.order = 'YXZ';
     this.camera.position.set(0, 9, 12);
     this.scene.add(this.camera);
@@ -5050,6 +5051,9 @@ export class FortLiteGame {
 
     this.camera.position.copy(this.cameraRigPosition);
     this.camera.lookAt(this.cameraLookPosition);
+    if (this.skyDome) {
+      this.skyDome.position.set(this.camera.position.x, 0, this.camera.position.z);
+    }
     this.updatePlayerPerspectiveVisibility(firstPerson);
     this.lastFirstPersonView = firstPerson;
   }
