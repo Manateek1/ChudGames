@@ -1,220 +1,90 @@
 import { useEffect, useRef, useState } from "react";
 import type { GameComponentProps } from "../types/arcade";
-import { FortLiteGame } from "./fortliteRuntime/game";
 import "./fortlite.css";
 
-const FULLSCREEN_HINT_KEY = "fortlite_fullscreen_hint_hidden";
+type PartyMode = "solo" | "party";
+type Unit = { id: string; x: number; y: number; hp: number; alive: boolean; hue: string; weapon: number; elims: number; name: string; cooldown: number };
+type Building = { x: number; y: number; w: number; h: number; color: string; roof: string };
+type Pickup = { x: number; y: number; kind: "med" | "ammo" | "wood"; active: boolean };
+type Snapshot = { type: "state"; player: Omit<Unit, "cooldown"> } | { type: "damage"; target: string; amount: number; source: string };
 
-export const FortLite = ({
-  seed,
-  mode,
-  settings,
-  paused,
-  audio,
-  onScore,
-  onFps,
-  onGameOver,
-}: GameComponentProps): React.JSX.Element => {
-  const viewportRef = useRef<HTMLDivElement | null>(null);
-  const mountRef = useRef<HTMLDivElement | null>(null);
-  const gameRef = useRef<FortLiteGame | null>(null);
-  const scoreRef = useRef(onScore);
-  const fpsRef = useRef(onFps);
-  const fpsVisibleRef = useRef(settings.showFps);
-  const graphicsQualityRef = useRef(settings.graphicsQuality);
-  const gameOverRef = useRef(onGameOver);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showFullscreenHint, setShowFullscreenHint] = useState(() => {
-    if (typeof window === "undefined") {
-      return true;
-    }
-    return window.localStorage.getItem(FULLSCREEN_HINT_KEY) !== "true";
-  });
-  const fullscreenSupported = typeof document !== "undefined" && document.fullscreenEnabled;
+const WORLD = 1800;
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+const distance = (a: Unit, b: Unit): number => Math.hypot(a.x - b.x, a.y - b.y);
+const makeCode = (): string => Array.from({ length: 6 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
+const createBuildings = (): Building[] => [
+  { x: 220, y: 290, w: 210, h: 150, color: "#d9d1bd", roof: "#e05d45" }, { x: 520, y: 190, w: 180, h: 220, color: "#c9d4d0", roof: "#2d8d9b" },
+  { x: 840, y: 300, w: 250, h: 160, color: "#eadbc5", roof: "#cb604c" }, { x: 1230, y: 220, w: 180, h: 230, color: "#d0dedb", roof: "#3d7486" },
+  { x: 1360, y: 660, w: 230, h: 170, color: "#e3d6bd", roof: "#d96a48" }, { x: 900, y: 810, w: 260, h: 190, color: "#cad4c8", roof: "#538899" },
+  { x: 430, y: 890, w: 210, h: 180, color: "#e8dbc7", roof: "#bd5d49" }, { x: 200, y: 1280, w: 230, h: 190, color: "#cfdbd2", roof: "#397b88" },
+  { x: 660, y: 1280, w: 180, h: 240, color: "#e8d6bb", roof: "#da694b" }, { x: 1160, y: 1280, w: 260, h: 170, color: "#d2d8ca", roof: "#457887" },
+];
 
-  useEffect(() => {
-    scoreRef.current = onScore;
-    fpsRef.current = onFps;
-    gameOverRef.current = onGameOver;
-  }, [onScore, onFps, onGameOver]);
+class HarborRun {
+  private readonly canvas: HTMLCanvasElement;
+  private readonly ctx: CanvasRenderingContext2D;
+  private readonly playerId = crypto.randomUUID();
+  private readonly player: Unit = { id: this.playerId, x: 900, y: 900, hp: 100, alive: true, hue: "#45e5ce", weapon: 0, elims: 0, name: "YOU", cooldown: 0 };
+  private readonly bots: Unit[] = Array.from({ length: 17 }, (_, index) => ({ id: `bot-${index}`, x: 260 + (index * 197) % 1280, y: 240 + (index * 317) % 1280, hp: 100, alive: true, hue: ["#ff9369", "#f8d365", "#9c8cff", "#f47fb0"][index % 4], weapon: index % 3, elims: 0, name: `BOT ${index + 1}`, cooldown: Math.random() }));
+  private readonly buildings = createBuildings();
+  private readonly pickups: Pickup[] = Array.from({ length: 28 }, (_, index) => ({ x: 130 + (index * 271) % 1540, y: 170 + (index * 431) % 1500, kind: (["med", "ammo", "wood"] as const)[index % 3], active: true }));
+  private readonly keys = new Set<string>();
+  private readonly bullets: Array<{ x: number; y: number; dx: number; dy: number; life: number; color: string }> = [];
+  private readonly builds: Array<{ x: number; y: number; type: "wall" | "floor" | "ramp" }> = [];
+  private channel: BroadcastChannel | null = null;
+  private peer: Unit | null = null;
+  private frame = 0; private last = performance.now(); private elapsed = 0; private zone = 760; private parachute = 4.2;
+  private paused = false; private ended = false; private fpsFrames = 0; private fpsAt = performance.now();
+  private ammo = 45; private wood = 60; private medkits = 1; private activeWeapon = 0; private buildMode = false; private buildType: "wall" | "floor" | "ramp" = "wall";
+  private mouse = { x: 0, y: 0, down: false };
+  private readonly onScore: (score: number) => void;
+  private readonly onFps: (fps: number) => void;
+  private readonly onEnd: (won: boolean, placement: number, elims: number) => void;
+  private readonly handleKeyDown = (event: KeyboardEvent): void => { if (["KeyW", "KeyA", "KeyS", "KeyD", "ShiftLeft", "Digit1", "Digit2", "Digit3", "KeyR", "KeyQ", "KeyZ", "KeyX", "KeyC"].includes(event.code)) event.preventDefault(); this.keys.add(event.code); if (["Digit1", "Digit2", "Digit3"].includes(event.code)) this.activeWeapon = Number(event.code.at(-1)) - 1; if (!event.repeat && event.code === "KeyQ") this.buildMode = !this.buildMode; if (!event.repeat && event.code === "KeyZ") { this.buildMode = true; this.buildType = "wall"; } if (!event.repeat && event.code === "KeyX") { this.buildMode = true; this.buildType = "floor"; } if (!event.repeat && event.code === "KeyC") { this.buildMode = true; this.buildType = "ramp"; } if (!event.repeat && event.code === "KeyR" && this.medkits > 0 && this.player.hp < 95) { this.medkits -= 1; this.player.hp = Math.min(100, this.player.hp + 42); } };
+  private readonly handleKeyUp = (event: KeyboardEvent): void => { this.keys.delete(event.code); };
+  private readonly handleMouseMove = (event: MouseEvent): void => { const rect = this.canvas.getBoundingClientRect(); this.mouse.x = event.clientX - rect.left; this.mouse.y = event.clientY - rect.top; };
+  private readonly handleMouseDown = (): void => { this.mouse.down = true; this.canvas.focus(); if (this.buildMode && this.wood >= 15 && this.parachute <= 0) { this.builds.push({ x: clamp(this.player.x + 70, 45, WORLD - 45), y: clamp(this.player.y, 45, WORLD - 45), type: this.buildType }); this.wood -= 15; } };
+  private readonly handleMouseUp = (): void => { this.mouse.down = false; };
+  private readonly resize = (): void => { const rect = this.canvas.getBoundingClientRect(); const ratio = Math.min(devicePixelRatio || 1, 1.5); this.canvas.width = Math.max(1, Math.floor(rect.width * ratio)); this.canvas.height = Math.max(1, Math.floor(rect.height * ratio)); this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0); };
 
-  useEffect(() => {
-    fpsVisibleRef.current = settings.showFps;
-    if (!settings.showFps) {
-      onFps(0);
-    }
-  }, [settings.showFps, onFps]);
+  constructor(canvas: HTMLCanvasElement, partyCode: string | null, onScore: (score: number) => void, onFps: (fps: number) => void, onEnd: (won: boolean, placement: number, elims: number) => void) {
+    this.canvas = canvas; const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Canvas unavailable"); this.ctx = ctx; canvas.tabIndex = 0;
+    this.onScore = onScore; this.onFps = onFps; this.onEnd = onEnd;
+    canvas.addEventListener("mousemove", this.handleMouseMove); canvas.addEventListener("mousedown", this.handleMouseDown); window.addEventListener("mouseup", this.handleMouseUp); window.addEventListener("keydown", this.handleKeyDown); window.addEventListener("keyup", this.handleKeyUp); window.addEventListener("resize", this.resize);
+    if (partyCode && "BroadcastChannel" in window) { this.channel = new BroadcastChannel(`fortlite-harbor-${partyCode}`); this.channel.onmessage = (event: MessageEvent<Snapshot>) => this.onMessage(event.data); }
+    this.resize(); this.frame = requestAnimationFrame(this.loop);
+  }
+  setPaused(value: boolean): void { this.paused = value; }
+  dispose(): void { cancelAnimationFrame(this.frame); window.removeEventListener("resize", this.resize); window.removeEventListener("mouseup", this.handleMouseUp); window.removeEventListener("keydown", this.handleKeyDown); window.removeEventListener("keyup", this.handleKeyUp); this.canvas.removeEventListener("mousemove", this.handleMouseMove); this.canvas.removeEventListener("mousedown", this.handleMouseDown); this.channel?.close(); this.onFps(0); }
+  private onMessage(message: Snapshot): void { if (message.type === "state" && message.player.id !== this.playerId) this.peer = { ...message.player, cooldown: 0 }; if (message.type === "damage" && message.target === this.playerId && message.source !== this.playerId) { this.player.hp = Math.max(0, this.player.hp - message.amount); if (this.player.hp === 0) this.player.alive = false; } }
+  private readonly loop = (now: number): void => { const dt = Math.min(.035, (now - this.last) / 1000); this.last = now; if (!this.paused && !this.ended) this.update(dt); this.draw(); this.fpsFrames += 1; if (now - this.fpsAt > 750) { this.onFps(this.fpsFrames * 1000 / (now - this.fpsAt)); this.fpsFrames = 0; this.fpsAt = now; } this.frame = requestAnimationFrame(this.loop); };
+  private update(dt: number): void {
+    this.elapsed += dt; this.parachute = Math.max(0, this.parachute - dt); this.zone = Math.max(170, 760 - Math.max(0, this.elapsed - 14) * 9);
+    const speed = this.parachute > 0 ? 250 : this.keys.has("ShiftLeft") ? 310 : 220; let dx = (this.keys.has("KeyD") ? 1 : 0) - (this.keys.has("KeyA") ? 1 : 0); let dy = (this.keys.has("KeyS") ? 1 : 0) - (this.keys.has("KeyW") ? 1 : 0); const magnitude = Math.hypot(dx, dy) || 1; dx /= magnitude; dy /= magnitude; this.player.x = clamp(this.player.x + dx * speed * dt, 40, WORLD - 40); this.player.y = clamp(this.player.y + dy * speed * dt, 40, WORLD - 40); this.player.cooldown = Math.max(0, this.player.cooldown - dt);
+    if (this.mouse.down && this.player.cooldown <= 0 && this.ammo > 0 && this.parachute <= 0) this.fire(this.player, this.mouse.x - this.canvas.clientWidth / 2, this.mouse.y - this.canvas.clientHeight / 2);
+    for (const pickup of this.pickups) if (pickup.active && Math.hypot(pickup.x - this.player.x, pickup.y - this.player.y) < 34) { pickup.active = false; if (pickup.kind === "ammo") this.ammo += 18; if (pickup.kind === "wood") this.wood += 30; if (pickup.kind === "med") this.medkits = Math.min(3, this.medkits + 1); }
+    for (const bot of this.bots.filter((entry) => entry.alive)) this.updateBot(bot, dt);
+    for (const bullet of this.bullets) { bullet.x += bullet.dx * dt; bullet.y += bullet.dy * dt; bullet.life -= dt; } this.bullets.splice(0, this.bullets.length, ...this.bullets.filter((bullet) => bullet.life > 0));
+    const targets = [this.player, ...this.bots, ...(this.peer?.alive ? [this.peer] : [])]; for (const unit of targets.filter((entry) => entry.alive)) { if (Math.hypot(unit.x - WORLD / 2, unit.y - WORLD / 2) > this.zone) unit.hp = Math.max(0, unit.hp - dt * 7); if (unit.hp <= 0) unit.alive = false; }
+    if (this.channel && Math.floor(this.elapsed * 12) !== Math.floor((this.elapsed - dt) * 12)) this.channel.postMessage({ type: "state", player: { ...this.player } } satisfies Snapshot);
+    const living = 1 + this.bots.filter((entry) => entry.alive).length + (this.peer?.alive ? 1 : 0); this.onScore(living); if (!this.player.alive || living <= 1) { this.ended = true; this.onEnd(this.player.alive, this.player.alive ? 1 : living + 1, this.player.elims); }
+  }
+  private updateBot(bot: Unit, dt: number): void { const target = this.player.alive ? this.player : this.peer; if (!target) return; const angle = Math.atan2(target.y - bot.y, target.x - bot.x); const d = distance(bot, target); const strafe = Math.sin(this.elapsed * 1.2 + bot.x) * .65; const move = d > 190 ? 1 : d < 130 ? -.45 : 0; bot.x = clamp(bot.x + (Math.cos(angle) * move - Math.sin(angle) * strafe) * 96 * dt, 40, WORLD - 40); bot.y = clamp(bot.y + (Math.sin(angle) * move + Math.cos(angle) * strafe) * 96 * dt, 40, WORLD - 40); bot.cooldown -= dt; if (d < 440 && bot.cooldown <= 0 && this.parachute <= 0) this.fire(bot, target.x - bot.x, target.y - bot.y); }
+  private fire(source: Unit, dx: number, dy: number): void { const weapon = source === this.player ? this.activeWeapon : source.weapon; const config = [{ interval: .22, damage: 13, speed: 900, spread: .035 }, { interval: .72, damage: 31, speed: 720, spread: .12 }, { interval: .1, damage: 8, speed: 960, spread: .07 }][weapon]; const base = Math.atan2(dy, dx); source.cooldown = config.interval; if (source === this.player) this.ammo -= 1; const pellets = weapon === 1 ? 4 : 1; for (let pellet = 0; pellet < pellets; pellet += 1) { const angle = base + (Math.random() - .5) * config.spread; this.bullets.push({ x: source.x, y: source.y, dx: Math.cos(angle) * config.speed, dy: Math.sin(angle) * config.speed, life: .48, color: source.hue }); } const victim = [this.player, ...this.bots, ...(this.peer?.alive ? [this.peer] : [])].filter((target) => target !== source && target.alive).sort((a, b) => distance(source, a) - distance(source, b))[0]; if (victim && distance(source, victim) < (weapon === 1 ? 230 : 520) && Math.random() > .22) { victim.hp = Math.max(0, victim.hp - config.damage); if (victim === this.peer) this.channel?.postMessage({ type: "damage", target: victim.id, amount: config.damage, source: this.playerId } satisfies Snapshot); if (victim.hp <= 0) { victim.alive = false; source.elims += 1; } } }
+  private draw(): void { const ctx = this.ctx; const width = this.canvas.clientWidth; const height = this.canvas.clientHeight; if (!width || !height) return; ctx.clearRect(0, 0, width, height); const scale = Math.min(width, height) / 980; const cameraX = clamp(this.player.x - width / scale / 2, 0, WORLD - width / scale); const cameraY = clamp(this.player.y - height / scale / 2, 0, WORLD - height / scale); ctx.save(); ctx.scale(scale, scale); ctx.translate(-cameraX, -cameraY); this.drawWorld(ctx); this.drawBuilds(ctx); for (const pickup of this.pickups.filter((entry) => entry.active)) this.drawPickup(ctx, pickup); for (const bullet of this.bullets) { ctx.strokeStyle = bullet.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(bullet.x, bullet.y); ctx.lineTo(bullet.x - bullet.dx * .035, bullet.y - bullet.dy * .035); ctx.stroke(); } for (const unit of [...this.bots, ...(this.peer ? [this.peer] : []), this.player]) if (unit.alive) this.drawUnit(ctx, unit); ctx.restore(); this.drawHud(ctx, width, height); }
+  private drawWorld(ctx: CanvasRenderingContext2D): void { ctx.fillStyle = "#42abc1"; ctx.fillRect(0, 0, WORLD, WORLD); ctx.fillStyle = "#dcce9d"; ctx.beginPath(); ctx.arc(WORLD / 2, WORLD / 2, 840, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#74ae62"; ctx.beginPath(); ctx.arc(WORLD / 2, WORLD / 2, 700, 0, Math.PI * 2); ctx.fill(); for (const building of this.buildings) { ctx.fillStyle = "rgba(27,44,54,.18)"; ctx.fillRect(building.x + 14, building.y + 18, building.w, building.h); ctx.fillStyle = building.color; ctx.fillRect(building.x, building.y, building.w, building.h); ctx.fillStyle = building.roof; ctx.fillRect(building.x - 10, building.y - 16, building.w + 20, 35); ctx.fillStyle = "#23424d"; for (let i = 0; i < 3; i += 1) ctx.fillRect(building.x + 24 + i * 46, building.y + 58, 24, 34); } for (let i = 0; i < 55; i += 1) { const x = 110 + (i * 107) % 1580; const y = 100 + (i * 193) % 1590; ctx.fillStyle = "#3d744f"; ctx.beginPath(); ctx.arc(x, y, 22 + i % 3 * 7, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#805e3c"; ctx.fillRect(x - 4, y + 13, 8, 21); } ctx.save(); ctx.setLineDash([12, 12]); ctx.strokeStyle = "#8b5cff"; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(WORLD / 2, WORLD / 2, this.zone, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+  private drawBuilds(ctx: CanvasRenderingContext2D): void { for (const build of this.builds) { ctx.fillStyle = "rgba(86,57,30,.24)"; ctx.fillRect(build.x - 31, build.y - 18, 66, 42); ctx.fillStyle = "#a97848"; if (build.type === "wall") { ctx.fillRect(build.x - 31, build.y - 38, 62, 55); ctx.strokeStyle = "#e7c590"; ctx.strokeRect(build.x - 31, build.y - 38, 62, 55); } else if (build.type === "floor") { ctx.fillRect(build.x - 38, build.y - 16, 76, 30); } else { ctx.beginPath(); ctx.moveTo(build.x - 34, build.y + 16); ctx.lineTo(build.x + 34, build.y + 16); ctx.lineTo(build.x + 34, build.y - 32); ctx.closePath(); ctx.fill(); } } }
+  private drawPickup(ctx: CanvasRenderingContext2D, pickup: Pickup): void { ctx.fillStyle = pickup.kind === "med" ? "#f27270" : pickup.kind === "ammo" ? "#f5c85a" : "#b38052"; ctx.fillRect(pickup.x - 11, pickup.y - 11, 22, 22); ctx.fillStyle = "rgba(255,255,255,.7)"; ctx.fillRect(pickup.x - 3, pickup.y - 7, 6, 14); ctx.fillRect(pickup.x - 7, pickup.y - 3, 14, 6); }
+  private drawUnit(ctx: CanvasRenderingContext2D, unit: Unit): void { ctx.save(); ctx.translate(unit.x, unit.y); ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.beginPath(); ctx.ellipse(0, 14, 18, 7, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = unit.hue; ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#183047"; ctx.fillRect(9, -4, 23, 7); ctx.fillStyle = "#102335"; ctx.fillRect(-19, -28, 38, 6); ctx.fillStyle = "#52e4c2"; ctx.fillRect(-18, -28, 36 * unit.hp / 100, 6); ctx.fillStyle = "#fff8e8"; ctx.font = "700 11px system-ui"; ctx.textAlign = "center"; ctx.fillText(unit.name, 0, -37); if (unit === this.player && this.parachute > 0) { ctx.strokeStyle = "#1dbdc0"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, -45, 40, Math.PI, 0); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-36, -45); ctx.lineTo(-9, -5); ctx.moveTo(36, -45); ctx.lineTo(9, -5); ctx.stroke(); } ctx.restore(); }
+  private drawHud(ctx: CanvasRenderingContext2D, width: number, height: number): void { const living = 1 + this.bots.filter((entry) => entry.alive).length + (this.peer?.alive ? 1 : 0); ctx.save(); ctx.fillStyle = "rgba(9,23,41,.88)"; ctx.fillRect(18, 18, 268, 84); ctx.fillStyle = "#f7f3e9"; ctx.font = "700 12px system-ui"; ctx.fillText(`HARBOR RUN  ·  ${living} LEFT`, 32, 41); ctx.fillStyle = "#183047"; ctx.fillRect(32, 54, 225, 17); ctx.fillStyle = "#46e5cb"; ctx.fillRect(32, 54, 225 * this.player.hp / 100, 17); ctx.fillStyle = "#f7f3e9"; ctx.font = "700 13px system-ui"; ctx.fillText(`${Math.ceil(this.player.hp)} HP  ·  ${this.player.elims} ELIMS`, 32, 91); ctx.fillStyle = "rgba(9,23,41,.88)"; ctx.fillRect(width - 178, 18, 160, 160); ctx.save(); ctx.beginPath(); ctx.arc(width - 98, 98, 64, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = "#6ba76a"; ctx.fillRect(width - 170, 26, 145, 145); ctx.strokeStyle = "#a188ff"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(width - 98, 98, 64 * this.zone / 900, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = "#fff8e8"; ctx.beginPath(); ctx.arc(width - 98 + (this.player.x - WORLD / 2) / 14, 98 + (this.player.y - WORLD / 2) / 14, 5, 0, Math.PI * 2); ctx.fill(); ctx.restore(); ctx.strokeStyle = "#d9e6ec"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(width - 98, 98, 64, 0, Math.PI * 2); ctx.stroke(); const labels = ["RIFLE", "SHOTGUN", "SMG"]; labels.forEach((label, index) => { const x = width / 2 - 166 + index * 112; const active = index === this.activeWeapon; ctx.fillStyle = active ? "#2aa9a8" : "rgba(9,23,41,.88)"; ctx.fillRect(x, height - 78, 100, 56); ctx.strokeStyle = active ? "#bffff4" : "#466072"; ctx.strokeRect(x, height - 78, 100, 56); ctx.fillStyle = "#f7f3e9"; ctx.font = "700 11px system-ui"; ctx.fillText(`${index + 1}  ${label}`, x + 10, height - 54); }); ctx.fillStyle = "#d8e9ec"; ctx.font = "600 12px system-ui"; ctx.fillText(`AMMO ${this.ammo}   WOOD ${this.wood}   MEDS ${this.medkits}   R heal`, width / 2 - 145, height - 95); ctx.fillStyle = "rgba(9,23,41,.82)"; ctx.fillRect(18, height - 48, 430, 30); ctx.fillStyle = "#f7f3e9"; ctx.font = "600 12px system-ui"; ctx.fillText(this.parachute > 0 ? "GLIDING — steer toward a landing" : this.buildMode ? `BUILD ${this.buildType.toUpperCase()} · click to place · Z/X/C choose · Q exit` : "WASD move · Mouse fire · Shift sprint · 1–3 weapons · Q build", 31, height - 28); if (this.channel) { ctx.fillStyle = "#46e5cb"; ctx.fillText(`PARTY ${this.channel.name.replace("fortlite-harbor-", "")}${this.peer ? " · teammate linked" : " · waiting for teammate"}`, width - 302, height - 28); } ctx.restore(); }
+}
 
-  useEffect(() => {
-    graphicsQualityRef.current = settings.graphicsQuality;
-  }, [settings.graphicsQuality]);
-
-  useEffect(() => {
-    const onFullscreenChange = (): void => {
-      setIsFullscreen(document.fullscreenElement === viewportRef.current);
-      window.dispatchEvent(new Event("resize"));
-    };
-
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    onFullscreenChange();
-
-    return () => {
-      document.removeEventListener("fullscreenchange", onFullscreenChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!fullscreenSupported) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.repeat || event.code !== "KeyF") {
-        return;
-      }
-
-      const target = event.target as HTMLElement | null;
-      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
-        return;
-      }
-
-      const viewport = viewportRef.current;
-      if (!viewport) {
-        return;
-      }
-
-      event.preventDefault();
-
-      void (async () => {
-        try {
-          if (document.fullscreenElement === viewport) {
-            await document.exitFullscreen();
-            return;
-          }
-
-          await viewport.requestFullscreen();
-        } catch {
-          setIsFullscreen(document.fullscreenElement === viewport);
-        }
-      })();
-    };
-
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [fullscreenSupported]);
-
-  useEffect(() => {
-    if (!fullscreenSupported || !showFullscreenHint) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setShowFullscreenHint(false);
-      window.localStorage.setItem(FULLSCREEN_HINT_KEY, "true");
-    }, 3000);
-
-    return () => window.clearTimeout(timer);
-  }, [fullscreenSupported, showFullscreenHint]);
-
-  useEffect(() => {
-    const mount = mountRef.current;
-    if (!mount) {
-      return;
-    }
-
-    const viewport = viewportRef.current;
-    const game = new FortLiteGame(mount, {
-      seedBase: seed,
-      mode: mode === "duos" ? "duos" : "solo",
-      graphicsQuality: graphicsQualityRef.current,
-      audio,
-      showEndScreen: false,
-      onFpsChange: (fps) => {
-        if (fpsVisibleRef.current) {
-          fpsRef.current(fps);
-        }
-      },
-      onPlacementChange: (placement) => {
-        scoreRef.current(placement);
-      },
-      onMatchEnd: (result) => {
-        const reportGameOver = (): void => {
-          gameOverRef.current({
-            score: result.won ? 1 : 0,
-            won: result.won,
-            stats: {
-              placement: result.placement,
-              eliminations: result.eliminations,
-              run: result.survivalTime,
-            },
-          });
-        };
-
-        if (fullscreenSupported && document.fullscreenElement === viewport) {
-          void document.exitFullscreen().finally(reportGameOver);
-          return;
-        }
-
-        reportGameOver();
-      },
-    });
-
-    gameRef.current = game;
-    game.start();
-
-    return () => {
-      if (document.fullscreenElement === viewport) {
-        void document.exitFullscreen();
-      }
-      gameRef.current = null;
-      game.dispose();
-    };
-  }, [seed, mode, fullscreenSupported, audio]);
-
-  useEffect(() => {
-    gameRef.current?.setPaused(paused);
-    if (paused) {
-      onFps(0);
-    }
-  }, [paused, onFps]);
-
-  useEffect(() => {
-    gameRef.current?.setGraphicsQuality(settings.graphicsQuality);
-  }, [settings.graphicsQuality]);
-
-  const toggleFullscreen = async (): Promise<void> => {
-    const viewport = viewportRef.current;
-    if (!viewport || !fullscreenSupported) {
-      return;
-    }
-
-    try {
-      if (document.fullscreenElement === viewport) {
-        await document.exitFullscreen();
-        return;
-      }
-
-      await viewport.requestFullscreen();
-    } catch {
-      setIsFullscreen(document.fullscreenElement === viewport);
-    }
-  };
-
-  return (
-    <div ref={viewportRef} className="fortlite-viewport">
-      {fullscreenSupported && showFullscreenHint && (
-        <button
-          type="button"
-          className="fortlite-fullscreen-btn"
-          onClick={() => void toggleFullscreen()}
-          aria-pressed={isFullscreen}
-        >
-          {isFullscreen ? "Exit Fullscreen (F)" : "Fullscreen (F)"}
-        </button>
-      )}
-      <div ref={mountRef} className="fortlite-mount" />
-    </div>
-  );
+export const FortLite = ({ settings, paused, onScore, onFps, onGameOver }: GameComponentProps): React.JSX.Element => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null); const gameRef = useRef<HarborRun | null>(null);
+  const [partyMode, setPartyMode] = useState<PartyMode>("solo"); const [roomCode, setRoomCode] = useState(""); const [activeRoom, setActiveRoom] = useState<string | null>(null); const [started, setStarted] = useState(false); const [generatedCode] = useState(() => makeCode());
+  useEffect(() => { if (!started || !canvasRef.current) return; const game = new HarborRun(canvasRef.current, activeRoom, onScore, onFps, (won, placement, elims) => onGameOver({ score: won ? 1 : 0, won, stats: { placement, eliminations: elims, run: 0 } })); gameRef.current = game; return () => { gameRef.current = null; game.dispose(); }; }, [activeRoom, onFps, onGameOver, onScore, started]);
+  useEffect(() => { gameRef.current?.setPaused(paused); }, [paused]);
+  useEffect(() => { if (!settings.showFps) onFps(0); }, [onFps, settings.showFps]);
+  if (!started) return <section className="fortlite-lobby" aria-label="FortLite Harbor Run lobby"><div className="fortlite-lobby__art" /><div className="fortlite-lobby__panel"><p className="fortlite-lobby__eyebrow">FORTLITE · HARBOR RUN</p><h2>Drop into a faster battle royale.</h2><p>Land with your glider, clear the harbor, pick up gear, build quick cover, and outlast the storm.</p><div className="fortlite-lobby__modes"><button type="button" className={partyMode === "solo" ? "is-active" : ""} onClick={() => setPartyMode("solo")}>Solo run</button><button type="button" className={partyMode === "party" ? "is-active" : ""} onClick={() => setPartyMode("party")}>Party code</button></div>{partyMode === "party" && <div className="fortlite-lobby__party"><label htmlFor="fortlite-room">Join a browser party</label><div><input id="fortlite-room" value={roomCode} onChange={(event) => setRoomCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))} placeholder={generatedCode} maxLength={6} /><button type="button" onClick={() => setRoomCode(generatedCode)}>Make code</button></div><small>Open the same site in another tab and enter this code. Player movement, health, and eliminations sync live.</small></div>}<button type="button" className="fortlite-lobby__start" onClick={() => { setActiveRoom(partyMode === "party" ? (roomCode || generatedCode) : null); setStarted(true); }}>Start match</button><ul><li>WASD move · mouse aim & fire · Shift sprint</li><li>1 Rifle · 2 Shotgun · 3 SMG · R medkit</li><li>Fast rounds, bot squads, loot, storm, and landing glider</li></ul></div></section>;
+  return <div className="fortlite-viewport"><canvas ref={canvasRef} className="fortlite-canvas" aria-label="FortLite Harbor Run game canvas" /></div>;
 };
