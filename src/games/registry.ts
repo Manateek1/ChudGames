@@ -282,19 +282,20 @@ export const gameRegistry: GameDefinition[] = [
     id: "fortlite",
     title: "FortLite",
     genre: "action",
-    shortDescription: "Fast harbor battle royale with bots, loot, and browser parties.",
-    description: "Glide into a compact harbor island, pick a loadout, race the storm, and outlast the bot lobby. Party codes synchronize a live teammate in another tab on the same site.",
+    shortDescription: "Offline battle royale with bots, building, and third-person combat.",
+    description: "Drop into FortLite inside ChudGames, loot weapons, harvest materials, build cover, and outlast the bot lobby in solo or duos.",
     controls: [
       "Move: WASD",
-      "Aim / Shoot: Mouse after clicking the arena",
-      "Sprint: Left Shift, Loot: Auto Pickup, Heal: R",
+      "Look / Aim: Mouse after clicking the arena",
+      "Shoot / Harvest: Left Mouse",
+      "Sprint: Left Shift, Jump: Space, Loot: Auto Pickup, Zoom: Hold Right Mouse or E",
       "Weapons: 1 Rifle, 2 Shotgun, 3 SMG",
-      "Build: Q toggle, Z wall, X floor, C ramp, click to place",
+      "Build: Q to enter/exit, Z wall, X floor, C ramp, R to rotate",
     ],
     tutorial: [
-      "Choose a solo run or create and share a party code, then steer the glider with WASD.",
-      "Run through loot to collect ammo, wood, and medkits, then cycle Rifle, Shotgun, and SMG with 1–3.",
-      "Stay ahead of the storm and be the last player alive. Parties show a live synced teammate when both tabs join the code.",
+      "Click into the arena to capture the mouse, steer your drop, and fight in third-person until you aim with right click or E.",
+      "Run through loot to collect weapons and ammo automatically, then harvest materials so you can build under pressure.",
+      "Stay ahead of the storm and be the last player or last duo alive to win the match.",
     ],
     tags: ["battle-royale", "third-person", "building"],
     difficulties: ["normal"],
@@ -302,12 +303,12 @@ export const gameRegistry: GameDefinition[] = [
       {
         id: "solo",
         label: "Solo",
-        description: "Fast every-player-for-themselves Harbor Run."
+        description: "Classic every-player-for-themselves FortLite."
       },
       {
         id: "duos",
         label: "Duos",
-        description: "Use a party code in the game lobby to link a teammate."
+        description: "28 teams of two with double floor-loot spawns."
       }
     ],
     defaultMode: "solo",

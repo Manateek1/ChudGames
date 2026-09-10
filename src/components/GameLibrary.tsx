@@ -27,8 +27,7 @@ export const GameLibrary = ({
   onOpen,
   reducedMotion,
 }: GameLibraryProps): React.JSX.Element => {
-  const featuredGame = games.find((game) => game.id === "apex-run");
-  const fortLite = games.find((game) => game.id === "fortlite");
+  const featuredGames = games.filter((game) => game.id === "apex-run" || game.id === "fortlite");
   const miniGames = games.filter((game) => game.id !== "apex-run" && game.id !== "fortlite");
 
   return (
@@ -66,55 +65,31 @@ export const GameLibrary = ({
         </div>
       </div>
 
-      {featuredGame && (
-        <article className="group overflow-hidden rounded-[2rem] border border-sky-200/30 bg-[linear-gradient(140deg,rgba(8,20,38,0.96),rgba(18,39,66,0.92))] p-4 shadow-[0_36px_90px_-42px_rgba(7,18,34,0.96)]">
+      {featuredGames.map((game) => (
+        <article key={game.id} className="group overflow-hidden rounded-[2rem] border border-sky-200/30 bg-[linear-gradient(140deg,rgba(8,20,38,0.96),rgba(18,39,66,0.92))] p-4 shadow-[0_36px_90px_-42px_rgba(7,18,34,0.96)]">
           <div className="grid gap-5 lg:grid-cols-[1.15fr,0.85fr]">
             <div className="relative">
-              <GameThumbnail renderer={featuredGame.thumbnail} reducedMotion={reducedMotion} />
+              <GameThumbnail renderer={game.thumbnail} reducedMotion={reducedMotion} />
             </div>
             <div className="flex flex-col justify-between gap-4 rounded-[1.6rem] border border-sky-100/12 bg-[rgba(255,255,255,0.05)] p-5 text-slate-50">
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-display text-4xl text-white">{featuredGame.title}</h3>
+                  <h3 className="font-display text-4xl text-white">{game.title}</h3>
                 </div>
-                <p className="text-base text-sky-50/82">{featuredGame.description}</p>
+                <p className="text-base text-sky-50/82">{game.description}</p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <button type="button" onClick={() => onOpen(featuredGame.id)} className="arcade-btn-primary">
-                  Play Apex Run
+                <button type="button" onClick={() => onOpen(game.id)} className="arcade-btn-primary">
+                  Play {game.title}
                 </button>
                 <span className="self-center text-sm text-sky-100/70">
-                  Mountain time attack. More games below.
+                  {game.id === "apex-run" ? "Mountain time attack." : "Third-person battle royale."}
                 </span>
               </div>
             </div>
           </div>
         </article>
-      )}
-
-      {fortLite && (
-        <article className="group overflow-hidden rounded-[2rem] border border-sky-200/30 bg-[linear-gradient(140deg,rgba(8,20,38,0.96),rgba(18,39,66,0.92))] p-4 shadow-[0_36px_90px_-42px_rgba(7,18,34,0.96)]">
-          <div className="grid gap-5 lg:grid-cols-[0.9fr,1.1fr]">
-            <div className="relative">
-              <GameThumbnail renderer={fortLite.thumbnail} reducedMotion={reducedMotion} />
-            </div>
-            <div className="flex flex-col justify-between gap-4 rounded-[1.6rem] border border-sky-100/12 bg-[rgba(255,255,255,0.05)] p-5 text-slate-50">
-              <div className="space-y-3">
-                <h3 className="font-display text-4xl text-white">{fortLite.title}</h3>
-                <p className="text-base text-sky-50/82">{fortLite.description}</p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <button type="button" onClick={() => onOpen(fortLite.id)} className="arcade-btn-primary">
-                  Play Harbor Run
-                </button>
-                <span className="self-center text-sm text-sky-100/70">
-                  Solo runs and browser party codes.
-                </span>
-              </div>
-            </div>
-          </div>
-        </article>
-      )}
+      ))}
 
       <div className="flex items-center justify-between gap-3">
         <div>
