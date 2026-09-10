@@ -6,7 +6,7 @@ export type BuildPieceType = 'wall' | 'floor' | 'ramp';
 export type ActorKind = 'player' | 'bot';
 export type LootKind = 'weapon' | 'ammo' | 'material' | 'medkit';
 export type EquipmentMode = 'harvest' | 'weapon';
-export type BotState = 'roam' | 'seekLoot' | 'seekSafeZone' | 'engage' | 'harvest';
+export type BotState = 'roam' | 'seekLoot' | 'seekSafeZone' | 'engage' | 'harvest' | 'retreat' | 'heal';
 
 export interface WeaponDefinition {
   id: string;
@@ -21,6 +21,11 @@ export interface WeaponDefinition {
   pellets: number;
   reservePickup: number;
   color: number;
+  falloffStart?: number;
+  falloffEnd?: number;
+  minDamageMultiplier?: number;
+  bloomPerShot?: number;
+  maxBloom?: number;
 }
 
 export interface WeaponInstance {

@@ -3,7 +3,6 @@ import type { MaterialType, StormPhase, WeaponDefinition } from './types';
 export const BASE_MAP_RADIUS = 180;
 export const MAP_SCALE = 2.2;
 export const STORM_SPEED_MULTIPLIER = 4;
-const RELOAD_TIME_MULTIPLIER = 2.5;
 export const MAP_RADIUS = BASE_MAP_RADIUS * MAP_SCALE;
 export const PLAYER_EYE_HEIGHT = 1.7;
 export const ACTOR_RADIUS = 1;
@@ -15,6 +14,10 @@ export const RESOURCE_RESPAWN_COUNT = 30 * MAP_SCALE;
 export const PATHFINDING_GRID_SIZE = 96;
 export const PATHFINDING_CELL_SIZE = 12;
 export const FIXED_TIMESTEP = 1 / 30;
+export const SKYDIVE_ALTITUDE = 92;
+export const GLIDER_DEPLOY_ALTITUDE = 38;
+export const SKYDIVE_FALL_SPEED = 24;
+export const GLIDER_FALL_SPEED = 9;
 const SHRINK_DURATION_SCALE = MAP_SCALE / STORM_SPEED_MULTIPLIER;
 const PAUSE_DURATION_SCALE = MAP_SCALE / STORM_SPEED_MULTIPLIER;
 
@@ -23,43 +26,58 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     id: 'ranger-rifle',
     name: 'Rifle',
     ammoType: 'light',
-    damage: 13,
-    range: 86,
-    fireInterval: 0.2,
+    damage: 24,
+    range: 92,
+    fireInterval: 0.18,
     magSize: 24,
-    reloadDuration: 1.4 * RELOAD_TIME_MULTIPLIER,
-    spread: 0.009,
+    reloadDuration: 2.2,
+    spread: 0.007,
     pellets: 1,
     reservePickup: 36,
-    color: 0xe3b341
+    color: 0xe3b341,
+    falloffStart: 45,
+    falloffEnd: 92,
+    minDamageMultiplier: 0.65,
+    bloomPerShot: 0.0035,
+    maxBloom: 0.022
   },
   {
     id: 'auto-shotgun',
     name: 'Shotgun',
     ammoType: 'shells',
-    damage: 11,
-    range: 24,
-    fireInterval: 0.76,
-    magSize: 8,
-    reloadDuration: 1.7 * RELOAD_TIME_MULTIPLIER,
-    spread: 0.068,
-    pellets: 5,
+    damage: 10,
+    range: 26,
+    fireInterval: 0.72,
+    magSize: 6,
+    reloadDuration: 2.6,
+    spread: 0.054,
+    pellets: 8,
     reservePickup: 14,
-    color: 0xe14b52
+    color: 0xe14b52,
+    falloffStart: 9,
+    falloffEnd: 26,
+    minDamageMultiplier: 0.35,
+    bloomPerShot: 0.01,
+    maxBloom: 0.03
   },
   {
     id: 'tactical-smg',
     name: 'SMG',
     ammoType: 'light',
-    damage: 20,
-    range: 54,
-    fireInterval: 0.08,
-    magSize: 30,
-    reloadDuration: 1.65 * RELOAD_TIME_MULTIPLIER,
-    spread: 0.015,
+    damage: 15,
+    range: 48,
+    fireInterval: 0.076,
+    magSize: 32,
+    reloadDuration: 1.9,
+    spread: 0.016,
     pellets: 1,
-    reservePickup: 40,
-    color: 0x3d8dff
+    reservePickup: 48,
+    color: 0x3d8dff,
+    falloffStart: 18,
+    falloffEnd: 48,
+    minDamageMultiplier: 0.5,
+    bloomPerShot: 0.003,
+    maxBloom: 0.04
   }
 ];
 

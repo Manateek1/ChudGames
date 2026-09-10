@@ -27,6 +27,7 @@ import { GridPathfinder } from './pathfinding';
 import { getRequestedBuildPiece, getRequestedWeaponSlot } from './controls';
 import type {
   ActorKind,
+  BotState,
   BuildPiece,
   BuildPieceType,
   InventoryState,
@@ -38,6 +39,50 @@ import type {
   WeaponInstance
 } from './types';
 import { FortLiteHud } from './ui';
+import {
+  calculateDamageWithFalloff,
+  WeaponBloomTracker,
+  CombatTelemetryTracker
+} from './combat';
+import {
+  type BotSkillProfile,
+  generateBotSkillProfile,
+  canPerceiveTarget,
+  shouldBotRetreat,
+  calculateDefensiveWallPlacement
+} from './bots';
+import { IslandTerrain } from './terrain';
+import { MaterialPalette, createSkyDome, createAtmosphericFog, createIslandLighting } from './atmosphere';
+import {
+  createHarborDistrict,
+  createHillSettlement,
+  createLighthouseOverlook,
+  createSmallOutpost,
+  type LocationResult
+} from './locations';
+import {
+  type LandingDustEffect,
+  createLandingDust,
+  updateLandingDust,
+  disposeLandingDust,
+  type BuildPlaceAnimation,
+  createBuildPlaceAnimation,
+  updateBuildPlaceAnimation
+} from './effects';
+import type { FortLiteNetworkClient } from './multiplayer/client';
+import { LocalPlayerPredictor } from './multiplayer/prediction';
+import { SnapshotInterpolator, type InterpolatedActor } from './multiplayer/interpolation';
+import type {
+  WorldSnapshotMessage,
+  ShotBroadcastMessage,
+  DamageEventMessage,
+  EliminationEventMessage,
+  BuildEventMessage,
+  LootEventMessage,
+  MatchEndedMessage,
+  BuildSnapshot,
+  LootSnapshot
+} from './multiplayer/protocol';
 
 type MatchState = 'boot' | 'inProgress' | 'ended';
 type StormMode = 'pause' | 'shrink' | 'done';
@@ -47,6 +92,7 @@ type SpawnState = 'parachuting' | 'grounded';
 
 interface Actor {
   id: string;
+  name?: string;
   kind: ActorKind;
   teamId: number;
   group: THREE.Group;
@@ -91,10 +137,13 @@ interface Actor {
 }
 
 interface BotBrain {
-  state: 'roam' | 'seekLoot' | 'seekSafeZone' | 'engage' | 'harvest';
+  state: BotState;
+  profile: BotSkillProfile;
   targetLootId?: string;
   targetNodeId?: string;
   targetActorId?: string;
+  lastSeenTargetPosition?: THREE.Vector3;
+  targetMemoryTimer: number;
   destination: THREE.Vector3;
   path: THREE.Vector3[];
   pathIndex: number;
@@ -105,6 +154,10 @@ interface BotBrain {
   strafeTimer: number;
   buildCooldown: number;
   harvestTimer: number;
+  burstShotsRemaining: number;
+  burstCooldownTimer: number;
+  healTimer: number;
+  retreatTimer: number;
 }
 
 interface StormRuntime {
@@ -230,7 +283,7 @@ export interface FortLiteMatchResult {
   survivalTime: number;
 }
 
-interface FortLiteGameOptions {
+export interface FortLiteGameOptions {
   audio?: AudioManager;
   graphicsQuality?: GraphicsQuality;
   mode?: FortLiteMode;
@@ -239,12 +292,22 @@ interface FortLiteGameOptions {
   onPlacementChange?: (placement: number) => void;
   onMatchEnd?: (result: FortLiteMatchResult) => void;
   showEndScreen?: boolean;
+  networkClient?: FortLiteNetworkClient;
+  localPlayerName?: string;
+  matchSeed?: number;
+  dropStartPositions?: Record<string, [number, number, number]>;
+  onPauseToggle?: () => void;
 }
 
 export class FortLiteGame {
   private readonly root: HTMLDivElement;
   private readonly options: FortLiteGameOptions;
   private readonly matchMode: FortLiteMode;
+  private networkClient?: FortLiteNetworkClient;
+  private readonly interpolator = new SnapshotInterpolator(100);
+  private readonly predictor = new LocalPlayerPredictor();
+  private spectatingTargetId: string | null = null;
+  private inputSeq = 0;
   private readonly shell: HTMLDivElement;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene: THREE.Scene;
@@ -273,6 +336,8 @@ export class FortLiteGame {
   private matchTime = 0;
   private graphicsQuality: GraphicsQuality;
   private maxShotEffects = 72;
+  private playerFootstepTimer = 0;
+  private enemyFootstepTimer = 0;
 
   private matchRoot = new THREE.Group();
   private environmentGroup = new THREE.Group();
@@ -303,12 +368,22 @@ export class FortLiteGame {
   private participantSpawns: THREE.Vector3[] = [];
   private raycastTargets: THREE.Object3D[] = [];
   private cameraObstacles: THREE.Object3D[] = [];
+  private islandTerrain: IslandTerrain | null = null;
+  private materialPalette = new MaterialPalette();
+  private skyDome: THREE.Mesh | null = null;
+  private landingDustEffects: LandingDustEffect[] = [];
+  private buildAnimations: BuildPlaceAnimation[] = [];
 
   private previewMesh: THREE.Mesh | null = null;
   private selectedBuildPiece: BuildPieceType = 'wall';
   private buildRotation = 0;
   private buildMode = false;
   private buildPlacementValid = false;
+
+  private playerBloom = new WeaponBloomTracker();
+  private telemetry = new CombatTelemetryTracker();
+  private bufferedWeaponSlot: number | null = null;
+  private bufferedSlotTimer = 0;
 
   private cameraYaw = Math.PI;
   private cameraPitch = 0.06;
@@ -355,11 +430,21 @@ export class FortLiteGame {
       return;
     }
 
-    if (event.code === 'Tab') {
+    if (event.code === 'Tab' || event.code === 'KeyH') {
       event.preventDefault();
       if (!event.repeat) {
         this.helpVisible = !this.helpVisible;
+        this.hud.toggleHelp(this.helpVisible);
+        if (!this.helpVisible && typeof window !== 'undefined') {
+          window.localStorage.setItem('fortlite_guide_dismissed', 'true');
+        }
       }
+      return;
+    }
+
+    if (event.code === 'Escape') {
+      event.preventDefault();
+      this.options.onPauseToggle?.();
       return;
     }
 
@@ -464,14 +549,17 @@ export class FortLiteGame {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.04;
+    this.renderer.shadowMap.enabled = this.graphicsQuality !== 'low';
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.currentPixelRatio = this.getPixelRatioForQuality(this.graphicsQuality);
     this.applyRendererResolution();
     this.renderer.domElement.className = 'fortlite-canvas';
     this.shell.append(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xaed7ff);
-    this.scene.fog = new THREE.Fog(0xaed7ff, MAP_RADIUS * 0.68 * RENDER_DISTANCE_MULTIPLIER, MAP_RADIUS * 1.95 * RENDER_DISTANCE_MULTIPLIER);
+    this.skyDome = createSkyDome(MAP_RADIUS * 2.1);
+    this.scene.add(this.skyDome);
+    this.scene.fog = createAtmosphericFog(MAP_RADIUS);
 
     this.camera = new THREE.PerspectiveCamera(DEFAULT_CAMERA_FOV, Math.max(1, this.root.clientWidth / Math.max(1, this.root.clientHeight)), 0.05, MAP_RADIUS * 2.2 * RENDER_DISTANCE_MULTIPLIER);
     this.camera.rotation.order = 'YXZ';
@@ -484,10 +572,54 @@ export class FortLiteGame {
 
     this.hud = new FortLiteHud(this.shell, HELP_TEXT);
     this.hud.setRestartHandler(() => this.resetMatch());
+    this.hud.setSpectateHandler(() => {
+      this.hud.hideEndScreen();
+      this.startSpectating();
+    });
+    this.hud.setPauseHandlers({
+      onResume: () => this.options.onPauseToggle?.(),
+      onRestart: () => {
+        this.options.onPauseToggle?.();
+        this.resetMatch();
+      },
+      onToggleSound: () => {
+        if (this.options.audio) {
+          this.options.audio.setEnabled(!this.options.audio.enabled);
+          this.hud.showPause(this.isPaused(), this.options.audio.enabled, this.graphicsQuality);
+        }
+      },
+      onCycleQuality: () => {
+        const nextQ: GraphicsQuality =
+          this.graphicsQuality === 'low' ? 'medium' : this.graphicsQuality === 'medium' ? 'high' : 'low';
+        this.setGraphicsQuality(nextQ);
+        this.hud.showPause(this.isPaused(), this.options.audio?.enabled ?? true, this.graphicsQuality);
+      },
+      onLeave: () => {
+        this.reportMatchResult(false);
+      }
+    });
+    this.hud.setHelpToggleHandler((visible) => {
+      this.helpVisible = visible;
+      if (!visible && typeof window !== 'undefined') {
+        window.localStorage.setItem('fortlite_guide_dismissed', 'true');
+      }
+    });
+
+    // First-match check: show controls guide if not previously dismissed
+    if (typeof window !== 'undefined' && window.localStorage.getItem('fortlite_guide_dismissed') !== 'true') {
+      this.helpVisible = true;
+      this.hud.toggleHelp(true);
+    }
+
     this.applyGraphicsQuality(this.graphicsQuality);
 
     this.installLighting();
     this.installEvents();
+
+    this.networkClient = options.networkClient;
+    if (this.networkClient) {
+      this.bindNetworkEvents();
+    }
   }
 
   start(): void {
@@ -506,6 +638,7 @@ export class FortLiteGame {
 
     this.externallyPaused = paused;
     this.lastFrameTime = performance.now();
+    this.hud.showPause(paused, this.options.audio?.enabled ?? true, this.graphicsQuality);
 
     if (paused) {
       this.options.onFpsChange?.(0);
@@ -520,12 +653,19 @@ export class FortLiteGame {
     }
   }
 
+  isPaused(): boolean {
+    return this.externallyPaused;
+  }
+
   dispose(): void {
     if (this.disposed) {
       return;
     }
 
     this.disposed = true;
+    if (this.networkClient) {
+      this.networkClient.setCallbacks({});
+    }
     window.cancelAnimationFrame(this.animationFrame);
     this.removeEvents();
     this.releasePointerLock();
@@ -542,7 +682,14 @@ export class FortLiteGame {
     }
 
     this.clearMatchRoot();
+    if (this.skyDome) {
+      this.skyDome.geometry.dispose();
+      (this.skyDome.material as THREE.Material).dispose();
+      this.skyDome = null;
+    }
+    this.materialPalette.dispose();
     this.renderer.dispose();
+    this.hud.dispose();
     this.root.innerHTML = '';
     this.keysDown.clear();
     this.justPressedKeys.clear();
@@ -597,16 +744,7 @@ export class FortLiteGame {
   };
 
   private installLighting(): void {
-    const hemi = new THREE.HemisphereLight(0xf8f6e9, 0x31402a, 1.5);
-    this.scene.add(hemi);
-
-    const sun = new THREE.DirectionalLight(0xffefc8, 1.32);
-    sun.position.set(-34, 44, 20);
-    this.scene.add(sun);
-
-    const fill = new THREE.DirectionalLight(0x9fdcff, 0.42);
-    fill.position.set(26, 18, -16);
-    this.scene.add(fill);
+    createIslandLighting(this.scene, this.graphicsQuality);
   }
 
   private installEvents(): void {
@@ -635,6 +773,12 @@ export class FortLiteGame {
     this.renderer.domElement.removeEventListener('contextmenu', this.handleContextMenu);
   }
 
+  requestPointerLock(): void {
+    if (!this.externallyPaused && !this.isPointerLocked() && this.state === 'inProgress') {
+      void this.renderer.domElement.requestPointerLock().catch(() => this.handlePointerLockChange());
+    }
+  }
+
   private releasePointerLock(): void {
     if (document.pointerLockElement === this.renderer.domElement) {
       document.exitPointerLock();
@@ -646,8 +790,11 @@ export class FortLiteGame {
     this.handleInputReset();
 
     this.matchIndex += 1;
-    this.rng = new SeededRandom((this.options.seedBase ?? 1337) + (this.matchIndex - 1) * 4099);
+    const seed = this.options.matchSeed ?? ((this.options.seedBase ?? 1337) + (this.matchIndex - 1) * 4099);
+    this.rng = new SeededRandom(seed);
     this.matchTime = 0;
+    this.spectatingTargetId = null;
+    this.inputSeq = 0;
     this.state = 'inProgress';
     this.accumulator = 0;
     this.timedMessage = null;
@@ -670,6 +817,8 @@ export class FortLiteGame {
     this.lastFirstPersonView = false;
     this.lastHudRenderTime = 0;
     this.simulationTick = 0;
+    this.playerFootstepTimer = 0;
+    this.enemyFootstepTimer = 0;
 
     this.clearMatchRoot();
 
@@ -719,6 +868,17 @@ export class FortLiteGame {
       this.previewMesh = null;
     }
 
+    if (this.islandTerrain) {
+      this.islandTerrain.dispose();
+      this.islandTerrain = null;
+    }
+
+    for (const dust of this.landingDustEffects) {
+      disposeLandingDust(dust);
+    }
+    this.landingDustEffects = [];
+    this.buildAnimations = [];
+
     if (this.matchRoot.parent) {
       this.scene.remove(this.matchRoot);
     }
@@ -741,297 +901,88 @@ export class FortLiteGame {
     object.clear();
   }
 
+  private integrateLocationResult(loc: LocationResult): void {
+    for (const mesh of loc.meshes) {
+      this.environmentGroup.add(mesh);
+    }
+    for (const obstacle of loc.obstacles) {
+      this.staticObstacles.push(obstacle);
+    }
+    for (const lootPoint of loc.lootSpawnPoints) {
+      this.lootSpawnPoints.push(lootPoint);
+    }
+    for (const surface of loc.walkableSurfaces) {
+      this.walkableSurfaces.push(surface);
+    }
+    for (const target of loc.raycastTargets) {
+      this.raycastTargets.push(target);
+    }
+    for (const cameraObs of loc.cameraObstacles) {
+      this.cameraObstacles.push(cameraObs);
+    }
+  }
+
   private buildWorld(): void {
-    const perimeterWallCount = this.getAdjustedCount(44 * MAP_SCALE, 54);
-    const randomObstacleCount = this.getAdjustedCoverCount(18 * MAP_SCALE, 18);
-    const groundSegments = this.graphicsQuality === 'low' ? 32 : this.graphicsQuality === 'medium' ? 44 : 60;
+    if (this.islandTerrain) {
+      this.islandTerrain.dispose();
+      this.islandTerrain = null;
+    }
+    this.islandTerrain = new IslandTerrain(this.rng, MAP_RADIUS, this.graphicsQuality);
+    this.islandTerrain.terrainMesh.userData = { kind: 'static' };
+    this.environmentGroup.add(this.islandTerrain.terrainMesh);
+    this.environmentGroup.add(this.islandTerrain.waterMesh);
+    this.environmentGroup.add(this.islandTerrain.treeTrunks);
+    this.environmentGroup.add(this.islandTerrain.treeCanopies);
+    this.raycastTargets.push(this.islandTerrain.terrainMesh);
+    this.cameraObstacles.push(this.islandTerrain.terrainMesh);
 
-    const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(MAP_RADIUS, groundSegments),
-      new THREE.MeshStandardMaterial({ color: 0x5c7650, roughness: 1 })
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.02;
-    this.environmentGroup.add(ground);
-    this.addGroundSector(MAP_RADIUS, 0xd0aa66, -0.018, 0.98, DESERT_BIOME_THETA_START, QUARTER_BIOME_THETA_LENGTH);
-    this.addGroundSector(MAP_RADIUS, 0x446f3b, -0.017, 0.98, FOREST_BIOME_THETA_START, QUARTER_BIOME_THETA_LENGTH);
-    this.addGroundSector(MAP_RADIUS, 0x657d4f, -0.016, 0.92, REGULAR_BIOME_THETA_START, REGULAR_BIOME_THETA_LENGTH);
-    this.addGroundSector(MAP_RADIUS * 0.82, 0xe0bd76, -0.012, 0.34, DESERT_BIOME_THETA_START, QUARTER_BIOME_THETA_LENGTH);
-    this.addGroundSector(MAP_RADIUS * 0.82, 0x335d32, -0.011, 0.3, FOREST_BIOME_THETA_START, QUARTER_BIOME_THETA_LENGTH);
-    this.addGroundSector(MAP_RADIUS * 0.72, 0x728757, -0.01, 0.24, REGULAR_BIOME_THETA_START, REGULAR_BIOME_THETA_LENGTH);
+    const heightSampler = (x: number, z: number) => this.sampleBaseTerrainHeight(x, z);
 
-    const terrainPatches = [
-      { position: new THREE.Vector3(-44, 0, -8), radiusX: 30, radiusZ: 18, color: 0x8b6a45, opacity: 0.68, rotation: 0.32 },
-      { position: new THREE.Vector3(36, 0, -42), radiusX: 22, radiusZ: 12, color: 0x806244, opacity: 0.7, rotation: -0.48 },
-      { position: new THREE.Vector3(46, 0, 34), radiusX: 26, radiusZ: 15, color: 0x6f8a4f, opacity: 0.48, rotation: 0.22 },
-      { position: new THREE.Vector3(-34, 0, 44), radiusX: 24, radiusZ: 13, color: 0x867350, opacity: 0.66, rotation: -0.2 },
-      { position: new THREE.Vector3(0, 0, 0), radiusX: 18, radiusZ: 18, color: 0x7b5b3d, opacity: 0.55, rotation: 0 },
-      { position: new THREE.Vector3(-122, 0, -72), radiusX: 44, radiusZ: 26, color: 0x8a6c4f, opacity: 0.54, rotation: 0.18 },
-      { position: new THREE.Vector3(132, 0, -112), radiusX: 38, radiusZ: 22, color: 0x7d6d4e, opacity: 0.58, rotation: -0.34 },
-      { position: new THREE.Vector3(152, 0, 108), radiusX: 42, radiusZ: 24, color: 0x6b8750, opacity: 0.52, rotation: 0.26 },
-      { position: new THREE.Vector3(-136, 0, 126), radiusX: 40, radiusZ: 24, color: 0x8d7456, opacity: 0.56, rotation: -0.16 },
-      { position: new THREE.Vector3(0, 0, -154), radiusX: 54, radiusZ: 20, color: 0x5f7c47, opacity: 0.42, rotation: 0.08 },
-      { position: new THREE.Vector3(0, 0, 164), radiusX: 56, radiusZ: 24, color: 0x6e8a4b, opacity: 0.4, rotation: -0.12 },
-      { position: new THREE.Vector3(-284, 0, -228), radiusX: 74, radiusZ: 34, color: 0x856a4d, opacity: 0.48, rotation: 0.24 },
-      { position: new THREE.Vector3(292, 0, -248), radiusX: 70, radiusZ: 36, color: 0x736246, opacity: 0.5, rotation: -0.2 },
-      { position: new THREE.Vector3(336, 0, 234), radiusX: 78, radiusZ: 34, color: 0x6a8450, opacity: 0.44, rotation: 0.18 },
-      { position: new THREE.Vector3(-318, 0, 254), radiusX: 72, radiusZ: 38, color: 0x846d51, opacity: 0.48, rotation: -0.12 },
-      { position: new THREE.Vector3(0, 0, -352), radiusX: 88, radiusZ: 32, color: 0x6a7f49, opacity: 0.4, rotation: 0.06 },
-      { position: new THREE.Vector3(0, 0, 372), radiusX: 92, radiusZ: 38, color: 0x728a51, opacity: 0.38, rotation: -0.08 },
-      { position: new THREE.Vector3(-446, 0, 42), radiusX: 68, radiusZ: 30, color: 0x7c6a4e, opacity: 0.46, rotation: 0.3 },
-      { position: new THREE.Vector3(462, 0, -24), radiusX: 72, radiusZ: 28, color: 0x6f624a, opacity: 0.44, rotation: -0.18 },
-      { position: new THREE.Vector3(-232, 0, 424), radiusX: 66, radiusZ: 28, color: 0x807053, opacity: 0.42, rotation: 0.22 },
-      { position: new THREE.Vector3(246, 0, 438), radiusX: 70, radiusZ: 32, color: 0x738a54, opacity: 0.42, rotation: -0.16 }
+    // Anchor Location 1: Hill Settlement (North)
+    const settlementCenter = new THREE.Vector3(0, 0, -MAP_RADIUS * 0.5);
+    const settlement = createHillSettlement(settlementCenter, this.rng, heightSampler);
+    this.integrateLocationResult(settlement);
+
+    // Anchor Location 2: Lighthouse Overlook (West cliff)
+    const lighthouseCenter = new THREE.Vector3(-MAP_RADIUS * 0.6, 0, 0);
+    const lighthouse = createLighthouseOverlook(lighthouseCenter, this.rng, heightSampler);
+    this.integrateLocationResult(lighthouse);
+
+    // Anchor Location 3: Harbor District (Southeast coast)
+    const harborCenter = new THREE.Vector3(MAP_RADIUS * 0.5, 0, MAP_RADIUS * 0.5);
+    const harbor = createHarborDistrict(harborCenter, this.rng, heightSampler);
+    this.integrateLocationResult(harbor);
+
+    // Outposts between anchor locations
+    const outpostPositions = [
+      new THREE.Vector3(-MAP_RADIUS * 0.28, 0, -MAP_RADIUS * 0.25),
+      new THREE.Vector3(MAP_RADIUS * 0.22, 0, -MAP_RADIUS * 0.28),
+      new THREE.Vector3(-MAP_RADIUS * 0.35, 0, MAP_RADIUS * 0.28),
+      new THREE.Vector3(MAP_RADIUS * 0.12, 0, MAP_RADIUS * 0.25),
+      new THREE.Vector3(-MAP_RADIUS * 0.15, 0, MAP_RADIUS * 0.38),
+      new THREE.Vector3(MAP_RADIUS * 0.38, 0, -MAP_RADIUS * 0.1),
     ];
-
-    const terrainPatchStep = this.graphicsQuality === 'low' ? 5 : this.graphicsQuality === 'medium' ? 3 : 2;
-    for (let patchIndex = 0; patchIndex < terrainPatches.length; patchIndex += terrainPatchStep) {
-      const patch = terrainPatches[patchIndex];
-      this.addTerrainPatch(patch.position, patch.radiusX, patch.radiusZ, patch.color, patch.opacity, patch.rotation);
+    for (const outpostPos of outpostPositions) {
+      const outpost = createSmallOutpost(outpostPos, this.rng, heightSampler);
+      this.integrateLocationResult(outpost);
     }
 
-    this.scatterBiomeTerrainPatches('forest', this.getAdjustedCount(14, 8), [0x2f5d2f, 0x446f3b, 0x577b43, 0x5a6f34], MAP_RADIUS * 0.16, MAP_RADIUS * 0.92);
-    this.scatterBiomeTerrainPatches('desert', this.getAdjustedCount(14, 8), [0xc19a59, 0xd6b36c, 0xb88e4c, 0xe1c98d], MAP_RADIUS * 0.16, MAP_RADIUS * 0.92);
-    this.scatterBiomeTerrainPatches('regular', this.getAdjustedCount(20, 12), [0x6a7f49, 0x7c6a4e, 0x6f8451, 0x8a7453], MAP_RADIUS * 0.12, MAP_RADIUS * 0.94);
-    this.addCloudLayer();
-
-    this.addWaterZone(new THREE.Vector3(-252, 0, 142), 46, 28, 0.28);
-    this.addWaterZone(new THREE.Vector3(286, 0, 168), 40, 30, -0.42);
-    this.addWaterZone(new THREE.Vector3(12, 0, -284), 54, 34, 0.1);
-    this.addWaterZone(new THREE.Vector3(-374, 0, -78), 38, 26, -0.34);
-    this.addWaterZone(new THREE.Vector3(418, 0, -188), 46, 30, 0.46);
-    this.addWaterZone(new THREE.Vector3(-88, 0, 354), 44, 28, -0.18);
-
-    const innerRing = new THREE.LineLoop(
-      new THREE.BufferGeometry().setFromPoints(this.makeCirclePoints(MAP_RADIUS, this.graphicsQuality === 'low' ? 56 : this.graphicsQuality === 'medium' ? 72 : 90)),
-      new THREE.LineBasicMaterial({ color: 0xf8fcff, opacity: 0.14, transparent: true })
-    );
-    innerRing.rotation.x = -Math.PI / 2;
-    innerRing.position.y = 0.04;
-    this.environmentGroup.add(innerRing);
-
-    for (let i = 0; i < perimeterWallCount; i += 1) {
-      const angle = (i / perimeterWallCount) * Math.PI * 2;
-      const radius = MAP_RADIUS + this.rng.range(1.2, 3.8);
-      const position = new THREE.Vector3(Math.cos(angle) * radius, 1.4, Math.sin(angle) * radius);
-      const sizeX = this.rng.range(4, 9);
-      const sizeZ = this.rng.range(4, 9);
-      const height = this.rng.range(3.1, 7.2);
-      const wall = new THREE.Mesh(
-        new THREE.BoxGeometry(sizeX, height, sizeZ),
-        new THREE.MeshStandardMaterial({ color: 0x68727d, roughness: 1 })
-      );
-      wall.position.copy(position);
-      this.environmentGroup.add(wall);
-    }
-
+    // Roads connecting locations
     const roads = [
-      { start: new THREE.Vector3(-6, 0, 0), end: new THREE.Vector3(-42, 0, -32), width: 7, color: 0x7b6549 },
-      { start: new THREE.Vector3(4, 0, -4), end: new THREE.Vector3(32, 0, -26), width: 6, color: 0x746149 },
-      { start: new THREE.Vector3(5, 0, 5), end: new THREE.Vector3(42, 0, 40), width: 7, color: 0x6e5d45 },
-      { start: new THREE.Vector3(-4, 0, 6), end: new THREE.Vector3(-28, 0, 38), width: 6.5, color: 0x7b684d },
-      { start: new THREE.Vector3(-18, 0, -10), end: new THREE.Vector3(-126, 0, -92), width: 8, color: 0x735f46 },
-      { start: new THREE.Vector3(22, 0, -16), end: new THREE.Vector3(126, 0, -108), width: 7.5, color: 0x6d5b43 },
-      { start: new THREE.Vector3(26, 0, 20), end: new THREE.Vector3(142, 0, 114), width: 8, color: 0x685944 },
-      { start: new THREE.Vector3(-20, 0, 22), end: new THREE.Vector3(-132, 0, 128), width: 7.5, color: 0x74644c },
-      { start: new THREE.Vector3(-126, 0, -92), end: new THREE.Vector3(-278, 0, -214), width: 8.5, color: 0x735f46 },
-      { start: new THREE.Vector3(126, 0, -108), end: new THREE.Vector3(284, 0, -236), width: 8.5, color: 0x6d5b43 },
-      { start: new THREE.Vector3(142, 0, 114), end: new THREE.Vector3(336, 0, 218), width: 8.5, color: 0x685944 },
-      { start: new THREE.Vector3(-132, 0, 128), end: new THREE.Vector3(-324, 0, 248), width: 8.5, color: 0x74644c },
-      { start: new THREE.Vector3(0, 0, -154), end: new THREE.Vector3(0, 0, -338), width: 9, color: 0x705d42 },
-      { start: new THREE.Vector3(0, 0, 164), end: new THREE.Vector3(0, 0, 356), width: 9, color: 0x6d6047 },
-      { start: new THREE.Vector3(-136, 0, 128), end: new THREE.Vector3(-446, 0, 42), width: 8.2, color: 0x7a654a },
-      { start: new THREE.Vector3(146, 0, 116), end: new THREE.Vector3(458, 0, -18), width: 8.2, color: 0x715f47 },
-      { start: new THREE.Vector3(-136, 0, 128), end: new THREE.Vector3(-236, 0, 420), width: 8, color: 0x73644b },
-      { start: new THREE.Vector3(146, 0, 116), end: new THREE.Vector3(232, 0, 432), width: 8, color: 0x6c6148 }
+      { start: new THREE.Vector3(0, 0, 0), end: settlementCenter, width: 8, color: 0x7b6549 },
+      { start: new THREE.Vector3(0, 0, 0), end: lighthouseCenter, width: 8, color: 0x735f46 },
+      { start: new THREE.Vector3(0, 0, 0), end: harborCenter, width: 9, color: 0x6d5b43 },
+      { start: settlementCenter, end: new THREE.Vector3(-MAP_RADIUS * 0.28, 0, -MAP_RADIUS * 0.25), width: 7, color: 0x74644c },
+      { start: lighthouseCenter, end: new THREE.Vector3(-MAP_RADIUS * 0.35, 0, MAP_RADIUS * 0.28), width: 7, color: 0x705d42 },
+      { start: harborCenter, end: new THREE.Vector3(MAP_RADIUS * 0.12, 0, MAP_RADIUS * 0.25), width: 7, color: 0x6d6047 },
     ];
-
     for (const road of roads) {
       this.addRoad(road.start, road.end, road.width, road.color);
     }
 
     this.createCentralArena();
 
-    const compounds = [
-      {
-        center: new THREE.Vector3(-44, 0, -36),
-        color: 0x9a8062,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(12, 10), height: 6 },
-          { offset: new THREE.Vector3(14, 0, 6), size: new THREE.Vector2(7, 7), height: 4.5 },
-          { offset: new THREE.Vector3(-15, 0, 10), size: new THREE.Vector2(8, 4), height: 3.5 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(32, 0, -28),
-        color: 0x8e7454,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(14, 9), height: 5.6 },
-          { offset: new THREE.Vector3(-13, 0, -10), size: new THREE.Vector2(8, 8), height: 4.8 },
-          { offset: new THREE.Vector3(16, 0, -8), size: new THREE.Vector2(6, 12), height: 5.2 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(42, 0, 44),
-        color: 0x7c6d61,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(10, 14), height: 5.6 },
-          { offset: new THREE.Vector3(-12, 0, 10), size: new THREE.Vector2(9, 7), height: 4.4 },
-          { offset: new THREE.Vector3(14, 0, -12), size: new THREE.Vector2(7, 7), height: 4.4 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(-30, 0, 38),
-        color: 0x8b8b79,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(13, 9), height: 5.2 },
-          { offset: new THREE.Vector3(-15, 0, -8), size: new THREE.Vector2(7, 7), height: 4.2 },
-          { offset: new THREE.Vector3(12, 0, 11), size: new THREE.Vector2(8, 6), height: 3.6 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(-2, 0, 4),
-        color: 0x9f917d,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(12, 12), height: 5.4 },
-          { offset: new THREE.Vector3(14, 0, -10), size: new THREE.Vector2(6, 6), height: 4 },
-          { offset: new THREE.Vector3(-16, 0, 8), size: new THREE.Vector2(6, 10), height: 4 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(-122, 0, -96),
-        color: 0x8f7c61,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 10), height: 5.8 },
-          { offset: new THREE.Vector3(18, 0, 12), size: new THREE.Vector2(8, 8), height: 4.6 },
-          { offset: new THREE.Vector3(-18, 0, -10), size: new THREE.Vector2(9, 7), height: 4.2 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(126, 0, -112),
-        color: 0x7c7467,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(15, 11), height: 5.8 },
-          { offset: new THREE.Vector3(-16, 0, 10), size: new THREE.Vector2(8, 7), height: 4.4 },
-          { offset: new THREE.Vector3(18, 0, -8), size: new THREE.Vector2(7, 12), height: 5 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(146, 0, 116),
-        color: 0x8a7b66,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(14, 12), height: 5.6 },
-          { offset: new THREE.Vector3(-18, 0, -10), size: new THREE.Vector2(8, 6), height: 4.4 },
-          { offset: new THREE.Vector3(16, 0, 12), size: new THREE.Vector2(8, 8), height: 4.6 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(-136, 0, 128),
-        color: 0x7f8171,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 10), height: 5.4 },
-          { offset: new THREE.Vector3(16, 0, -12), size: new THREE.Vector2(7, 7), height: 4.2 },
-          { offset: new THREE.Vector3(-18, 0, 10), size: new THREE.Vector2(9, 8), height: 4.4 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(-278, 0, -214),
-        color: 0x8a7357,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(18, 11), height: 6 },
-          { offset: new THREE.Vector3(20, 0, 10), size: new THREE.Vector2(9, 8), height: 4.6 },
-          { offset: new THREE.Vector3(-18, 0, -12), size: new THREE.Vector2(10, 8), height: 4.4 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(284, 0, -236),
-        color: 0x7f7265,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(17, 12), height: 5.8 },
-          { offset: new THREE.Vector3(-18, 0, 10), size: new THREE.Vector2(8, 7), height: 4.5 },
-          { offset: new THREE.Vector3(20, 0, -10), size: new THREE.Vector2(8, 12), height: 5.1 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(336, 0, 218),
-        color: 0x8b7d67,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(18, 12), height: 5.9 },
-          { offset: new THREE.Vector3(-20, 0, -12), size: new THREE.Vector2(10, 8), height: 4.5 },
-          { offset: new THREE.Vector3(18, 0, 12), size: new THREE.Vector2(8, 8), height: 4.5 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(-324, 0, 248),
-        color: 0x808474,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(17, 10), height: 5.6 },
-          { offset: new THREE.Vector3(18, 0, -10), size: new THREE.Vector2(8, 8), height: 4.2 },
-          { offset: new THREE.Vector3(-20, 0, 12), size: new THREE.Vector2(10, 8), height: 4.4 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(0, 0, -338),
-        color: 0x8f7b5f,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 12), height: 5.8 },
-          { offset: new THREE.Vector3(18, 0, 12), size: new THREE.Vector2(8, 8), height: 4.5 },
-          { offset: new THREE.Vector3(-18, 0, -12), size: new THREE.Vector2(9, 9), height: 4.5 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(0, 0, 356),
-        color: 0x7f7e6c,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 11), height: 5.5 },
-          { offset: new THREE.Vector3(-18, 0, 10), size: new THREE.Vector2(8, 8), height: 4.4 },
-          { offset: new THREE.Vector3(18, 0, -10), size: new THREE.Vector2(8, 10), height: 4.7 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(-446, 0, 42),
-        color: 0x8b7760,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(17, 11), height: 5.7 },
-          { offset: new THREE.Vector3(20, 0, 10), size: new THREE.Vector2(9, 8), height: 4.6 },
-          { offset: new THREE.Vector3(-18, 0, -10), size: new THREE.Vector2(8, 10), height: 4.8 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(458, 0, -18),
-        color: 0x7c7265,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(18, 10), height: 5.6 },
-          { offset: new THREE.Vector3(-18, 0, 10), size: new THREE.Vector2(8, 8), height: 4.2 },
-          { offset: new THREE.Vector3(18, 0, -12), size: new THREE.Vector2(9, 9), height: 4.5 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(-236, 0, 420),
-        color: 0x867a64,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(16, 11), height: 5.6 },
-          { offset: new THREE.Vector3(18, 0, -10), size: new THREE.Vector2(8, 8), height: 4.3 },
-          { offset: new THREE.Vector3(-18, 0, 12), size: new THREE.Vector2(10, 8), height: 4.5 }
-        ]
-      },
-      {
-        center: new THREE.Vector3(232, 0, 432),
-        color: 0x7f866d,
-        boxes: [
-          { offset: new THREE.Vector3(0, 0, 0), size: new THREE.Vector2(17, 12), height: 5.8 },
-          { offset: new THREE.Vector3(-20, 0, -10), size: new THREE.Vector2(8, 8), height: 4.4 },
-          { offset: new THREE.Vector3(18, 0, 12), size: new THREE.Vector2(9, 8), height: 4.6 }
-        ]
-      }
-    ];
-
-    const compoundStride = this.graphicsQuality === 'low' ? 2 : 1;
-    for (let compoundIndex = 0; compoundIndex < compounds.length; compoundIndex += compoundStride) {
-      const compound = compounds[compoundIndex];
-      this.createCompound(compound.center, compound.color, compound.boxes);
-    }
-
+    // Natural rock clusters for cover
     this.createRockCluster(new THREE.Vector3(-356, 0, -146), 6, 24);
     this.createRockCluster(new THREE.Vector3(382, 0, -126), 5, 20);
     this.createRockCluster(new THREE.Vector3(-398, 0, 102), 5, 22);
@@ -1040,47 +991,15 @@ export class FortLiteGame {
     this.createRockCluster(new THREE.Vector3(104, 0, -412), 6, 22);
     this.createRockCluster(new THREE.Vector3(-82, 0, -468), 7, 28);
     this.createRockCluster(new THREE.Vector3(468, 0, 114), 5, 18);
-    this.createTallStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.32, MAP_RADIUS * 0.78, 36), 0x52684e, 0xa5c995, 13.5);
-    this.createTallStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.38, MAP_RADIUS * 0.88, 36), 0x4d5b46, 0x87b57a, 15.2);
-    this.createTallStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.32, MAP_RADIUS * 0.78, 36), 0x9d7c4e, 0xe2c483, 13.2);
-    this.createTallStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.4, MAP_RADIUS * 0.88, 36), 0x8d6f46, 0xf0d296, 15);
-    this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.28, MAP_RADIUS * 0.7, 36), 0x6e706e, 0xc6d5cf, 14.2);
-    this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.34, MAP_RADIUS * 0.82, 36), 0x767566, 0xf1e2b6, 15.8);
-    this.createTallStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.42, MAP_RADIUS * 0.9, 36), 0x657168, 0xb6d7e5, 17.2);
-    const megaStructureFloors = this.getAdjustedFloorCount(5);
-    const standardMegaFloors = this.getAdjustedFloorCount(4);
-    const regularDistrictDensity = this.getAdjustedDistrictDensity(4);
-    const biomeDistrictDensity = this.getAdjustedDistrictDensity(3);
-    this.createMegaStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.44, MAP_RADIUS * 0.94, 52), 0x445d48, 0x9fd08f, megaStructureFloors);
-    this.createMegaStructure(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.5, MAP_RADIUS * 0.96, 52), 0x365148, 0x85bf79, standardMegaFloors);
-    this.createMegaStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.44, MAP_RADIUS * 0.94, 52), 0x8f7049, 0xe3c17f, megaStructureFloors);
-    this.createMegaStructure(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.5, MAP_RADIUS * 0.96, 52), 0x7f6642, 0xf0d69a, standardMegaFloors);
-    this.createMegaStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.4, MAP_RADIUS * 0.9, 52), 0x63686b, 0xc8d9e4, megaStructureFloors);
-    this.createMegaStructure(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.48, MAP_RADIUS * 0.96, 52), 0x5d6661, 0xf0ddb0, standardMegaFloors);
-    this.createCityDistrict(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.18, MAP_RADIUS * 0.46, 78), 0x5d6769, 0xcde1ea, regularDistrictDensity);
-    this.createCityDistrict(this.findBiomeFreePoint('regular', MAP_RADIUS * 0.34, MAP_RADIUS * 0.68, 78), 0x6a6c61, 0xf0ddb0, regularDistrictDensity);
-    this.createCityDistrict(this.findBiomeFreePoint('desert', MAP_RADIUS * 0.26, MAP_RADIUS * 0.62, 74), 0x8d7048, 0xe9c889, biomeDistrictDensity);
-    this.createCityDistrict(this.findBiomeFreePoint('forest', MAP_RADIUS * 0.24, MAP_RADIUS * 0.58, 74), 0x435b48, 0xaad59c, biomeDistrictDensity);
-    this.scatterScatteredBuildings('regular', this.getAdjustedCoverCount(7, 4), MAP_RADIUS * 0.2, MAP_RADIUS * 0.96, [0x5f6968, 0x6c6e62, 0x6a716b], [0xc8dce8, 0xf3deaf, 0xc9d9c9]);
-    this.scatterScatteredBuildings('forest', this.getAdjustedCoverCount(5, 3), MAP_RADIUS * 0.2, MAP_RADIUS * 0.94, [0x4a5e49, 0x55664d, 0x405847], [0x98cb8c, 0xcfe8c7, 0x84bc7e]);
-    this.scatterScatteredBuildings('desert', this.getAdjustedCoverCount(5, 3), MAP_RADIUS * 0.22, MAP_RADIUS * 0.94, [0x8b6f49, 0x9c7d54, 0x7f6844], [0xe8c57d, 0xf3dfb2, 0xd6b37a]);
-    this.populateTerrainRelief();
-    this.populateForestBiomeCover();
-    this.populateRegularBiomeCover();
 
+    // Scattered cover obstacles
+    const randomObstacleCount = this.getAdjustedCoverCount(18 * MAP_SCALE, 18);
     for (let i = 0; i < randomObstacleCount; i += 1) {
-      const point = this.findFreePoint(MAP_RADIUS - 18, 6);
+      const point = this.findFreePoint(MAP_RADIUS - 28, 6);
       const size = new THREE.Vector2(this.rng.range(2.4, 5.8), this.rng.range(2.4, 5.8));
       const height = this.rng.range(1.8, 3.8);
-      const biome = this.getBiomeAtPosition(point);
-      const palette =
-        biome === 'forest'
-          ? [0x4d6949, 0x61775d, 0x5b6844]
-          : biome === 'desert'
-            ? [0x9e865c, 0xa49169, 0x8c7551]
-            : [0x73837f, 0x7d7869, 0x587169];
       if (this.rng.next() > 0.45) {
-        this.addStaticObstacle(point, size, height, this.rng.pick(palette), false);
+        this.addStaticObstacle(point, size, height, 0x6f7a80, false);
       } else {
         this.addRockObstacle(point, size, height);
       }
@@ -2282,17 +2201,38 @@ export class FortLiteGame {
     const botCount = this.getBotCount();
     this.participantSpawns = this.generateParticipantSpawns(participantCount, this.getTeamSize());
 
+    const localId = this.networkClient?.playerId || 'player-local';
+    let localSpawn = this.participantSpawns[0];
+    let localDropStart = this.makeSkyDropStart(this.participantSpawns[0], true);
+
+    if (this.networkClient && this.options.dropStartPositions && this.options.dropStartPositions[localId]) {
+      const pos = this.options.dropStartPositions[localId];
+      localDropStart = new THREE.Vector3(pos[0], pos[1], pos[2]);
+      localSpawn = new THREE.Vector3(pos[0], 0, pos[2]);
+    }
+
     this.player = this.createActor(
       'player',
-      this.participantSpawns[0],
+      localSpawn,
       0x2dd4bf,
       0x4fd1ff,
       0,
-      this.makeSkyDropStart(this.participantSpawns[0], true)
+      localDropStart
     );
+    this.player.id = localId;
+    this.player.name = this.options.localPlayerName || 'Player';
     this.player.yaw = this.cameraYaw;
     this.player.dropTarget.set(this.player.dropStart.x, 0, this.player.dropStart.z);
     this.actors.push(this.player);
+
+    if (this.networkClient) {
+      this.refreshActorPresentations();
+      this.cameraYaw = Math.PI;
+      this.cameraPitch = -0.16;
+      this.cameraRigInitialized = false;
+      this.lastFirstPersonView = false;
+      return;
+    }
 
     for (let i = 0; i < botCount; i += 1) {
       const spawn = this.participantSpawns[i + 1];
@@ -2304,18 +2244,25 @@ export class FortLiteGame {
         this.getTeamIdForParticipant(i + 1),
         this.makeSkyDropStart(spawn, false)
       );
+      const profile = generateBotSkillProfile(this.rng);
       bot.ai = {
         state: 'roam',
+        profile,
         destination: spawn.clone(),
         path: [],
         pathIndex: 0,
-        decisionTimer: this.getBotDecisionInterval(),
+        decisionTimer: profile.reactionTime,
         repathTimer: 0,
         senseTimer: this.getBotSenseInterval(false),
         strafeDirection: this.rng.next() > 0.5 ? 1 : -1,
         strafeTimer: this.rng.range(1.2, 2.1),
         buildCooldown: this.rng.range(1.4, 3.4),
-        harvestTimer: this.rng.range(0.45, 1.1)
+        harvestTimer: this.rng.range(0.45, 1.1),
+        targetMemoryTimer: 0,
+        burstShotsRemaining: 0,
+        burstCooldownTimer: 0,
+        healTimer: 0,
+        retreatTimer: 0
       };
       this.giveBotStarterLoadout(bot);
       this.actors.push(bot);
@@ -2922,45 +2869,69 @@ export class FortLiteGame {
     this.muzzleFlashTime = Math.max(0, this.muzzleFlashTime - dt * 7.5);
     this.viewModelSway.multiplyScalar(Math.max(0, 1 - dt * 7.5));
     this.playerDamageSoundCooldown = Math.max(0, this.playerDamageSoundCooldown - dt);
-    this.updateStorm(dt);
+    this.playerBloom.update(dt);
+    if (this.bufferedWeaponSlot !== null) {
+      this.bufferedSlotTimer -= dt;
+      if (this.player.alive && this.player.fireCooldown <= 0 && this.player.reloadTimer <= 0) {
+        this.selectWeaponSlot(this.player, this.bufferedWeaponSlot);
+        this.bufferedWeaponSlot = null;
+      } else if (this.bufferedSlotTimer <= 0) {
+        this.bufferedWeaponSlot = null;
+      }
+    }
+    if (this.networkClient) {
+      this.updateRemoteActorsFromInterpolation();
+    } else {
+      this.updateStorm(dt);
+    }
     this.updateLootVisuals(this.matchTime);
     this.updateShotEffects(dt);
     this.processPlayer(dt);
 
-    for (let actorIndex = 0; actorIndex < this.actors.length; actorIndex += 1) {
-      const actor = this.actors[actorIndex];
-      if (actor === this.player || !actor.alive) {
-        continue;
-      }
-      const simulationStep = this.getBotSimulationStep(actor);
-      if (!this.shouldRunBotSimulationThisTick(simulationStep, actorIndex)) {
-        continue;
-      }
-      this.processBot(actor, dt * simulationStep);
-      this.tryAutoPickup(actor);
-    }
-
-    for (let actorIndex = 0; actorIndex < this.actors.length; actorIndex += 1) {
-      const actor = this.actors[actorIndex];
-      if (!actor.alive) {
-        continue;
-      }
-
-      this.updateActorTimers(actor, dt);
-      this.applyStormDamage(actor, dt);
-      if (this.shouldUseDetailedActorVisualUpdate(actor, actorIndex)) {
-        this.updateActorVisual(actor);
-      } else {
-        this.syncActorTransformOnly(actor);
-      }
-      if (actor === this.player) {
+    if (!this.networkClient) {
+      for (let actorIndex = 0; actorIndex < this.actors.length; actorIndex += 1) {
+        const actor = this.actors[actorIndex];
+        if (actor === this.player || !actor.alive) {
+          continue;
+        }
+        const simulationStep = this.getBotSimulationStep(actor);
+        if (!this.shouldRunBotSimulationThisTick(simulationStep, actorIndex)) {
+          continue;
+        }
+        this.processBot(actor, dt * simulationStep);
         this.tryAutoPickup(actor);
       }
+
+      for (let actorIndex = 0; actorIndex < this.actors.length; actorIndex += 1) {
+        const actor = this.actors[actorIndex];
+        if (!actor.alive) {
+          continue;
+        }
+
+        this.updateActorTimers(actor, dt);
+        this.applyStormDamage(actor, dt);
+        if (this.shouldUseDetailedActorVisualUpdate(actor, actorIndex)) {
+          this.updateActorVisual(actor);
+        } else {
+          this.syncActorTransformOnly(actor);
+        }
+        if (actor === this.player) {
+          this.tryAutoPickup(actor);
+        }
+      }
+
+      this.resolveActorSeparation();
+    } else {
+      if (this.player.alive) {
+        this.updateActorTimers(this.player, dt);
+        this.tryAutoPickup(this.player);
+      }
     }
 
-    this.resolveActorSeparation();
     this.updateBuildPreview();
-    this.checkMatchEnd();
+    if (!this.networkClient) {
+      this.checkMatchEnd();
+    }
   }
 
   private finishLanding(actor: Actor, groundHeight: number): void {
@@ -2971,6 +2942,17 @@ export class FortLiteGame {
     actor.grounded = true;
     actor.parachuteGroup.visible = false;
     actor.lastPosition.copy(actor.position);
+
+    const dust = createLandingDust(actor.position);
+    while (this.landingDustEffects.length >= 8) {
+      const oldest = this.landingDustEffects.shift();
+      if (oldest) {
+        this.effectsGroup.remove(oldest.mesh);
+        disposeLandingDust(oldest);
+      }
+    }
+    this.effectsGroup.add(dust.mesh);
+    this.landingDustEffects.push(dust);
 
     if (actor.ai) {
       actor.ai.state = 'roam';
@@ -3035,6 +3017,16 @@ export class FortLiteGame {
     const actor = this.player;
     if (!actor.alive) {
       this.viewModelMoveBlend = 0;
+      const lookSensitivity = 0.0022;
+      this.cameraYaw -= this.pendingLookDeltaX * lookSensitivity;
+      this.cameraPitch = clamp(this.cameraPitch - this.pendingLookDeltaY * lookSensitivity, -0.65, 0.88);
+      this.pendingLookDeltaX = 0;
+      this.pendingLookDeltaY = 0;
+      this.updateCamera();
+
+      if (this.justPressedKeys.has('Space') || this.justPressedMouseButtons.has(0)) {
+        this.cycleSpectatorTarget();
+      }
       return;
     }
 
@@ -3056,6 +3048,26 @@ export class FortLiteGame {
 
     if (moveInput.lengthSq() > 1) {
       moveInput.normalize();
+    }
+
+    if (this.networkClient) {
+      this.inputSeq += 1;
+      const seq = this.predictor.recordInput({
+        move: { x: moveInput.x, z: moveInput.y },
+        yaw: this.cameraYaw,
+        sprint: isSprinting,
+        dt
+      });
+      this.networkClient.send({
+        type: 'player_input',
+        seq,
+        move: { x: moveInput.x, z: moveInput.y },
+        yaw: this.cameraYaw,
+        pitch: this.cameraPitch,
+        sprint: isSprinting,
+        jump: this.justPressedKeys.has('Space'),
+        ads: this.isFirstPersonView()
+      });
     }
 
     this.handlePlayerLoadoutInput();
@@ -3138,7 +3150,12 @@ export class FortLiteGame {
     if (requestedWeaponSlot !== null) {
       this.buildMode = false;
       const definition = WEAPON_DEFINITIONS[requestedWeaponSlot];
-      if (this.selectWeaponSlot(actor, requestedWeaponSlot)) {
+      if (actor.fireCooldown > 0 || actor.reloadTimer > 0) {
+        this.bufferedWeaponSlot = requestedWeaponSlot;
+        this.bufferedSlotTimer = 0.45;
+        this.showMessage(`Queued ${definition.name}...`, 0.6);
+      } else if (this.selectWeaponSlot(actor, requestedWeaponSlot)) {
+        this.bufferedWeaponSlot = null;
         this.showMessage(`${definition.name} equipped.`, 0.9);
       } else {
         this.showMessage(`${definition.name} slot is empty. Walk over one to pick it up.`, 1.4);
@@ -3200,19 +3217,16 @@ export class FortLiteGame {
     let visibleEnemy: Actor | null = null;
     if (brain.senseTimer <= 0 || (brain.state === 'engage' && brain.targetActorId)) {
       brain.senseTimer = this.getBotSenseInterval(brain.state === 'engage');
-      visibleEnemy = this.findVisibleEnemy(actor, this.getBotVisionRange());
+      visibleEnemy = this.findVisibleEnemy(actor, brain.profile.awarenessRadius);
       if (visibleEnemy) {
         brain.targetActorId = visibleEnemy.id;
+        brain.lastSeenTargetPosition = visibleEnemy.position.clone();
+        brain.targetMemoryTimer = brain.profile.memoryDuration;
       } else if (brain.targetActorId) {
-        const target = this.findActorById(brain.targetActorId);
-        if (
-          !target ||
-          !target.alive ||
-          this.areTeammates(actor, target) ||
-          horizontalDistance(actor.position, target.position) > 60 ||
-          !this.hasLineOfSight(actor, target)
-        ) {
+        brain.targetMemoryTimer -= dt;
+        if (brain.targetMemoryTimer <= 0) {
           brain.targetActorId = undefined;
+          brain.lastSeenTargetPosition = undefined;
         }
       }
     }
@@ -3220,8 +3234,54 @@ export class FortLiteGame {
     const trackedEnemy = brain.targetActorId ? this.findActorById(brain.targetActorId) : null;
 
     if (brain.decisionTimer <= 0) {
-      brain.decisionTimer = this.getBotDecisionInterval();
+      brain.decisionTimer = brain.profile.reactionTime;
       this.rethinkBotState(actor, visibleEnemy ?? (trackedEnemy && trackedEnemy.alive && !this.areTeammates(actor, trackedEnemy) ? trackedEnemy : null));
+    }
+
+    // Retreat state
+    if (brain.state === 'retreat') {
+      brain.retreatTimer -= dt;
+      const threat = brain.targetActorId ? this.findActorById(brain.targetActorId) : null;
+      if (threat && threat.alive) {
+        const awayDir = actor.position.clone().sub(threat.position).setY(0);
+        if (awayDir.lengthSq() > 0.01) {
+          awayDir.normalize();
+        } else {
+          awayDir.set(1, 0, 0);
+        }
+        const retreatDest = actor.position.clone().addScaledVector(awayDir, 16);
+        this.followBotDestination(actor, retreatDest, dt, true);
+        actor.yaw = angleLerp(actor.yaw, Math.atan2(awayDir.x, awayDir.z), 0.2);
+      } else {
+        const safeDest = this.getSafeZoneDestination(actor.position);
+        this.followBotDestination(actor, safeDest, dt, true);
+      }
+
+      if (!visibleEnemy && actor.health < actor.maxHealth * 0.85) {
+        brain.state = 'heal';
+        brain.healTimer = 2.8;
+      } else if (brain.retreatTimer <= 0) {
+        brain.state = 'roam';
+      }
+
+      this.applyVerticalMotion(actor, dt);
+      return;
+    }
+
+    // Heal state
+    if (brain.state === 'heal') {
+      if (visibleEnemy) {
+        brain.state = 'engage';
+        brain.targetActorId = visibleEnemy.id;
+      } else {
+        brain.healTimer -= dt;
+        if (brain.healTimer <= 0) {
+          actor.health = Math.min(actor.maxHealth, actor.health + 45);
+          brain.state = 'roam';
+        }
+      }
+      this.applyVerticalMotion(actor, dt);
+      return;
     }
 
     if (brain.state === 'engage' && brain.targetActorId) {
@@ -3316,6 +3376,13 @@ export class FortLiteGame {
       return;
     }
 
+    const totalAmmo = this.getActorTotalAmmo(actor);
+    if (shouldBotRetreat(actor.health, actor.maxHealth, totalAmmo, brain.profile.aggression)) {
+      brain.state = 'retreat';
+      brain.retreatTimer = 3.5;
+      return;
+    }
+
     if (visibleEnemy && armed && !urgentHeal) {
       brain.state = 'engage';
       brain.targetActorId = visibleEnemy.id;
@@ -3382,19 +3449,27 @@ export class FortLiteGame {
       this.moveActor(actor, move.multiplyScalar(distance > optimalDistance ? BOT_SPRINT_SPEED : BOT_MOVE_SPEED), dt);
     }
 
-    actor.yaw = angleLerp(actor.yaw, Math.atan2(target.position.x - actor.position.x, target.position.z - actor.position.z), 0.3);
+    const desiredYaw = Math.atan2(target.position.x - actor.position.x, target.position.z - actor.position.z);
+    let yawDiff = desiredYaw - actor.yaw;
+    while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+    while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+    const maxTurn = brain.profile.turnRate * dt;
+    actor.yaw += clamp(yawDiff, -maxTurn, maxTurn);
+
     this.tryBotCombatBuild(actor, brain, desiredDirection, distance, hasSight);
 
     if (weapon) {
       actor.inventory.mode = 'weapon';
       actor.inventory.weaponIndex = this.getWeaponSlotIndexById(weapon.definition.id);
-      const aimJitter = weapon.definition.id === 'auto-shotgun'
-        ? 0.38
-        : weapon.definition.id === 'tactical-smg'
-          ? 0.3
-          : 0.24;
-      const fireChance = weapon.definition.id === 'auto-shotgun' ? 0.18 : 0.12;
-      if (distance <= weapon.definition.range * 0.9 && hasSight && this.rng.next() > fireChance) {
+
+      if (brain.burstCooldownTimer > 0) {
+        brain.burstCooldownTimer -= dt;
+      } else if (distance <= weapon.definition.range * 0.95 && hasSight) {
+        if (brain.burstShotsRemaining <= 0) {
+          brain.burstShotsRemaining = Math.floor(this.rng.range(brain.profile.burstMinShots, brain.profile.burstMaxShots + 1));
+        }
+
+        const aimJitter = brain.profile.aimError * distance;
         const aimTarget = target.position.clone().add(new THREE.Vector3(
           this.rng.range(-aimJitter, aimJitter),
           this.rng.range(1.14, 1.68),
@@ -3402,6 +3477,11 @@ export class FortLiteGame {
         ));
         const direction = aimTarget.sub(actor.position.clone().add(new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0))).normalize();
         this.tryFireWeapon(actor, direction, false);
+
+        brain.burstShotsRemaining -= 1;
+        if (brain.burstShotsRemaining <= 0) {
+          brain.burstCooldownTimer = brain.profile.burstCooldown;
+        }
       } else if (weapon.magAmmo <= 0) {
         this.tryStartReload(actor);
       }
@@ -3475,6 +3555,38 @@ export class FortLiteGame {
       actor.reloadTimer = Math.max(0, actor.reloadTimer - dt);
       if (actor.reloadTimer === 0) {
         this.finishReload(actor);
+      }
+    }
+
+    // Spatial Footstep Cadence Audio
+    if (actor === this.player && actor.spawnState === 'grounded') {
+      const moving = actor.moveBlend > 0.15;
+      if (moving) {
+        const isSprinting = (this.keysDown.has('ShiftLeft') || this.keysDown.has('ShiftRight')) || actor.moveBlend > 0.65;
+        this.playerFootstepTimer += dt;
+        const interval = isSprinting ? 0.25 : 0.38;
+        if (this.playerFootstepTimer >= interval) {
+          this.playerFootstepTimer = 0;
+          this.options.audio?.fortliteFootstep(isSprinting, false);
+        }
+      } else {
+        this.playerFootstepTimer = 0.15;
+      }
+    } else if (actor !== this.player && actor.spawnState === 'grounded' && this.player && this.player.alive) {
+      const dx = actor.position.x - this.player.position.x;
+      const dz = actor.position.z - this.player.position.z;
+      const distSq = dx * dx + dz * dz;
+      if (distSq < 22 * 22) {
+        const moving = actor.moveBlend > 0.15;
+        if (moving) {
+          const isSprinting = actor.moveBlend > 0.65;
+          this.enemyFootstepTimer += dt;
+          const interval = isSprinting ? 0.26 : 0.40;
+          if (this.enemyFootstepTimer >= interval) {
+            this.enemyFootstepTimer = 0;
+            this.options.audio?.fortliteFootstep(isSprinting, true);
+          }
+        }
       }
     }
   }
@@ -3552,6 +3664,21 @@ export class FortLiteGame {
       effect.lineMaterial.opacity = alpha * 0.9;
       effect.sparkMaterial.opacity = alpha;
     }
+
+    for (let i = this.landingDustEffects.length - 1; i >= 0; i -= 1) {
+      const dust = this.landingDustEffects[i];
+      if (updateLandingDust(dust, dt)) {
+        this.effectsGroup.remove(dust.mesh);
+        disposeLandingDust(dust);
+        this.landingDustEffects.splice(i, 1);
+      }
+    }
+
+    for (let i = this.buildAnimations.length - 1; i >= 0; i -= 1) {
+      if (updateBuildPlaceAnimation(this.buildAnimations[i], dt)) {
+        this.buildAnimations.splice(i, 1);
+      }
+    }
   }
 
   private updateStorm(dt: number): void {
@@ -3573,6 +3700,7 @@ export class FortLiteGame {
     if (this.storm.mode === 'pause') {
       if (this.storm.timer >= phase.pauseDuration) {
         this.storm.mode = 'shrink';
+        this.options.audio?.fortliteStormWarning();
         this.storm.timer = 0;
         this.storm.startRadius = this.storm.currentRadius;
         this.storm.startCenter.copy(this.storm.currentCenter);
@@ -3654,6 +3782,24 @@ export class FortLiteGame {
     if (playerOwned) {
       this.viewModelKick = Math.min(0.22, this.viewModelKick + (weapon.definition.id === 'auto-shotgun' ? 0.18 : 0.1));
       this.muzzleFlashTime = 0.14;
+      this.playerBloom.addBloom(weapon.definition.bloomPerShot ?? 0.005, weapon.definition.maxBloom ?? 0.03);
+      this.telemetry.recordShot(weapon.definition.id);
+      this.options.audio?.fortliteFire(weapon.definition.id);
+
+      if (this.networkClient) {
+        const eyePos = this.camera.position;
+        this.networkClient.send({
+          type: 'fire_weapon',
+          weaponId: weapon.definition.id,
+          origin: [eyePos.x, eyePos.y, eyePos.z],
+          direction: [direction.x, direction.y, direction.z],
+          clientTime: Date.now()
+        });
+      }
+    } else {
+      if (this.player && this.player.alive && horizontalDistance(actor.position, this.player.position) < 75) {
+        this.options.audio?.fortliteFire(weapon.definition.id);
+      }
     }
 
     const origin = actor.kind === 'player'
@@ -3661,10 +3807,12 @@ export class FortLiteGame {
       : this.tempVectorD.copy(actor.position).setY(actor.position.y + PLAYER_EYE_HEIGHT);
     const renderShotEffects = this.shouldRenderShotEffects(actor);
     const visualOrigin = renderShotEffects ? this.getShotVisualOrigin(actor) : null;
-    let landedImpact = false;
+
+    const spreadBloom = playerOwned ? this.playerBloom.bloom : (actor.ai?.profile.aimError ?? 0);
+    const effectiveSpread = weapon.definition.spread + spreadBloom;
 
     for (let pellet = 0; pellet < weapon.definition.pellets; pellet += 1) {
-      const shotDirection = this.applyWeaponSpread(direction, weapon.definition.spread, playerOwned);
+      const shotDirection = this.applyWeaponSpread(direction, effectiveSpread, playerOwned);
       this.raycaster.set(origin, shotDirection);
       this.raycaster.far = weapon.definition.range;
       const hits = this.raycaster.intersectObjects(this.raycastTargets, true);
@@ -3681,7 +3829,6 @@ export class FortLiteGame {
         if (!ref) {
           if (kind === 'static' || kind === 'resource') {
             impactPoint.copy(hit.point);
-            landedImpact = true;
             break;
           }
           continue;
@@ -3693,21 +3840,33 @@ export class FortLiteGame {
             continue;
           }
           impactPoint.copy(hit.point);
-          landedImpact = true;
-          this.applyDamage(target, weapon.definition.damage, actor, 'weapon');
+          const distance = origin.distanceTo(hit.point);
+          let damage = calculateDamageWithFalloff(weapon.definition, distance);
+          const isCritical = (hit.point.y - target.position.y) > 1.32;
+          if (isCritical) {
+            damage = Math.round(damage * 1.5);
+          }
+          if (playerOwned) {
+            this.telemetry.recordHit(weapon.definition.id, damage);
+            this.hud.showHitMarker(isCritical);
+            if (isCritical) {
+              this.options.audio?.fortliteCriticalHit();
+            } else {
+              this.options.audio?.hit();
+            }
+          }
+          this.applyDamage(target, damage, actor, 'weapon', isCritical);
           break;
         }
 
         if (kind === 'build') {
           impactPoint.copy(hit.point);
-          landedImpact = true;
           this.damageBuildPiece(ref as BuildPiece, weapon.definition.damage);
           break;
         }
 
         if (kind === 'resource') {
           impactPoint.copy(hit.point);
-          landedImpact = true;
           break;
         }
       }
@@ -3715,10 +3874,6 @@ export class FortLiteGame {
       if (renderShotEffects && visualOrigin) {
         this.createShotEffect(visualOrigin, impactPoint, weapon.definition.color);
       }
-    }
-
-    if (playerOwned && landedImpact) {
-      this.options.audio?.fortliteFire(weapon.definition.id);
     }
   }
 
@@ -3842,6 +3997,15 @@ export class FortLiteGame {
     if (actor.kind === 'player') {
       this.options.audio?.fortliteBuild();
       this.showMessage(`${pieceType[0].toUpperCase()}${pieceType.slice(1)} placed.`, 1);
+
+      if (this.networkClient) {
+        this.networkClient.send({
+          type: 'place_build',
+          pieceType,
+          position: [placement.position.x, placement.position.y, placement.position.z],
+          yaw: placement.yaw
+        });
+      }
     }
 
     if (piece.obstacle) {
@@ -3849,7 +4013,7 @@ export class FortLiteGame {
     }
   }
 
-  private addBuildPiece(pieceType: BuildPieceType, materialType: MaterialType, position: THREE.Vector3, yaw: number): BuildPiece {
+  private addBuildPiece(pieceType: BuildPieceType, materialType: MaterialType, position: THREE.Vector3, yaw: number, customId?: string): BuildPiece {
     const mesh = this.createBuildMesh(pieceType, this.colorForBuildMaterial(materialType), false);
     mesh.position.copy(position);
     mesh.rotation.y = yaw;
@@ -3859,7 +4023,7 @@ export class FortLiteGame {
     this.buildGroup.add(mesh);
 
     const piece: BuildPiece = {
-      id: `build-${this.buildPieces.length}`,
+      id: customId ?? `build-${this.buildPieces.length}`,
       pieceType,
       materialType,
       mesh,
@@ -3872,6 +4036,7 @@ export class FortLiteGame {
     mesh.userData.kind = 'build';
     mesh.userData.ref = piece;
     this.buildPieces.push(piece);
+    this.buildAnimations.push(createBuildPlaceAnimation(mesh));
     this.raycastTargets.push(mesh);
     this.cameraObstacles.push(mesh);
     return piece;
@@ -3879,11 +4044,23 @@ export class FortLiteGame {
 
   private damageBuildPiece(piece: BuildPiece, amount: number): void {
     piece.health -= amount;
-    piece.mesh.scale.setScalar(clamp(piece.health / 220, 0.55, 1));
+    piece.mesh.scale.setScalar(clamp(piece.health / 220, 0.65, 1));
 
     if (piece.health > 0) {
       return;
     }
+
+    const dust = createLandingDust(piece.position, 0.7);
+    while (this.landingDustEffects.length >= 8) {
+      const oldest = this.landingDustEffects.shift();
+      if (oldest) {
+        this.effectsGroup.remove(oldest.mesh);
+        disposeLandingDust(oldest);
+      }
+    }
+    this.landingDustEffects.push(dust);
+    this.effectsGroup.add(dust.mesh);
+    this.options.audio?.fortliteHarvest();
 
     this.buildPieces = this.buildPieces.filter((entry) => entry.id !== piece.id);
     this.buildGroup.remove(piece.mesh);
@@ -3934,9 +4111,25 @@ export class FortLiteGame {
 
     const snappedX = snap(placeTarget.x, BUILD_GRID_SIZE);
     const snappedZ = snap(placeTarget.z, BUILD_GRID_SIZE);
-    const supportY = this.sampleGroundHeight(snappedX, snappedZ, actor.position.y + 6);
+    let supportY = this.sampleGroundHeight(snappedX, snappedZ, actor.position.y + 6);
     const baseYaw = forcedYaw ?? Math.round((this.cameraYaw + this.buildRotation) / (Math.PI * 0.5)) * (Math.PI * 0.5);
     const yaw = pieceType === 'ramp' ? baseYaw + Math.PI : baseYaw;
+
+    // Adjacent socket snapping: if aiming near an existing build piece, snap height vertically
+    if (!forcedWorldPosition) {
+      let closestPiece: BuildPiece | null = null;
+      let closestDistSq = 4.2 * 4.2;
+      for (const piece of this.buildPieces) {
+        const distSq = piece.position.distanceToSquared(placeTarget);
+        if (distSq < closestDistSq) {
+          closestDistSq = distSq;
+          closestPiece = piece;
+        }
+      }
+      if (closestPiece && placeTarget.y > closestPiece.position.y + 0.8) {
+        supportY = closestPiece.position.y + (closestPiece.pieceType === 'wall' ? WALL_HEIGHT * 0.5 : FLOOR_THICKNESS * 0.5);
+      }
+    }
 
     const position = new THREE.Vector3(
       snappedX,
@@ -3955,7 +4148,7 @@ export class FortLiteGame {
   private getBuildAimPoint(actor: Actor, forward: THREE.Vector3): THREE.Vector3 {
     const direction = this.getAimDirection();
     this.raycaster.set(this.camera.position, direction);
-    this.raycaster.far = 20;
+    this.raycaster.far = 24;
     const hits = this.raycaster.intersectObjects(this.raycastTargets, true);
     for (const hit of hits) {
       const kind = hit.object.userData.kind as string | undefined;
@@ -3964,18 +4157,10 @@ export class FortLiteGame {
       }
     }
 
-    const hit = this.raycaster.ray.intersectPlane(this.tempPlane, this.tempVectorA);
-    const fallback = actor.position.clone().addScaledVector(forward, 6.5);
-    if (!hit) {
-      return fallback;
-    }
-
-    const target = this.tempVectorA.clone();
-    if (horizontalDistance(actor.position, target) < 3) {
-      return fallback;
-    }
-
-    return target;
+    const forwardX = actor.position.x + forward.x * 6.5;
+    const forwardZ = actor.position.z + forward.z * 6.5;
+    const forwardY = this.sampleGroundHeight(forwardX, forwardZ, actor.position.y + 2);
+    return new THREE.Vector3(forwardX, forwardY, forwardZ);
   }
 
   private isBuildPlacementValid(actor: Actor, pieceType: BuildPieceType, position: THREE.Vector3, yaw: number): boolean {
@@ -4157,6 +4342,10 @@ export class FortLiteGame {
   }
 
   private sampleBaseTerrainHeight(x: number, z: number): number {
+    if (this.islandTerrain) {
+      return Math.max(0, this.islandTerrain.sampleHeight(x, z));
+    }
+
     let height = 0;
 
     for (const mound of this.terrainMounds) {
@@ -4389,6 +4578,7 @@ export class FortLiteGame {
         if (actor.kind === 'player') {
           this.options.audio?.fortlitePickup();
           this.showMessage(`Ammo topped up for ${pickup.weapon.name}.`, 1.2);
+          this.hud.showPickupNotice(`+ Ammo: ${pickup.weapon.name}`);
         }
       } else {
         const instance: WeaponInstance = {
@@ -4415,6 +4605,7 @@ export class FortLiteGame {
         if (actor.kind === 'player') {
           this.options.audio?.fortlitePickup();
           this.showMessage(`Picked up ${pickup.weapon.name}.`, 1.4);
+          this.hud.showPickupNotice(`+ ${pickup.weapon.name}`);
         }
       }
     } else if (pickup.kind === 'ammo' && pickup.ammoType && pickup.amount) {
@@ -4422,12 +4613,14 @@ export class FortLiteGame {
       if (actor.kind === 'player') {
         this.options.audio?.fortlitePickup();
         this.showMessage(`+${pickup.amount} ${pickup.ammoType} ammo`, 1.1);
+        this.hud.showPickupNotice(`+${pickup.amount} ${pickup.ammoType}`);
       }
     } else if (pickup.kind === 'material' && pickup.materialType && pickup.amount) {
       actor.inventory.materials[pickup.materialType] += pickup.amount;
       if (actor.kind === 'player') {
         this.options.audio?.fortlitePickup();
         this.showMessage(`+${pickup.amount} ${MATERIAL_DISPLAY_NAMES[pickup.materialType]}`, 1.1);
+        this.hud.showPickupNotice(`+${pickup.amount} ${MATERIAL_DISPLAY_NAMES[pickup.materialType]}`);
       }
     } else if (pickup.kind === 'medkit') {
       const healed = Math.ceil(actor.maxHealth - actor.health);
@@ -4438,6 +4631,7 @@ export class FortLiteGame {
       if (actor.kind === 'player') {
         this.options.audio?.fortliteHeal();
         this.showMessage(`Medkit used. +${healed} HP`, 1.1);
+        this.hud.showPickupNotice(`+${healed} HP (Medkit)`);
       }
     }
 
@@ -4446,16 +4640,62 @@ export class FortLiteGame {
     this.disposeObject(pickup.mesh);
   }
 
-  private applyDamage(target: Actor, amount: number, attacker: Actor | null, reason: 'weapon' | 'storm'): void {
+  private getActorTotalAmmo(actor: Actor): number {
+    let sum = 0;
+    for (const weapon of actor.inventory.weapons) {
+      sum += weapon.magAmmo + (actor.inventory.ammo[weapon.definition.ammoType] ?? 0);
+    }
+    return sum;
+  }
+
+  private applyDamage(target: Actor, amount: number, attacker: Actor | null, reason: 'weapon' | 'storm', isCritical = false): void {
+    void isCritical;
     if (!target.alive || (attacker && this.areTeammates(attacker, target))) {
       return;
     }
 
     target.health -= amount;
-    if (target.kind === 'player' && amount > 0.01 && this.playerDamageSoundCooldown <= 0) {
-      this.options.audio?.fortliteDamage();
-      this.playerDamageSoundCooldown = reason === 'storm' ? 0.45 : 0.12;
+    if (target.kind === 'player' && amount > 0.01) {
+      if (this.playerDamageSoundCooldown <= 0) {
+        this.options.audio?.fortliteDamage();
+        this.playerDamageSoundCooldown = reason === 'storm' ? 0.45 : 0.12;
+      }
+      if (attacker) {
+        const dx = attacker.position.x - target.position.x;
+        const dz = attacker.position.z - target.position.z;
+        const angle = Math.atan2(dz, dx) - this.cameraYaw;
+        this.hud.flashHit(angle);
+      } else {
+        this.hud.flashHit(0);
+      }
     }
+
+    // Bot reactions to taking damage
+    if (target.kind === 'bot' && target.ai && attacker) {
+      const brain = target.ai;
+      brain.targetActorId = attacker.id;
+      brain.lastSeenTargetPosition = attacker.position.clone();
+      brain.targetMemoryTimer = brain.profile.memoryDuration;
+
+      // Defensive building under fire
+      if (
+        this.totalMaterials(target.inventory.materials) >= BUILD_COST &&
+        this.rng.next() < brain.profile.buildFrequency &&
+        brain.buildCooldown <= 0
+      ) {
+        const wall = calculateDefensiveWallPlacement(target.position, attacker.position);
+        this.tryPlaceBuild(target, 'wall', wall.position, wall.yaw);
+        brain.buildCooldown = this.rng.range(1.6, 3.2);
+      }
+
+      // Check retreat
+      const totalAmmo = this.getActorTotalAmmo(target);
+      if (shouldBotRetreat(target.health, target.maxHealth, totalAmmo, brain.profile.aggression)) {
+        brain.state = 'retreat';
+        brain.retreatTimer = 3.5;
+      }
+    }
+
     if (target.health > 0) {
       return;
     }
@@ -4467,6 +4707,8 @@ export class FortLiteGame {
 
     if (attacker) {
       attacker.eliminationCount += 1;
+      const weaponId = attacker.inventory.weapons[attacker.inventory.weaponIndex]?.definition.id ?? 'rifle';
+      this.telemetry.recordKill(weaponId, reason);
       if (attacker.kind === 'player') {
         this.options.audio?.explosion();
         this.showMessage(`Eliminated ${target.id}.`, 1.6);
@@ -4482,7 +4724,23 @@ export class FortLiteGame {
         return;
       }
 
-      this.endMatch('Defeat', 'You were eliminated. Press Enter or use the button to drop into a new match.', false);
+      if (this.networkClient) {
+        this.spectatingTargetId = attacker?.id ?? null;
+        this.startSpectating();
+        this.showMessage('You were eliminated. Now spectating remaining players.', 3);
+        return;
+      }
+
+      const canSpectate = this.actors.some((a) => a.alive && a !== this.player);
+      this.endMatch(
+        'Defeat',
+        canSpectate
+          ? 'You were eliminated. You can spectate remaining players or drop into a new match.'
+          : 'You were eliminated. Press Enter or use the button to drop into a new match.',
+        false,
+        undefined,
+        canSpectate
+      );
       if (reason === 'storm') {
         this.showMessage('The storm got you.', 2.5);
       }
@@ -4530,17 +4788,28 @@ export class FortLiteGame {
         this.isDuosMode()
           ? 'Your duo outlasted every other team. Press Enter or use the button to queue another match.'
           : 'You outlasted every bot and survived the storm. Press Enter or use the button to queue another offline match.',
-        true
+        true,
+        { placement: 1, eliminations: this.player.eliminationCount, survivalTime: this.matchTime },
+        false
       );
     } else {
-      this.endMatch('Defeat', 'Another bot won the match. Press Enter or use the button to try again.', false);
+      this.endMatch('Defeat', 'Another bot won the match. Press Enter or use the button to try again.', false, undefined, false);
     }
   }
 
-  private endMatch(title: string, body: string, won: boolean): void {
+  private endMatch(
+    title: string,
+    body: string,
+    won: boolean,
+    statsOverride?: { placement: number; eliminations: number; survivalTime: number },
+    canSpectate = false
+  ): void {
     this.state = 'ended';
+    const placement = statsOverride?.placement ?? (won ? 1 : this.getAliveTeamCount() + 1);
+    const eliminations = statsOverride?.eliminations ?? this.player.eliminationCount;
+    const survivalTime = statsOverride?.survivalTime ?? this.matchTime;
     if (this.options.showEndScreen !== false) {
-      this.hud.showEndScreen(title, body);
+      this.hud.showEndScreen(title, body, won, { placement, eliminations, survivalTime }, canSpectate);
     }
     if (won) {
       this.options.audio?.fortliteVictory();
@@ -4609,6 +4878,11 @@ export class FortLiteGame {
                 : weapon
                   ? `${weapon.definition.name} ready`
                   : 'Find a weapon';
+
+    const distFromCenter = horizontalDistance(this.player.position, this.storm.currentCenter);
+    const stormDiff = distFromCenter - this.storm.currentRadius;
+    const stormIntensity = stormDiff > 0 ? Math.min(1, stormDiff / 25) : 0;
+    this.hud.updateStormIntensity(stormIntensity);
 
     this.hud.render({
       health: this.player.health,
@@ -4701,6 +4975,28 @@ export class FortLiteGame {
 
   private updateCamera(): void {
     if (!this.player) {
+      return;
+    }
+
+    if (!this.player.alive) {
+      let target = this.spectatingTargetId ? this.findActorById(this.spectatingTargetId) : null;
+      if (!target || !target.alive) {
+        target = this.findNextLivingActor(null);
+        this.spectatingTargetId = target?.id || null;
+      }
+
+      if (target) {
+        this.hud.setSpectating(target.name || target.id);
+        const pivot = target.position.clone().add(new THREE.Vector3(0, 1.8, 0));
+        const horizontalForward = this.tempVectorE.set(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
+        const desiredPos = pivot.clone()
+          .add(new THREE.Vector3(0, 1.6, 0))
+          .addScaledVector(horizontalForward, -6.5);
+        this.cameraRigPosition.lerp(desiredPos, 0.25);
+        this.cameraLookPosition.lerp(pivot, 0.3);
+        this.camera.position.copy(this.cameraRigPosition);
+        this.camera.lookAt(this.cameraLookPosition);
+      }
       return;
     }
 
@@ -5054,32 +5350,24 @@ export class FortLiteGame {
   private findVisibleEnemy(actor: Actor, range: number): Actor | null {
     let closest: Actor | null = null;
     let bestDistanceSquared = range * range;
-    const facing = this.tempVectorA.set(Math.sin(actor.yaw), 0, Math.cos(actor.yaw));
 
     for (const other of this.actors) {
       if (!other.alive || other.spawnState !== 'grounded' || other.id === actor.id || this.areTeammates(actor, other)) {
         continue;
       }
 
-      const directionToOther = this.tempVectorB.set(
-        other.position.x - actor.position.x,
-        0,
-        other.position.z - actor.position.z
-      );
-      const distanceSquared = directionToOther.lengthSq();
+      const dx = other.position.x - actor.position.x;
+      const dz = other.position.z - actor.position.z;
+      const distanceSquared = dx * dx + dz * dz;
       if (distanceSquared >= bestDistanceSquared) {
         continue;
       }
 
-      const distance = Math.sqrt(distanceSquared);
-      if (distance > 12) {
-        directionToOther.divideScalar(Math.max(distance, 0.001));
-        if (directionToOther.dot(facing) < -0.25) {
-          continue;
-        }
-      }
+      const hasSight = this.shouldUsePreciseBotSight(actor, other)
+        ? this.hasLineOfSight(actor, other)
+        : Math.sqrt(distanceSquared) < 28;
 
-      if (this.shouldUsePreciseBotSight(actor, other) && !this.hasLineOfSight(actor, other)) {
+      if (!canPerceiveTarget(actor.position, actor.yaw, other.position, range, hasSight)) {
         continue;
       }
 
@@ -5431,6 +5719,10 @@ export class FortLiteGame {
   }
 
   private getMovementMultiplier(position: THREE.Vector3): number {
+    if (this.islandTerrain && this.islandTerrain.sampleHeight(position.x, position.z) <= 0.15) {
+      return WATER_MOVE_MULTIPLIER;
+    }
+
     for (const zone of this.waterZones) {
       if (this.isPointInWater(position, 0, zone)) {
         return zone.moveMultiplier;
@@ -5441,6 +5733,10 @@ export class FortLiteGame {
   }
 
   private isPointInWater(point: THREE.Vector3, padding = 0, zoneOverride?: WaterZone): boolean {
+    if (this.islandTerrain && this.islandTerrain.sampleHeight(point.x, point.z) <= (0.15 + padding * 0.1)) {
+      return true;
+    }
+
     const zones = zoneOverride ? [zoneOverride] : this.waterZones;
     for (const zone of zones) {
       const dx = point.x - zone.center.x;
@@ -5766,6 +6062,326 @@ export class FortLiteGame {
     });
   }
 
+  private bindNetworkEvents(): void {
+    if (!this.networkClient) {
+      return;
+    }
+
+    this.networkClient.setCallbacks({
+      onWorldSnapshot: (snapshot: WorldSnapshotMessage) => {
+        this.interpolator.pushSnapshot(snapshot);
+
+        // Local player reconciliation
+        const localSnap = snapshot.players.find((p) => p.id === this.networkClient?.playerId);
+        if (localSnap && this.player) {
+          this.predictor.reconcile(localSnap);
+          this.player.health = localSnap.health;
+          this.player.maxHealth = localSnap.maxHealth;
+          this.player.alive = localSnap.alive;
+          this.player.inventory.materials = { ...localSnap.materials };
+          this.player.inventory.ammo = { ...localSnap.ammo };
+          this.player.eliminationCount = localSnap.eliminationCount;
+
+          if (!this.player.alive && !this.spectatingTargetId) {
+            this.startSpectating();
+          }
+        }
+
+        // Storm authoritative sync
+        if (snapshot.storm && this.storm) {
+          const prevPhase = this.storm.phaseIndex;
+          this.storm.currentCenter.set(snapshot.storm.center[0], snapshot.storm.center[1], snapshot.storm.center[2]);
+          this.storm.currentRadius = snapshot.storm.radius;
+          this.storm.targetCenter.set(snapshot.storm.targetCenter[0], snapshot.storm.targetCenter[1], snapshot.storm.targetCenter[2]);
+          this.storm.targetRadius = snapshot.storm.targetRadius;
+          this.storm.phaseIndex = snapshot.storm.phaseIndex;
+          this.storm.timer = snapshot.storm.timer;
+          this.storm.currentDamagePerSecond = snapshot.storm.damagePerSecond;
+          if (snapshot.storm.phaseIndex !== prevPhase) {
+            this.options.audio?.fortliteStormWarning();
+          }
+          this.updateStormVisuals();
+        }
+
+        // Build pieces sync
+        if (snapshot.builds) {
+          this.syncBuildSnapshots(snapshot.builds);
+        }
+
+        // Loot sync
+        if (snapshot.loot) {
+          this.syncLootSnapshots(snapshot.loot);
+        }
+      },
+
+      onShotEvent: (shot: ShotBroadcastMessage) => {
+        if (shot.actorId === this.networkClient?.playerId) {
+          return;
+        }
+
+        const origin = new THREE.Vector3(...shot.origin);
+        const direction = new THREE.Vector3(...shot.direction);
+        const impact = shot.impact ? new THREE.Vector3(...shot.impact) : origin.clone().addScaledVector(direction, 60);
+
+        const def = WEAPON_DEFINITIONS.find((w) => w.id === shot.weaponId);
+        this.createShotEffect(origin, impact, def?.color ?? 0xffd280);
+        if (this.player && horizontalDistance(origin, this.player.position) < 80) {
+          this.options.audio?.fortliteFire(shot.weaponId);
+        }
+      },
+
+      onDamageEvent: (dmg: DamageEventMessage) => {
+        if (dmg.targetId === this.networkClient?.playerId) {
+          if (this.playerDamageSoundCooldown <= 0) {
+            this.options.audio?.fortliteDamage();
+            this.playerDamageSoundCooldown = 0.12;
+          }
+          const attacker = dmg.attackerId ? this.findActorById(dmg.attackerId) : null;
+          if (attacker && this.player) {
+            const dx = attacker.position.x - this.player.position.x;
+            const dz = attacker.position.z - this.player.position.z;
+            const angle = Math.atan2(dz, dx) - this.cameraYaw;
+            this.hud.flashHit(angle);
+          } else {
+            this.hud.flashHit(0);
+          }
+          if (this.player) {
+            this.player.health = dmg.newHealth;
+          }
+        }
+
+        if (dmg.attackerId === this.networkClient?.playerId) {
+          this.hud.showHitMarker(dmg.isCritical);
+          if (dmg.isCritical) {
+            this.options.audio?.fortliteCriticalHit();
+          } else {
+            this.options.audio?.hit();
+          }
+        }
+      },
+
+      onEliminationEvent: (elim: EliminationEventMessage) => {
+        const victimName = this.findActorById(elim.targetId)?.name || elim.targetId.slice(0, 6);
+        const killerName = elim.attackerId ? (this.findActorById(elim.attackerId)?.name || elim.attackerId.slice(0, 6)) : 'The Storm';
+
+        this.showMessage(`${killerName} eliminated ${victimName}`, 2.5);
+
+        if (elim.targetId === this.networkClient?.playerId) {
+          this.spectatingTargetId = elim.attackerId;
+          this.startSpectating();
+          this.showMessage(`Eliminated by ${killerName}. Now spectating.`, 4);
+        } else if (elim.attackerId === this.networkClient?.playerId) {
+          this.options.audio?.explosion();
+          this.showMessage(`You eliminated ${victimName}!`, 2.5);
+        }
+
+        const targetActor = this.findActorById(elim.targetId);
+        if (targetActor) {
+          targetActor.alive = false;
+          targetActor.group.visible = false;
+        }
+      },
+
+      onBuildEvent: (event: BuildEventMessage) => {
+        if (event.action === 'placed') {
+          const exists = this.buildPieces.some((b) => b.id === event.piece.id);
+          if (!exists) {
+            this.addBuildPiece(
+              event.piece.pieceType,
+              event.piece.materialType,
+              new THREE.Vector3(...event.piece.position),
+              event.piece.yaw,
+              event.piece.id
+            );
+            this.options.audio?.fortliteBuild();
+          }
+        } else if (event.action === 'destroyed') {
+          const piece = this.buildPieces.find((b) => b.id === event.piece.id);
+          if (piece) {
+            this.damageBuildPiece(piece, 9999);
+          }
+        }
+      },
+
+      onLootEvent: (event: LootEventMessage) => {
+        if (event.action === 'collected') {
+          const pickup = this.loot.find((l) => l.id === event.lootId);
+          if (pickup) {
+            this.loot = this.loot.filter((l) => l.id !== event.lootId);
+            this.lootGroup.remove(pickup.mesh);
+            this.disposeObject(pickup.mesh);
+          }
+        }
+      },
+
+      onMatchEnded: (data: MatchEndedMessage) => {
+        const won = data.winnerId === this.networkClient?.playerId;
+        const myPlacement = data.placements.find((p) => p.id === this.networkClient?.playerId);
+        this.endMatch(
+          won ? 'Victory Royale' : 'Match Ended',
+          won
+            ? 'You won the match!'
+            : `Winner: ${data.winnerName}. Placement: #${myPlacement?.placement ?? '-'}.`,
+          won,
+          {
+            placement: myPlacement?.placement ?? (won ? 1 : 2),
+            eliminations: myPlacement?.eliminations ?? this.player.eliminationCount,
+            survivalTime: this.matchTime
+          },
+          false
+        );
+      },
+
+      onPingUpdate: (pingMs: number) => {
+        this.hud.setPing(pingMs);
+      }
+    });
+  }
+
+  private getOrCreateRemoteActor(id: string, name: string, isBot: boolean, initialPos: [number, number, number]): Actor {
+    let actor = this.actors.find((a) => a.id === id);
+    if (actor) {
+      return actor;
+    }
+
+    const pos = new THREE.Vector3(initialPos[0], initialPos[1], initialPos[2]);
+    const color = isBot ? 0xef4444 : 0x3b82f6;
+    const accent = isBot ? 0xf97316 : 0x60a5fa;
+
+    actor = this.createActor(
+      isBot ? 'bot' : 'player',
+      pos,
+      color,
+      accent,
+      this.actors.length,
+      pos
+    );
+    actor.id = id;
+    actor.name = name;
+    this.actors.push(actor);
+    return actor;
+  }
+
+  private updateRemoteActorsFromInterpolation(): void {
+    if (!this.networkClient) {
+      return;
+    }
+
+    const localId = this.networkClient.playerId || '';
+    const interpolated = this.interpolator.getInterpolatedActors(Date.now(), localId);
+
+    for (const [id, data] of interpolated.players) {
+      const actor = this.getOrCreateRemoteActor(id, id.slice(0, 8), false, data.position);
+      this.applyInterpolatedState(actor, data);
+    }
+
+    for (const [id, data] of interpolated.bots) {
+      const actor = this.getOrCreateRemoteActor(id, `Bot ${id.slice(-3)}`, true, data.position);
+      this.applyInterpolatedState(actor, data);
+    }
+  }
+
+  private applyInterpolatedState(actor: Actor, data: InterpolatedActor): void {
+    actor.position.set(data.position[0], data.position[1], data.position[2]);
+    actor.yaw = data.yaw;
+    actor.health = data.health;
+    actor.maxHealth = data.maxHealth;
+    actor.alive = data.alive;
+    actor.group.visible = actor.alive;
+    actor.group.position.copy(actor.position);
+    actor.group.rotation.y = actor.yaw;
+
+    actor.parachuteGroup.visible = data.spawnState === 'skydive' || data.spawnState === 'gliding';
+
+    const hpRatio = clamp(actor.health / Math.max(1, actor.maxHealth), 0, 1);
+    actor.healthBarFill.scale.x = hpRatio;
+    actor.healthBarRoot.visible = actor.alive && actor.health < actor.maxHealth;
+
+    if (data.currentWeaponId && data.currentWeaponId !== actor.heldItemKey) {
+      const def = WEAPON_DEFINITIONS.find((w) => w.id === data.currentWeaponId);
+      if (def) {
+        if (actor.heldItemMesh) {
+          this.disposeObject(actor.heldItemMesh);
+          actor.heldItemMesh = null;
+        }
+        const gun = this.createWeaponDisplayModel(def, 'pickup');
+        gun.scale.setScalar(0.78);
+        gun.rotation.set(0.22, Math.PI * 0.95, 0.08);
+        actor.heldItemRoot.add(gun);
+        actor.heldItemMesh = gun;
+        actor.heldItemKey = data.currentWeaponId;
+      }
+    } else if (!data.currentWeaponId && actor.heldItemKey !== 'hidden') {
+      if (actor.heldItemMesh) {
+        this.disposeObject(actor.heldItemMesh);
+        actor.heldItemMesh = null;
+      }
+      actor.heldItemKey = 'hidden';
+    }
+  }
+
+  private syncBuildSnapshots(builds: BuildSnapshot[]): void {
+    const serverIds = new Set(builds.map((b) => b.id));
+
+    for (let i = this.buildPieces.length - 1; i >= 0; i -= 1) {
+      const piece = this.buildPieces[i];
+      if (!serverIds.has(piece.id)) {
+        this.damageBuildPiece(piece, 9999);
+      }
+    }
+
+    for (const snap of builds) {
+      const existing = this.buildPieces.find((b) => b.id === snap.id);
+      if (existing) {
+        existing.health = snap.health;
+      } else {
+        this.addBuildPiece(snap.pieceType, snap.materialType, new THREE.Vector3(...snap.position), snap.yaw, snap.id);
+      }
+    }
+  }
+
+  private syncLootSnapshots(lootList: LootSnapshot[]): void {
+    const serverIds = new Set(lootList.map((l) => l.id));
+
+    for (let i = this.loot.length - 1; i >= 0; i -= 1) {
+      const item = this.loot[i];
+      if (!serverIds.has(item.id)) {
+        this.lootGroup.remove(item.mesh);
+        this.disposeObject(item.mesh);
+        this.loot.splice(i, 1);
+      }
+    }
+  }
+
+  private startSpectating(): void {
+    this.spectatingTargetId = this.spectatingTargetId ?? this.findNextLivingActor(null)?.id ?? null;
+    const target = this.spectatingTargetId ? this.findActorById(this.spectatingTargetId) : null;
+    this.hud.setSpectating(target?.name || target?.id || 'Eliminated');
+  }
+
+  private findNextLivingActor(currentId: string | null): Actor | null {
+    const living = this.actors.filter((a) => a.alive && a !== this.player);
+    if (living.length === 0) {
+      return null;
+    }
+    if (!currentId) {
+      return living[0];
+    }
+    const idx = living.findIndex((a) => a.id === currentId);
+    if (idx < 0) {
+      return living[0];
+    }
+    return living[(idx + 1) % living.length];
+  }
+
+  private cycleSpectatorTarget(): void {
+    const next = this.findNextLivingActor(this.spectatingTargetId);
+    if (next) {
+      this.spectatingTargetId = next.id;
+      this.hud.setSpectating(next.name || next.id);
+    }
+  }
+
   private makeWallObstacle(position: THREE.Vector3, yaw: number, mesh: THREE.Mesh): ObstacleBox {
     const width = Math.abs(Math.cos(yaw)) > 0.5 ? WALL_WIDTH : WALL_THICKNESS;
     const depth = Math.abs(Math.cos(yaw)) > 0.5 ? WALL_THICKNESS : WALL_WIDTH;
@@ -6044,13 +6660,19 @@ export class FortLiteGame {
     this.renderer.setSize(width, height, false);
   };
 
+  getGraphicsQuality(): GraphicsQuality {
+    return this.graphicsQuality;
+  }
+
   setGraphicsQuality(quality: GraphicsQuality): void {
     this.graphicsQuality = quality;
     this.applyGraphicsQuality(quality);
   }
 
   private applyGraphicsQuality(quality: GraphicsQuality): void {
-    this.maxShotEffects = quality === 'low' ? 1 : quality === 'medium' ? 2 : 4;
+    this.renderer.shadowMap.enabled = quality !== 'low';
+    this.renderer.shadowMap.needsUpdate = true;
+    this.maxShotEffects = quality === 'low' ? 8 : quality === 'medium' ? 14 : 20;
     this.renderer.toneMapping = quality === 'high' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
     this.renderer.toneMappingExposure = quality === 'high' ? 1.02 : 1;
     this.currentPixelRatio = this.getPixelRatioForQuality(quality);

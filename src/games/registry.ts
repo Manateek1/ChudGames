@@ -1,4 +1,4 @@
-﻿import type { GameDefinition, ThumbnailRenderer } from "../types/arcade";
+import type { GameDefinition, ThumbnailRenderer } from "../types/arcade";
 import { AsteroidsPulse } from "./asteroidsPulse";
 import { ApexRun } from "./apexRun";
 import { BrickBreakerBlitz } from "./brickBreakerBlitz";
@@ -312,7 +312,7 @@ export const gameRegistry: GameDefinition[] = [
       }
     ],
     defaultMode: "solo",
-    isAvailable: false,
+    isAvailable: true,
     usesCanvas: false,
     isNew: true,
     thumbnail: fortLiteThumb,

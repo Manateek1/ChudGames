@@ -1,4 +1,4 @@
-﻿export class AudioManager {
+export class AudioManager {
   private context: AudioContext | null = null;
 
   private master: GainNode | null = null;
@@ -19,7 +19,15 @@
     }
 
     if (!this.context) {
-      this.context = new AudioContext();
+      const AudioCtx =
+        typeof window !== "undefined"
+          ? window.AudioContext ||
+            (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+          : undefined;
+      if (!AudioCtx) {
+        return null;
+      }
+      this.context = new AudioCtx();
       this.master = this.context.createGain();
       this.musicBus = this.context.createGain();
       this.master.gain.value = 0.45;
@@ -178,6 +186,26 @@
 
   fortliteDamage(): void {
     this.tone(160, 0.055, 0.05, "sawtooth", 0.001, 0.06);
+  }
+
+  fortliteFootstep(isSprint = false, isEnemy = false): void {
+    const baseFreq = isEnemy ? (isSprint ? 135 : 115) : (isSprint ? 165 : 145);
+    const duration = isSprint ? 0.04 : 0.055;
+    const gain = (isEnemy ? 0.032 : 0.02) + (isSprint ? 0.008 : 0);
+    this.tone(baseFreq, duration, gain, "triangle", 0.001, 0.035);
+    if (isEnemy) {
+      this.tone(baseFreq * 0.6, duration + 0.01, gain * 0.6, "sine", 0.001, 0.04);
+    }
+  }
+
+  fortliteStormWarning(): void {
+    this.tone(95, 0.32, 0.045, "triangle", 0.02, 0.28);
+    this.tone(62, 0.42, 0.05, "sawtooth", 0.03, 0.35);
+  }
+
+  fortliteCriticalHit(): void {
+    this.tone(1250, 0.06, 0.055, "sine", 0.001, 0.06);
+    this.tone(1880, 0.08, 0.038, "triangle", 0.002, 0.08);
   }
 
   fortliteVictory(): void {
