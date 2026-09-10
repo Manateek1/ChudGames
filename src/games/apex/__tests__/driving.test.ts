@@ -46,7 +46,7 @@ describe("Solstice Pass racing", () => {
     for (let i = 0; i < 500; i++)
       stepVehicle(
         s,
-        { throttle: 0, brake: 1, steer: 0.8, handbrake: false },
+        { throttle: 0, brake: 1, steer: 0, handbrake: false },
         FIXED_STEP,
       );
     expect(s.speed).toBeLessThan(0);
@@ -74,6 +74,17 @@ describe("Solstice Pass racing", () => {
     expect(s.heading - initial).toBeGreaterThan(0);
     expect(s.heading - initial).toBeLessThan(0.01);
     expect(s.steering).toBeLessThan(0.05);
+  });
+  it("turns decisively while retaining stable forward grip", () => {
+    const s = createVehicle();
+    for (let i = 0; i < 480; i += 1)
+      stepVehicle(
+        s,
+        { throttle: 1, brake: 0, steer: 0.78, handbrake: false },
+        FIXED_STEP,
+      );
+    expect(Math.abs(s.heading)).toBeGreaterThan(0.65);
+    expect(s.slip).toBeLessThan(0.35);
   });
   it("cannot finish by reversing over the line, teleporting or skipping sectors", () => {
     const r = createRace();

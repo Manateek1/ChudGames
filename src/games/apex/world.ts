@@ -33,13 +33,36 @@ function noise(x: number, z: number) {
 }
 function nearest(x: number, z: number) {
   let distance = Infinity,
+    closestIndex = 0,
     height = 0;
   for (let i = 0; i < SAMPLE_COUNT; i += 8) {
     const p = samples[i],
       d = (x - p.x) ** 2 + (z - p.z) ** 2;
     if (d < distance) {
       distance = d;
+      closestIndex = i;
       height = p.y;
+    }
+  }
+  // Refine against the nearby ribbon segments. The initial coarse pass keeps
+  // world construction fast, while this interpolation removes the visible
+  // elevation steps that were caused by snapping terrain to one sample.
+  for (let offset = -12; offset <= 12; offset += 1) {
+    const index = (closestIndex + offset + SAMPLE_COUNT) % SAMPLE_COUNT,
+      a = samples[index],
+      b = samples[index + 1],
+      dx = b.x - a.x,
+      dz = b.z - a.z,
+      denominator = dx * dx + dz * dz,
+      t = THREE.MathUtils.clamp(
+        ((x - a.x) * dx + (z - a.z) * dz) / denominator,
+        0,
+        1,
+      ),
+      d = (x - a.x - dx * t) ** 2 + (z - a.z - dz * t) ** 2;
+    if (d < distance) {
+      distance = d;
+      height = THREE.MathUtils.lerp(a.y, b.y, t);
     }
   }
   return { distance: Math.sqrt(distance), height };
@@ -249,9 +272,10 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
     new THREE.MeshStandardMaterial({
       map: asphalt,
       roughnessMap: asphalt,
-      roughness: 0.94,
-      color: 0x777b80,
-      metalness: 0.04,
+      roughness: 1,
+      color: 0x505458,
+      metalness: 0,
+      envMapIntensity: 0.04,
     }),
   );
   road.receiveShadow = true;

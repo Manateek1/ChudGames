@@ -69,12 +69,12 @@ export function stepVehicle(
     offroad = Math.abs(s.road.lateral) > 6.15;
   s.steering = damp(
     s.steering,
-    input.steer * (0.53 / (1 + abs * 0.036)),
-    7.5,
+    input.steer * (0.72 / (1 + abs * 0.021)),
+    10,
     dt,
   );
   const grip =
-    (offroad ? 5.5 : 11.8 + abs * abs * 0.00065) *
+    (offroad ? 7.5 : 29 + abs * abs * 0.0008) *
     (input.handbrake ? 0.47 : 1) *
     gripScale;
   const desiredYaw = (forward / 2.72) * Math.tan(s.steering);
@@ -83,7 +83,7 @@ export function stepVehicle(
     -grip / Math.max(abs, 3),
     grip / Math.max(abs, 3),
   );
-  s.yaw = damp(s.yaw, limitedYaw * (input.handbrake ? 1.6 : 1), 5, dt);
+  s.yaw = damp(s.yaw, limitedYaw * (input.handbrake ? 1.35 : 1), 9, dt);
   s.heading += s.yaw * dt;
   s.shift = Math.max(0, s.shift - dt);
   const torque = Math.max(2.6, 11.5 - abs * 0.095) * (s.shift > 0 ? 0.25 : 1);
@@ -92,7 +92,7 @@ export function stepVehicle(
     forward * Math.abs(forward) * 0.0012 -
     forward * (offroad ? 0.18 : 0.014);
   if (input.brake > 0)
-    force -= input.brake * (forward > 0.6 ? 16 : forward > -9 ? 4 : 0);
+    force -= input.brake * (forward > 0.6 ? 16 : forward > -9 ? 5 : 0);
   if (input.handbrake && abs > 0.2) force -= Math.sign(forward) * 5.5;
   if (input.throttle === 0 && input.brake === 0 && abs < 0.12) forward = 0;
   force -=
@@ -103,7 +103,7 @@ export function stepVehicle(
   forward = clamp(forward + force * dt, -9, 86);
   // Slip is retained during handbrake turns; stability assist damps recovery.
   const lateralForce = clamp(
-    -lateral * (input.handbrake ? 1.8 : assists ? 9 : 6.5),
+    -lateral * (input.handbrake ? 2.4 : assists ? 16 : 9),
     -grip,
     grip,
   );
@@ -113,8 +113,8 @@ export function stepVehicle(
   s.vx = ns * forward + nc * lateral;
   s.vz = nc * forward - ns * lateral;
   // Inertia opposes the rotation of the chassis into a new direction.
-  s.vx += (sin - ns) * forward * 0.68;
-  s.vz += (cos - nc) * forward * 0.68;
+  s.vx += (sin - ns) * forward * 0.18;
+  s.vz += (cos - nc) * forward * 0.18;
   s.x += s.vx * dt;
   s.z += s.vz * dt;
   s.road = locateRoad(s.x, s.z, s.road.index);

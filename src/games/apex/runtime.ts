@@ -484,12 +484,12 @@ export class ApexRuntime {
         framing = Math.max(1, 1.1 / this.camera.aspect),
         distance =
           this.cameraMode === 0
-            ? (7.9 + Math.abs(s.speed) * 0.018) * framing
+            ? (5.9 + Math.abs(s.speed) * 0.01) * framing
             : this.cameraMode === 1
               ? 5.1 * framing
               : -1.05;
       const height =
-        this.cameraMode === 0 ? 3 : this.cameraMode === 1 ? 1.75 : 1.2;
+        this.cameraMode === 0 ? 2.35 : this.cameraMode === 1 ? 1.5 : 1.2;
       const shake =
         reduced || this.cameraMode === 2
           ? 0
@@ -500,7 +500,7 @@ export class ApexRuntime {
         p.y + height + shake,
         p.z - cos * distance,
       );
-      this.cameraTarget.set(p.x + sin * 14, p.y + 1.0, p.z + cos * 14);
+      this.cameraTarget.set(p.x + sin * 9, p.y + 0.9, p.z + cos * 9);
       // A rising road cannot swallow the trailing camera when cresting a hill.
       const behind = trackPoint(
         s.road.progress - Math.max(0, distance) / TRACK_LENGTH,
@@ -516,8 +516,8 @@ export class ApexRuntime {
     const fov =
       this.phase === "menu" || this.phase === "finish"
         ? 53
-        : (this.cameraMode === 2 ? 68 : 58) +
-          (reduced ? 0 : Math.min(15, Math.abs(s.speed) * 0.19));
+        : (this.cameraMode === 2 ? 64 : 54) +
+          (reduced ? 0 : Math.min(7, Math.abs(s.speed) * 0.1));
     this.camera.fov = THREE.MathUtils.damp(this.camera.fov, fov, 3, dt);
     this.camera.updateProjectionMatrix();
   }
