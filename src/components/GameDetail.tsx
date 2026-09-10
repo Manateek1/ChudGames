@@ -1,4 +1,4 @@
-﻿import { GameThumbnail } from "./GameThumbnail";
+import { GameThumbnail } from "./GameThumbnail";
 import type { Difficulty, GameDefinition } from "../types/arcade";
 
 interface GameDetailProps {
@@ -7,7 +7,6 @@ interface GameDetailProps {
   mode: string;
   bestScore: number;
   ebtBucks: number;
-  daily: boolean;
   reducedMotion: boolean;
   onDifficultyChange: (difficulty: Difficulty) => void;
   onModeChange: (mode: string) => void;
@@ -21,7 +20,6 @@ export const GameDetail = ({
   mode,
   bestScore,
   ebtBucks,
-  daily,
   reducedMotion,
   onDifficultyChange,
   onModeChange,
@@ -44,7 +42,6 @@ export const GameDetail = ({
           </div>
           <div className="flex flex-wrap gap-2">
             {isFortLite && <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-semibold text-slate-950">Main Feature</span>}
-            {daily && <span className="rounded-full bg-sky-300 px-3 py-1 text-xs font-semibold text-slate-950">Daily</span>}
           </div>
         </div>
         <p className="mt-3 text-sky-50/80">{game.description}</p>

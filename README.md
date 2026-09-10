@@ -1,4 +1,4 @@
-﻿# ChudGames
+# ChudGames
 
 ChudGames is a React + Vite + TypeScript game launcher with a neon UI, shared game engine utilities, and 11 playable games including FortLite and Apex Run.
 
@@ -26,7 +26,6 @@ ChudGames is a React + Vite + TypeScript game launcher with a neon UI, shared ga
   - `fps.ts`: rolling-average FPS meter.
   - `math.ts`: deterministic random + collision helpers.
   - `storage.ts`: localStorage settings, high scores, progress.
-  - `daily.ts`: fixed-seed daily challenge picker.
   - `achievements.ts`: local achievement unlock rules.
 - `src/components/GamePlayer.tsx`: shared in-game shell (tutorial, pause, restart, quit, FPS, mobile controls).
 

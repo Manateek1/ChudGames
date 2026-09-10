@@ -17,7 +17,6 @@ const Arrow = (): React.JSX.Element => (
 
 export const HomeScreen = ({ games, reducedMotion, onBrowse, onOpen }: HomeScreenProps): React.JSX.Element => {
   const homeGames = games.filter((game) => game.id !== "fortlite").slice(0, 4);
-  const apex = games.find((game) => game.id === "apex-run") ?? homeGames[0];
 
   return (
     <div className="chud-home">
@@ -38,7 +37,7 @@ export const HomeScreen = ({ games, reducedMotion, onBrowse, onOpen }: HomeScree
             <h1 id="home-title">good games.<br />no nonsense.</h1>
             <p>A small collection of browser games with quick starts, sharp controls, and no downloads.</p>
             <div className="chud-home__hero-actions">
-              <button type="button" className="chud-home__play" onClick={() => apex && onOpen(apex.id)}>Play something</button>
+              <button type="button" className="chud-home__play" onClick={onBrowse}>Play something</button>
               <button type="button" className="chud-home__collection-link" onClick={onBrowse}>See the collection <Arrow /></button>
             </div>
           </div>

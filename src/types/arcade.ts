@@ -1,4 +1,4 @@
-﻿import type { ComponentType } from "react";
+import type { ComponentType } from "react";
 import type { AudioManager } from "../engine/audio";
 import type { InputManager } from "../engine/input";
 
@@ -86,12 +86,6 @@ export interface ProgressState {
   stats: Record<string, GameStats>;
   dailyBest: Record<string, { gameId: string; score: number }>;
   ebtBucks: number;
-}
-
-export interface DailyChallenge {
-  dateKey: string;
-  gameId: string;
-  seed: number;
 }
 
 export interface Achievement {

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AchievementPanel } from "./components/AchievementPanel";
 import { AnimatedBackground } from "./components/AnimatedBackground";
 import { GameDetail } from "./components/GameDetail";
@@ -9,7 +9,6 @@ import { PageTransition } from "./components/PageTransition";
 import { SettingsModal } from "./components/SettingsModal";
 import "./components/ArcadeShell.css";
 import { evaluateAchievements } from "./engine/achievements";
-import { pickDailyChallenge } from "./engine/daily";
 import {
   getBestScore,
   loadProgress,
@@ -17,7 +16,6 @@ import {
   markTutorialSeen,
   saveProgress,
   saveSettings,
-  withDailyBest,
   withGameResult,
   withUnlockedAchievements,
 } from "./engine/storage";
@@ -44,15 +42,9 @@ function App(): React.JSX.Element {
   const [mode, setMode] = useState("single");
   const [showSettings, setShowSettings] = useState(false);
   const [runSeed, setRunSeed] = useState(randomSeed);
-  const [dailyRun, setDailyRun] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const selectedGame = gameMap.get(selectedGameId) ?? gameRegistry[0];
-
-  const daily = useMemo(
-    () => pickDailyChallenge(gameRegistry.map((game) => game.id)),
-    [],
-  );
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
@@ -111,7 +103,6 @@ function App(): React.JSX.Element {
       targetGame.modes?.some((item) => item.id === current) ? current : defaultModeForGame(targetGame),
     );
     setScreen("detail");
-    setDailyRun(false);
   };
 
   const startFromDetail = (): void => {
@@ -121,23 +112,6 @@ function App(): React.JSX.Element {
     }
 
     setRunSeed(randomSeed());
-    setDailyRun(false);
-    setScreen("play");
-  };
-
-  const startDaily = (): void => {
-    setSelectedGameId(daily.gameId);
-    const targetGame = gameMap.get(daily.gameId) ?? gameRegistry[0];
-    if (targetGame.isAvailable === false) {
-      setToast(`${targetGame.title} is temporarily unavailable while Phase 1 is being stabilized.`);
-      setScreen("detail");
-      return;
-    }
-
-    setDifficulty(preferredDifficulty(targetGame.difficulties));
-    setMode(defaultModeForGame(targetGame));
-    setRunSeed(daily.seed);
-    setDailyRun(true);
     setScreen("play");
   };
 
@@ -153,10 +127,6 @@ function App(): React.JSX.Element {
         tile: result.stats?.tile,
         run: result.stats?.run,
       });
-
-      if (dailyRun) {
-        next = withDailyBest(next, daily.dateKey, selectedGame.id, trackedScore);
-      }
 
       const unlocked = evaluateAchievements(next, selectedGame.id, mode, result);
       if (unlocked.length > 0) {
@@ -192,7 +162,6 @@ function App(): React.JSX.Element {
         <nav>
           <button type="button" className="arcade-btn-secondary" onClick={() => setScreen("home")}>Home</button>
           <button type="button" className="arcade-btn-secondary" onClick={() => setScreen("library")}>Games</button>
-          <button type="button" className="arcade-btn-secondary" onClick={startDaily}>Daily</button>
           <button type="button" className="arcade-btn-secondary" onClick={() => setShowSettings(true)}>Settings</button>
         </nav>
       </div>
@@ -236,7 +205,6 @@ function App(): React.JSX.Element {
               mode={mode}
               bestScore={bestScore}
               ebtBucks={progress.ebtBucks}
-              daily={daily.gameId === selectedGame.id}
               reducedMotion={settings.reducedMotion}
               onDifficultyChange={setDifficulty}
               onModeChange={setMode}
