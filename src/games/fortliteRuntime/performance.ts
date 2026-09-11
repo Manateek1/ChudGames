@@ -61,10 +61,12 @@ export function getHudUpdateIntervalMs(quality: GraphicsQuality): number {
 }
 
 export function getFortLiteRenderIntervalMs(quality: GraphicsQuality): number {
-  // The simulation already advances at 30 Hz. Rendering low quality at 60 Hz
-  // doubles the GPU work without adding gameplay fidelity on constrained devices.
+  // The simulation advances at 30 Hz, but low quality still benefits from
+  // interpolated transforms at 45 Hz. This keeps movement from feeling
+  // choppy while staying below the old 60 Hz render cost on constrained
+  // devices.
   if (quality === 'low') {
-    return 1000 / 30;
+    return 1000 / 45;
   }
   if (quality === 'medium') {
     return 1000 / 45;
