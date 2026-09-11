@@ -2898,7 +2898,6 @@ export class FortLiteGame {
       this.cameraPitch = clamp(this.cameraPitch - this.pendingLookDeltaY * lookSensitivity, -0.65, 0.88);
       this.pendingLookDeltaX = 0;
       this.pendingLookDeltaY = 0;
-      this.updateCamera();
 
       if (this.justPressedKeys.has('Space') || this.justPressedMouseButtons.has(0)) {
         this.cycleSpectatorTarget();
@@ -2978,7 +2977,12 @@ export class FortLiteGame {
     }
 
     this.applyVerticalMotion(actor, dt);
-    this.updateCamera();
+    const needsAimCameraUpdate =
+      (!this.isBuildMode() && this.mouseDown.has(0)) ||
+      (this.isBuildMode() && this.justPressedMouseButtons.has(0));
+    if (needsAimCameraUpdate) {
+      this.updateCamera();
+    }
 
     if (!this.isBuildMode() && actor.inventory.mode === 'weapon' && this.mouseDown.has(0)) {
       this.tryFireWeapon(actor, this.getAimDirection(), true);
