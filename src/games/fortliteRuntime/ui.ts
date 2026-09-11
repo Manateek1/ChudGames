@@ -39,6 +39,7 @@ export interface HudSnapshot {
   eliminationCount: number;
   materials: Record<MaterialType, number>;
   stormText: string;
+  isInStorm: boolean;
   bannerText: string;
   buildMode: boolean;
   buildPieceType: BuildPieceType;
@@ -459,12 +460,13 @@ export class FortLiteHud {
       this.topLeftMaterials.textContent = `Wood ${snapshot.materials.wood} | Stone ${snapshot.materials.stone} | Metal ${snapshot.materials.metal}`;
     }
 
-    const topRightKey = [snapshot.aliveCount, snapshot.eliminationCount, snapshot.stormText].join('|');
+    const topRightKey = [snapshot.aliveCount, snapshot.eliminationCount, snapshot.stormText, snapshot.isInStorm ? 1 : 0].join('|');
     if (topRightKey !== this.lastTopRightKey) {
       this.lastTopRightKey = topRightKey;
       this.topRightPlayers.textContent = `${snapshot.aliveCount} Left`;
       this.topRightElims.textContent = `Elims: ${snapshot.eliminationCount}`;
       this.topRightStorm.textContent = snapshot.stormText;
+      this.topRightStorm.classList.toggle('hud-storm-danger', snapshot.isInStorm);
     }
 
     if (snapshot.bannerText !== this.lastBannerText) {

@@ -92,10 +92,15 @@ export function createStormVignetteElement(): HTMLDivElement {
 export function updateStormVignette(element: HTMLDivElement, intensity: number): void {
   const clamped = Math.max(0, Math.min(1, intensity));
   if (clamped < 0.01) {
+    element.classList.remove('active');
     element.style.opacity = '0';
     return;
   }
-  element.style.opacity = String(clamped * 0.6);
+
+  element.classList.add('active');
+  // Keep the storm unmistakable as soon as the player crosses the boundary,
+  // while still reserving the darkest treatment for deeper storm exposure.
+  element.style.opacity = String(0.56 + clamped * 0.28);
 }
 
 /**

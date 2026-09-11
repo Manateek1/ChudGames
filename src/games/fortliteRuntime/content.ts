@@ -19,6 +19,7 @@ export const SKYDIVE_ALTITUDE = 92;
 export const GLIDER_DEPLOY_ALTITUDE = 38;
 export const SKYDIVE_FALL_SPEED = 24;
 export const GLIDER_FALL_SPEED = 9;
+export const STORM_DAMAGE_PER_SECOND = 2;
 const SHRINK_DURATION_SCALE = MAP_SCALE / STORM_SPEED_MULTIPLIER;
 const PAUSE_DURATION_SCALE = MAP_SCALE / STORM_SPEED_MULTIPLIER;
 
@@ -83,11 +84,11 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
 ];
 
 export const STORM_PHASES: readonly StormPhase[] = [
-  { pauseDuration: 16 * PAUSE_DURATION_SCALE, shrinkDuration: 26 * SHRINK_DURATION_SCALE, targetRadius: 184 * MAP_SCALE, damagePerSecond: 0.5 },
-  { pauseDuration: 13 * PAUSE_DURATION_SCALE, shrinkDuration: 22 * SHRINK_DURATION_SCALE, targetRadius: 136 * MAP_SCALE, damagePerSecond: 1 },
-  { pauseDuration: 10 * PAUSE_DURATION_SCALE, shrinkDuration: 20 * SHRINK_DURATION_SCALE, targetRadius: 84 * MAP_SCALE, damagePerSecond: 2 },
-  { pauseDuration: 8 * PAUSE_DURATION_SCALE, shrinkDuration: 18 * SHRINK_DURATION_SCALE, targetRadius: 40 * MAP_SCALE, damagePerSecond: 3.5 },
-  { pauseDuration: 5 * PAUSE_DURATION_SCALE, shrinkDuration: 14 * SHRINK_DURATION_SCALE, targetRadius: 12 * MAP_SCALE, damagePerSecond: 5 }
+  { pauseDuration: 16 * PAUSE_DURATION_SCALE, shrinkDuration: 26 * SHRINK_DURATION_SCALE, targetRadius: 184 * MAP_SCALE, damagePerSecond: STORM_DAMAGE_PER_SECOND },
+  { pauseDuration: 13 * PAUSE_DURATION_SCALE, shrinkDuration: 22 * SHRINK_DURATION_SCALE, targetRadius: 136 * MAP_SCALE, damagePerSecond: STORM_DAMAGE_PER_SECOND },
+  { pauseDuration: 10 * PAUSE_DURATION_SCALE, shrinkDuration: 20 * SHRINK_DURATION_SCALE, targetRadius: 84 * MAP_SCALE, damagePerSecond: STORM_DAMAGE_PER_SECOND },
+  { pauseDuration: 8 * PAUSE_DURATION_SCALE, shrinkDuration: 18 * SHRINK_DURATION_SCALE, targetRadius: 40 * MAP_SCALE, damagePerSecond: STORM_DAMAGE_PER_SECOND },
+  { pauseDuration: 5 * PAUSE_DURATION_SCALE, shrinkDuration: 14 * SHRINK_DURATION_SCALE, targetRadius: 12 * MAP_SCALE, damagePerSecond: STORM_DAMAGE_PER_SECOND }
 ];
 
 export const RESOURCE_COLORS: Record<MaterialType, number> = {

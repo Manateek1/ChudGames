@@ -178,6 +178,17 @@
   color: #9fe7ff;
 }
 
+.hud-storm-danger {
+  color: #ff8bbd;
+  text-shadow: 0 0 12px rgba(255, 70, 151, 0.72);
+  animation: fortlite-storm-warning 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes fortlite-storm-warning {
+  from { opacity: 0.72; }
+  to { opacity: 1; }
+}
+
 .hud-strong {
   color: #ffffff;
 }
@@ -354,9 +365,30 @@
   inset: 0;
   pointer-events: none;
   opacity: 0;
-  background: radial-gradient(ellipse at center, transparent 38%, rgba(130, 60, 230, 0.42) 100%);
+  background:
+    radial-gradient(ellipse at center, rgba(36, 11, 58, 0.24) 0%, rgba(13, 4, 26, 0.58) 58%, rgba(2, 1, 8, 0.94) 100%),
+    linear-gradient(180deg, rgba(23, 5, 40, 0.22), rgba(3, 1, 11, 0.36));
   z-index: 9;
   transition: opacity 0.3s ease-out;
+  will-change: filter, opacity;
+}
+.fortlite-storm-vignette.active {
+  animation: fortlite-storm-pulse 1.8s ease-in-out infinite;
+}
+@keyframes fortlite-storm-pulse {
+  0%, 100% { filter: brightness(0.86) saturate(1.05); }
+  50% { filter: brightness(0.58) saturate(1.35); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-storm-danger,
+  .fortlite-storm-vignette.active {
+    animation: none;
+  }
+
+  .fortlite-storm-vignette.active {
+    filter: brightness(0.7) saturate(1.2);
+  }
 }
 
 /* Pickup indicator */

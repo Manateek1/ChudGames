@@ -18,6 +18,7 @@ import {
   PLAYER_EYE_HEIGHT,
   RESOURCE_COLORS,
   RESOURCE_RESPAWN_COUNT,
+  STORM_DAMAGE_PER_SECOND,
   STORM_PHASES,
   WEAPON_DEFINITIONS
 } from './content';
@@ -4736,8 +4737,13 @@ export class FortLiteGame {
       0,
       100
     );
+    const distFromCenter = horizontalDistance(this.player.position, this.storm.currentCenter);
+    const stormDiff = distFromCenter - this.storm.currentRadius;
+    const isInStorm = this.isStormActive() && stormDiff > 0;
     const stormText = !this.isStormActive()
       ? `Storm in ${Math.ceil(Math.max(0, STORM_START_DELAY - this.matchTime))}s`
+      : isInStorm
+        ? `IN STORM • ${STORM_DAMAGE_PER_SECOND} HP/s`
       : `Storm Phase ${stormProgress.toFixed(0)}%`;
 
     const statusText = this.player.spawnState === 'parachuting'
@@ -4756,9 +4762,8 @@ export class FortLiteGame {
                   ? `${weapon.definition.name} ready`
                   : 'Find a weapon';
 
-    const distFromCenter = horizontalDistance(this.player.position, this.storm.currentCenter);
-    const stormDiff = distFromCenter - this.storm.currentRadius;
-    const stormIntensity = stormDiff > 0 ? Math.min(1, stormDiff / 25) : 0;
+    const stormDepth = Math.max(0, stormDiff);
+    const stormIntensity = isInStorm ? clamp(0.35 + stormDepth / 30, 0.35, 1) : 0;
     this.hud.updateStormIntensity(stormIntensity);
 
     this.hud.render({
@@ -4771,6 +4776,7 @@ export class FortLiteGame {
       eliminationCount: this.getDisplayedEliminationCount(),
       materials: this.player.inventory.materials,
       stormText,
+      isInStorm,
       bannerText: this.getBannerText(pickupPrompt),
       buildMode: this.isBuildMode(),
       buildPieceType: this.selectedBuildPiece,
@@ -5031,6 +5037,10 @@ export class FortLiteGame {
 
     if (this.player.spawnState === 'parachuting') {
       return 'Parachuting. Steer with WASD, choose your direction, and race to loot before the storm timer expires.';
+    }
+
+    if (this.isStormActive() && this.isOutsideStorm(this.player.position)) {
+      return `IN THE STORM — taking ${STORM_DAMAGE_PER_SECOND} HP/s. Sprint to the safe zone.`;
     }
 
     if (nearbyPickup) {
