@@ -28,6 +28,7 @@ import {
   SKYDIVE_FALL_SPEED,
   GLIDER_FALL_SPEED
 } from '../src/games/fortliteRuntime/content.ts';
+import { buildBoundsOverlap, getBuildBounds } from '../src/games/fortliteRuntime/buildPlacement.ts';
 import { calculateDamageWithFalloff } from '../src/games/fortliteRuntime/combat.ts';
 import { generateBotSkillProfile } from '../src/games/fortliteRuntime/bots.ts';
 import { SeededRandom } from '../src/games/fortliteRuntime/math.ts';
@@ -661,6 +662,10 @@ export class MatchRoom {
       return;
     }
 
+    if (!this.isBuildPlacementValid(msg.pieceType, msg.position, msg.yaw)) {
+      return;
+    }
+
     actor.inventory.materials[materialType] -= BUILD_COST;
     const buildId = `build_${this.buildCounter++}`;
     const piece: ServerBuildPiece = {
@@ -687,6 +692,31 @@ export class MatchRoom {
         health: piece.health
       }
     });
+  }
+
+  private isBuildPlacementValid(
+    pieceType: 'wall' | 'floor' | 'ramp',
+    position: [number, number, number],
+    yaw: number
+  ): boolean {
+    if (!position.every(Number.isFinite) || !Number.isFinite(yaw)) {
+      return false;
+    }
+
+    const bounds = getBuildBounds(pieceType, { x: position[0], y: position[1], z: position[2] }, yaw);
+    for (const existing of this.buildPieces.values()) {
+      const existingBounds = getBuildBounds(
+        existing.pieceType,
+        { x: existing.position[0], y: existing.position[1], z: existing.position[2] },
+        existing.yaw
+      );
+      const verticalGap = Math.abs(bounds.minY - existingBounds.minY);
+      if (verticalGap < 0.45 && buildBoundsOverlap(bounds, existingBounds, 0.12)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private tryStartReload(actor: ServerActor): void {

@@ -369,6 +369,33 @@ describe('FortLite Multiplayer Server Suite', () => {
 
       expect(room.getBuildCount()).toBe(0);
     });
+
+    it('allows vertical stacking but rejects same-layer overlap', () => {
+      const actor = room.getActor(clientId)!;
+      actor.inventory.materials.wood = 100;
+
+      room.handleMessage(ws as unknown as WebSocket, JSON.stringify({
+        type: 'place_build',
+        pieceType: 'wall',
+        position: [0, 2, 4],
+        yaw: 0
+      }));
+      room.handleMessage(ws as unknown as WebSocket, JSON.stringify({
+        type: 'place_build',
+        pieceType: 'wall',
+        position: [0, 6, 4],
+        yaw: 0
+      }));
+      room.handleMessage(ws as unknown as WebSocket, JSON.stringify({
+        type: 'place_build',
+        pieceType: 'wall',
+        position: [0, 2, 4],
+        yaw: 0
+      }));
+
+      expect(room.getBuildCount()).toBe(2);
+      expect(actor.inventory.materials.wood).toBe(100 - BUILD_COST * 2);
+    });
   });
 
   describe('Reconnect Recovery (45-second Grace Window)', () => {

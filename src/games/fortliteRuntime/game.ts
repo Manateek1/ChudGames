@@ -108,10 +108,8 @@ import {
   PLAYER_SPRINT_SPEED,
   PLAYER_STARTER_LOOT_OFFSET,
   QUARTER_BIOME_THETA_LENGTH,
-  RAMP_ANGLE,
   RAMP_HEIGHT,
   RAMP_LENGTH,
-  RAMP_THICKNESS,
   RAMP_WIDTH,
   REGULAR_BIOME_THETA_LENGTH,
   REGULAR_BIOME_THETA_START,
@@ -121,8 +119,6 @@ import {
   THIRD_PERSON_CAMERA_HEIGHT,
   THIRD_PERSON_CAMERA_SHOULDER,
   WALL_HEIGHT,
-  WALL_THICKNESS,
-  WALL_WIDTH,
   WATER_MOVE_MULTIPLIER,
   WORLD_CENTER,
   ZOOMED_CAMERA_FOV,
@@ -132,6 +128,8 @@ import {
   BOT_STARTER_STONE,
   BOT_STARTER_WOOD
 } from './constants';
+import { buildBoundsOverlap, getBuildBounds, getBuildFootprint, getBuildSupportHeight } from './buildPlacement';
+import { createBuildGeometry, createBuildMaterial, getBuildMaterialColor } from './buildVisuals';
 import type {
   Actor,
   Biome,
@@ -3895,12 +3893,9 @@ export class FortLiteGame {
   }
 
   private addBuildPiece(pieceType: BuildPieceType, materialType: MaterialType, position: THREE.Vector3, yaw: number, customId?: string): BuildPiece {
-    const mesh = this.createBuildMesh(pieceType, this.colorForBuildMaterial(materialType), false);
+    const mesh = this.createBuildMesh(pieceType, getBuildMaterialColor(materialType), false);
     mesh.position.copy(position);
     mesh.rotation.y = yaw;
-    if (pieceType === 'ramp') {
-      mesh.rotation.x = RAMP_ANGLE;
-    }
     this.buildGroup.add(mesh);
 
     const piece: BuildPiece = {
@@ -3967,7 +3962,7 @@ export class FortLiteGame {
 
     this.previewMesh.visible = true;
     this.previewMesh.position.copy(placement.position);
-    this.previewMesh.rotation.set(this.selectedBuildPiece === 'ramp' ? RAMP_ANGLE : 0, placement.yaw, 0);
+    this.previewMesh.rotation.set(0, placement.yaw, 0);
     this.buildPlacementValid = placement.valid;
     const material = this.previewMesh.material as THREE.MeshStandardMaterial;
     material.color.setHex(placement.valid ? 0x7be0f6 : 0xff5a67);
@@ -3977,29 +3972,41 @@ export class FortLiteGame {
 
   private computeBuildPlacement(actor: Actor, pieceType: BuildPieceType, forcedWorldPosition?: THREE.Vector3, forcedYaw?: number): { position: THREE.Vector3; yaw: number; valid: boolean } {
     const forward = yawToDirection(this.cameraYaw);
-    const placeTarget = forcedWorldPosition
-      ? forcedWorldPosition.clone()
-      : this.getBuildAimPoint(actor, forward);
+    const aimTarget = forcedWorldPosition
+      ? { position: forcedWorldPosition.clone(), piece: null }
+      : this.getBuildAimTarget(actor, forward);
+    const placeTarget = aimTarget.position;
 
-    const snappedX = snap(placeTarget.x, BUILD_GRID_SIZE);
-    const snappedZ = snap(placeTarget.z, BUILD_GRID_SIZE);
+    let snappedX = snap(placeTarget.x, BUILD_GRID_SIZE);
+    let snappedZ = snap(placeTarget.z, BUILD_GRID_SIZE);
     let supportY = this.sampleGroundHeight(snappedX, snappedZ, actor.position.y + 6);
     const baseYaw = forcedYaw ?? Math.round((this.cameraYaw + this.buildRotation) / (Math.PI * 0.5)) * (Math.PI * 0.5);
     const yaw = pieceType === 'ramp' ? baseYaw + Math.PI : baseYaw;
+    let supportPiece: BuildPiece | null = null;
 
-    // Adjacent socket snapping: if aiming near an existing build piece, snap height vertically
+    // Aim at the upper half of a build piece to get a deterministic vertical stack socket.
     if (!forcedWorldPosition) {
-      let closestPiece: BuildPiece | null = null;
-      let closestDistSq = 4.2 * 4.2;
-      for (const piece of this.buildPieces) {
-        const distSq = piece.position.distanceToSquared(placeTarget);
-        if (distSq < closestDistSq) {
-          closestDistSq = distSq;
-          closestPiece = piece;
+      if (aimTarget.piece && placeTarget.y >= aimTarget.piece.position.y) {
+        supportPiece = aimTarget.piece;
+        supportY = getBuildSupportHeight(supportPiece.pieceType, supportPiece.position.y);
+        snappedX = snap(supportPiece.position.x, BUILD_GRID_SIZE);
+        snappedZ = snap(supportPiece.position.z, BUILD_GRID_SIZE);
+      } else {
+        let closestPiece: BuildPiece | null = null;
+        let closestDistSq = 4.2 * 4.2;
+        for (const piece of this.buildPieces) {
+          const distSq = piece.position.distanceToSquared(placeTarget);
+          if (distSq < closestDistSq) {
+            closestDistSq = distSq;
+            closestPiece = piece;
+          }
         }
-      }
-      if (closestPiece && placeTarget.y > closestPiece.position.y + 0.8) {
-        supportY = closestPiece.position.y + (closestPiece.pieceType === 'wall' ? WALL_HEIGHT * 0.5 : FLOOR_THICKNESS * 0.5);
+        if (closestPiece && placeTarget.y >= getBuildSupportHeight(closestPiece.pieceType, closestPiece.position.y) - 0.45) {
+          supportPiece = closestPiece;
+          supportY = getBuildSupportHeight(supportPiece.pieceType, supportPiece.position.y);
+          snappedX = snap(supportPiece.position.x, BUILD_GRID_SIZE);
+          snappedZ = snap(supportPiece.position.z, BUILD_GRID_SIZE);
+        }
       }
     }
 
@@ -4013,11 +4020,11 @@ export class FortLiteGame {
       snappedZ
     );
 
-    const valid = this.isBuildPlacementValid(actor, pieceType, position, yaw);
+    const valid = this.isBuildPlacementValid(actor, pieceType, position, yaw, supportPiece);
     return { position, yaw, valid };
   }
 
-  private getBuildAimPoint(actor: Actor, forward: THREE.Vector3): THREE.Vector3 {
+  private getBuildAimTarget(actor: Actor, forward: THREE.Vector3): { position: THREE.Vector3; piece: BuildPiece | null } {
     const direction = this.getAimDirection();
     this.raycaster.set(this.camera.position, direction);
     this.raycaster.far = 24;
@@ -4025,17 +4032,26 @@ export class FortLiteGame {
     for (const hit of hits) {
       const kind = hit.object.userData.kind as string | undefined;
       if (kind === 'static' || kind === 'build') {
-        return hit.point.clone();
+        return {
+          position: hit.point.clone(),
+          piece: kind === 'build' ? (hit.object.userData.ref as BuildPiece | null) : null
+        };
       }
     }
 
     const forwardX = actor.position.x + forward.x * 6.5;
     const forwardZ = actor.position.z + forward.z * 6.5;
     const forwardY = this.sampleGroundHeight(forwardX, forwardZ, actor.position.y + 2);
-    return new THREE.Vector3(forwardX, forwardY, forwardZ);
+    return { position: new THREE.Vector3(forwardX, forwardY, forwardZ), piece: null };
   }
 
-  private isBuildPlacementValid(actor: Actor, pieceType: BuildPieceType, position: THREE.Vector3, yaw: number): boolean {
+  private isBuildPlacementValid(
+    actor: Actor,
+    pieceType: BuildPieceType,
+    position: THREE.Vector3,
+    yaw: number,
+    supportPiece: BuildPiece | null
+  ): boolean {
     if (horizontalDistance(actor.position, position) > 12.5) {
       return false;
     }
@@ -4047,13 +4063,13 @@ export class FortLiteGame {
     const bounds = this.getBuildBounds(pieceType, position, yaw);
 
     for (const obstacle of this.staticObstacles) {
-      if (this.overlapsBounds(bounds, obstacle, 0.05) && bounds.minY < obstacle.height + 0.2) {
+      if (buildBoundsOverlap(bounds, obstacle, 0.05) && bounds.minY < obstacle.height + 0.2) {
         return false;
       }
     }
 
     for (const node of this.resourceNodes) {
-      if (this.overlapsBounds(bounds, node.obstacle, 0.05)) {
+      if (buildBoundsOverlap(bounds, node.obstacle, 0.05)) {
         return false;
       }
     }
@@ -4061,7 +4077,7 @@ export class FortLiteGame {
     for (const piece of this.buildPieces) {
       const pieceBounds = this.getBuildBounds(piece.pieceType, piece.position, piece.yaw);
       const verticalGap = Math.abs(bounds.minY - pieceBounds.minY);
-      if (verticalGap < 0.45 && this.overlapsBounds(bounds, pieceBounds, 0.12)) {
+      if (verticalGap < 0.45 && buildBoundsOverlap(bounds, pieceBounds, 0.12)) {
         return false;
       }
     }
@@ -4070,7 +4086,7 @@ export class FortLiteGame {
       if (!other.alive) {
         continue;
       }
-      if (horizontalDistance(other.position, position) < other.radius + 1.4) {
+      if (supportPiece === null && horizontalDistance(other.position, position) < other.radius + 1.4) {
         return false;
       }
     }
@@ -4079,52 +4095,12 @@ export class FortLiteGame {
   }
 
   private getBuildBounds(pieceType: BuildPieceType, position: THREE.Vector3, yaw: number): ObstacleBox & { minY: number; maxY: number } {
-    if (pieceType === 'floor') {
-      return {
-        minX: position.x - FLOOR_SIZE * 0.5,
-        maxX: position.x + FLOOR_SIZE * 0.5,
-        minZ: position.z - FLOOR_SIZE * 0.5,
-        maxZ: position.z + FLOOR_SIZE * 0.5,
-        minY: position.y - FLOOR_THICKNESS * 0.5,
-        maxY: position.y + FLOOR_THICKNESS * 0.5,
-        height: position.y + FLOOR_THICKNESS * 0.5,
-        mesh: this.previewMesh ?? this.buildGroup
-      };
-    }
-
-    if (pieceType === 'ramp') {
-      return {
-        minX: position.x - RAMP_WIDTH * 0.5,
-        maxX: position.x + RAMP_WIDTH * 0.5,
-        minZ: position.z - RAMP_LENGTH * 0.5,
-        maxZ: position.z + RAMP_LENGTH * 0.5,
-        minY: position.y - RAMP_HEIGHT * 0.5,
-        maxY: position.y + RAMP_HEIGHT * 0.5,
-        height: position.y + RAMP_HEIGHT * 0.5,
-        mesh: this.previewMesh ?? this.buildGroup
-      };
-    }
-
-    const orientedWidth = Math.abs(Math.cos(yaw)) > 0.5 ? WALL_WIDTH : WALL_THICKNESS;
-    const orientedDepth = Math.abs(Math.cos(yaw)) > 0.5 ? WALL_THICKNESS : WALL_WIDTH;
+    const bounds = getBuildBounds(pieceType, position, yaw);
     return {
-      minX: position.x - orientedWidth * 0.5,
-      maxX: position.x + orientedWidth * 0.5,
-      minZ: position.z - orientedDepth * 0.5,
-      maxZ: position.z + orientedDepth * 0.5,
-      minY: position.y - WALL_HEIGHT * 0.5,
-      maxY: position.y + WALL_HEIGHT * 0.5,
-      height: position.y + WALL_HEIGHT * 0.5,
+      ...bounds,
+      height: bounds.maxY,
       mesh: this.previewMesh ?? this.buildGroup
     };
-  }
-
-  private overlapsBounds(
-    a: Pick<ObstacleBox, 'minX' | 'maxX' | 'minZ' | 'maxZ'>,
-    b: Pick<ObstacleBox, 'minX' | 'maxX' | 'minZ' | 'maxZ'>,
-    padding: number
-  ): boolean {
-    return a.minX < b.maxX - padding && a.maxX > b.minX + padding && a.minZ < b.maxZ - padding && a.maxZ > b.minZ + padding;
   }
 
   private moveActor(actor: Actor, velocity: THREE.Vector3, dt: number): void {
@@ -5683,24 +5659,7 @@ export class FortLiteGame {
   }
 
   private createBuildMesh(pieceType: BuildPieceType, color: number, transparent: boolean): THREE.Mesh {
-    let geometry: THREE.BufferGeometry;
-    if (pieceType === 'wall') {
-      geometry = new THREE.BoxGeometry(WALL_WIDTH, WALL_HEIGHT, WALL_THICKNESS);
-    } else if (pieceType === 'floor') {
-      geometry = new THREE.BoxGeometry(FLOOR_SIZE, FLOOR_THICKNESS, FLOOR_SIZE);
-    } else {
-      geometry = new THREE.BoxGeometry(RAMP_WIDTH, RAMP_THICKNESS, RAMP_LENGTH);
-    }
-
-    const material = new THREE.MeshStandardMaterial({
-      color,
-      transparent,
-      opacity: transparent ? 0.45 : 0.92,
-      roughness: 0.88,
-      metalness: 0.05
-    });
-
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new THREE.Mesh(createBuildGeometry(pieceType), createBuildMaterial(color, transparent));
     mesh.userData.pieceType = pieceType;
     return mesh;
   }
@@ -6179,26 +6138,15 @@ export class FortLiteGame {
   }
 
   private makeWallObstacle(position: THREE.Vector3, yaw: number, mesh: THREE.Mesh): ObstacleBox {
-    const width = Math.abs(Math.cos(yaw)) > 0.5 ? WALL_WIDTH : WALL_THICKNESS;
-    const depth = Math.abs(Math.cos(yaw)) > 0.5 ? WALL_THICKNESS : WALL_WIDTH;
+    const footprint = getBuildFootprint('wall', yaw);
     return {
-      minX: position.x - width * 0.5,
-      maxX: position.x + width * 0.5,
-      minZ: position.z - depth * 0.5,
-      maxZ: position.z + depth * 0.5,
-      height: position.y + WALL_HEIGHT * 0.5,
+      minX: position.x - footprint.width * 0.5,
+      maxX: position.x + footprint.width * 0.5,
+      minZ: position.z - footprint.depth * 0.5,
+      maxZ: position.z + footprint.depth * 0.5,
+      height: position.y + footprint.height * 0.5,
       mesh
     };
-  }
-
-  private colorForBuildMaterial(materialType: MaterialType): number {
-    if (materialType === 'wood') {
-      return 0xc18b43;
-    }
-    if (materialType === 'stone') {
-      return 0xa9b4bf;
-    }
-    return 0x93b0c5;
   }
 
   private applyWeaponSpread(direction: THREE.Vector3, spread: number, playerOwned: boolean): THREE.Vector3 {
