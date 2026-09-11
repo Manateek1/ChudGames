@@ -70,6 +70,15 @@ wss.on('connection', (ws: WebSocket) => {
             return;
           }
 
+          if (!room.canAcceptClient(msg.reconnectToken)) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              code: 'ROOM_FULL',
+              message: 'This match is full. FortLite supports up to 50 players.'
+            }));
+            return;
+          }
+
           currentRoom = room;
           const { client } = room.createOrJoinClient(ws, msg.playerName, msg.reconnectToken);
           ws.send(JSON.stringify({

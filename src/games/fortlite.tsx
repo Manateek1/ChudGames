@@ -3,6 +3,7 @@ import type { GameComponentProps } from "../types/arcade";
 import { FortLiteGame } from "./fortliteRuntime/game";
 import { FortLiteNetworkClient } from "./fortliteRuntime/multiplayer/client";
 import type { LobbyPlayer, MatchStartingMessage } from "./fortliteRuntime/multiplayer/protocol";
+import { MAX_MATCH_PARTICIPANTS } from "./fortliteRuntime/content";
 import "./fortlite.css";
 
 const FULLSCREEN_HINT_KEY = "fortlite_fullscreen_hint_hidden";
@@ -451,7 +452,7 @@ export const FortLite = ({
               </button>
             </div>
             <div className="fortlite-lobby-subtitle">
-              Join-code battle royale with synchronized combat, building, and bots.
+              Join-code battle royale with synchronized combat, building, and bots. {MAX_MATCH_PARTICIPANTS}-player cap.
             </div>
 
             {lobbyState === "menu" ? (
@@ -566,7 +567,7 @@ export const FortLite = ({
                 )}
 
                 <div className="fortlite-input-label">
-                  PLAYERS IN LOBBY ({lobbyPlayers.length})
+                  PLAYERS IN LOBBY ({lobbyPlayers.length}/{MAX_MATCH_PARTICIPANTS})
                 </div>
                 <div className="fortlite-player-list">
                   {lobbyPlayers.map((player) => (

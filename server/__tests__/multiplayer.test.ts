@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { WebSocket } from 'ws';
-import { MatchRoom, TICK_DELTA_SECONDS } from '../matchRoom.ts';
+import { MatchRoom, TICK_DELTA_SECONDS, TOTAL_MATCH_PARTICIPANTS } from '../matchRoom.ts';
 import { RoomManager } from '../roomManager.ts';
 import {
   generateRandomRoomCode,
@@ -453,7 +453,7 @@ describe('FortLite Multiplayer Server Suite', () => {
       // Start match
       room.forceStartMatch();
       expect(room.state).toBe('in_game');
-      expect(room.getAllActors().length).toBe(10); // 2 humans + 8 bots
+      expect(room.getAllActors().length).toBe(TOTAL_MATCH_PARTICIPANTS); // 2 humans + remaining bots
 
       const TOTAL_TICKS = 24000; // 24,000 ticks * 0.05s = 1,200s (20 minutes)
 

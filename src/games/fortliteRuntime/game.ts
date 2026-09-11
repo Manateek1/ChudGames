@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { AudioManager } from '../../engine/audio';
 import type { GraphicsQuality } from '../../types/arcade';
-import { RollingFps, TARGET_FRAME_DELTA_SECONDS, shouldSkipFrame } from '../../engine/fps';
+import { RollingFps, TARGET_FRAME_DELTA_SECONDS } from '../../engine/fps';
 import {
   ACTOR_RADIUS,
   BOT_COUNT,
@@ -108,6 +108,7 @@ interface Actor {
   healthBarRoot: THREE.Group;
   healthBarFill: THREE.Mesh;
   bodyParts: THREE.Object3D[];
+  detailParts: THREE.Object3D[];
   heldItemRoot: THREE.Group;
   heldItemMesh: THREE.Object3D | null;
   heldItemKey: string;
@@ -274,6 +275,7 @@ const DYNAMIC_RESOLUTION_DROP_STEP = 0.12;
 const DYNAMIC_RESOLUTION_RECOVER_STEP = 0.04;
 const BOT_NEAR_PRIORITY_DISTANCE = 72;
 const BOT_MID_PRIORITY_DISTANCE = 120;
+const FORTLITE_RENDER_INTERVAL_MS = 1000 / 60;
 
 export interface FortLiteMatchResult {
   won: boolean;
@@ -705,7 +707,7 @@ export class FortLiteGame {
       return;
     }
 
-    if (shouldSkipFrame(time, this.lastFrameTime)) {
+    if (this.lastFrameTime !== 0 && time - this.lastFrameTime < FORTLITE_RENDER_INTERVAL_MS) {
       if (!this.disposed) {
         this.animationFrame = window.requestAnimationFrame(this.frame);
       }
@@ -2278,37 +2280,36 @@ export class FortLiteGame {
 
   private createParachuteMesh(color: number, accent: number): THREE.Group {
     const group = new THREE.Group();
+    const canopySegments = this.graphicsQuality === 'low' ? 12 : this.graphicsQuality === 'medium' ? 16 : 18;
+    const canopyRings = this.graphicsQuality === 'low' ? 8 : this.graphicsQuality === 'medium' ? 10 : 12;
+    const trimSegments = this.graphicsQuality === 'low' ? 16 : this.graphicsQuality === 'medium' ? 20 : 26;
     const canopy = new THREE.Mesh(
-      new THREE.SphereGeometry(2.35, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.5),
+      new THREE.SphereGeometry(2.35, canopySegments, canopyRings, 0, Math.PI * 2, 0, Math.PI * 0.5),
       new THREE.MeshStandardMaterial({ color, roughness: 0.56, metalness: 0.08 })
     );
     canopy.position.y = 4.6;
     canopy.scale.y = 0.7;
 
     const trim = new THREE.Mesh(
-      new THREE.TorusGeometry(2.08, 0.08, 8, 26),
+      new THREE.TorusGeometry(2.08, 0.08, 8, trimSegments),
       new THREE.MeshStandardMaterial({ color: accent, roughness: 0.42, metalness: 0.14 })
     );
     trim.rotation.x = Math.PI / 2;
     trim.position.y = 4.08;
 
-    const lineMaterial = new THREE.MeshStandardMaterial({ color: 0xe6f1f7, roughness: 0.3, metalness: 0.18 });
-    const lineOffsets = [
-      new THREE.Vector3(-1.4, 4.05, -0.6),
-      new THREE.Vector3(1.4, 4.05, -0.6),
-      new THREE.Vector3(-1.4, 4.05, 0.6),
-      new THREE.Vector3(1.4, 4.05, 0.6)
+    // One line-segment draw call replaces four cylinder meshes per player.
+    const linePoints = [
+      new THREE.Vector3(-0.45, 1.7, 0), new THREE.Vector3(-1.4, 4.05, -0.6),
+      new THREE.Vector3(0.45, 1.7, 0), new THREE.Vector3(1.4, 4.05, -0.6),
+      new THREE.Vector3(-0.3, 1.7, 0), new THREE.Vector3(-1.4, 4.05, 0.6),
+      new THREE.Vector3(0.3, 1.7, 0), new THREE.Vector3(1.4, 4.05, 0.6)
     ];
-    for (const offset of lineOffsets) {
-      const line = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 3.2, 6), lineMaterial);
-      line.position.copy(offset.clone().multiplyScalar(0.5));
-      line.position.y = 2.65;
-      line.lookAt(offset);
-      line.rotateX(Math.PI / 2);
-      group.add(line);
-    }
+    const lines = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(linePoints),
+      new THREE.LineBasicMaterial({ color: 0xe6f1f7, transparent: true, opacity: 0.82 })
+    );
 
-    group.add(canopy, trim);
+    group.add(canopy, trim, lines);
     group.visible = false;
     return group;
   }
@@ -2456,6 +2457,7 @@ export class FortLiteGame {
       healthBarRoot,
       healthBarFill,
       bodyParts: [visualRoot, shadow],
+      detailParts: [bodyBand, headBand, leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot],
       heldItemRoot,
       heldItemMesh: null,
       heldItemKey: 'hidden',
@@ -2592,8 +2594,11 @@ export class FortLiteGame {
       }
     }
 
-    for (let i = 0; i < this.participantSpawns.length; i += 1) {
-      this.spawnStarterLoadout(this.participantSpawns[i], i);
+    // Bots already receive their starter loadout in spawnParticipants. Keeping
+    // physical starter kits for every bot creates 150+ extra pickup meshes and
+    // makes every bot scan a much larger loot list on every simulation step.
+    if (this.participantSpawns[0]) {
+      this.spawnStarterLoadout(this.participantSpawns[0], 0);
     }
 
     this.spawnMedkits();
@@ -4441,6 +4446,9 @@ export class FortLiteGame {
       actor === this.player ||
       actor.spawnState === 'parachuting' ||
       distanceToPlayer <= detailedVisualDistance;
+    for (const part of actor.detailParts) {
+      part.visible = useDetailedAnimation;
+    }
     const material = actor.ringMesh.material as THREE.MeshBasicMaterial;
     const frameDistance = horizontalDistance(actor.position, actor.lastPosition);
     const targetMoveBlend = actor.spawnState === 'grounded'
@@ -6677,8 +6685,10 @@ export class FortLiteGame {
     this.renderer.shadowMap.enabled = quality !== 'low';
     this.renderer.shadowMap.needsUpdate = true;
     this.maxShotEffects = quality === 'low' ? 8 : quality === 'medium' ? 14 : 20;
-    this.renderer.toneMapping = quality === 'high' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
-    this.renderer.toneMappingExposure = quality === 'high' ? 1.02 : 1;
+    // Keep the inexpensive low/medium presets color-graded too. The previous
+    // no-tone-mapping path made the low preset look washed out and overly soft.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = quality === 'low' ? 1.08 : quality === 'medium' ? 1.04 : 1.02;
     this.currentPixelRatio = this.getPixelRatioForQuality(quality);
     this.lowFpsTime = 0;
     this.highFpsTime = 0;
@@ -6686,12 +6696,12 @@ export class FortLiteGame {
   }
 
   private getPixelRatioForQuality(quality: GraphicsQuality): number {
-    const target = quality === 'low' ? 0.72 : quality === 'medium' ? 0.88 : 1;
+    const target = quality === 'low' ? 0.84 : quality === 'medium' ? 0.94 : 1;
     return Math.min(window.devicePixelRatio || 1, target);
   }
 
   private getMinimumPixelRatioForQuality(quality: GraphicsQuality): number {
-    const minimum = quality === 'low' ? 0.5 : quality === 'medium' ? 0.62 : 0.78;
+    const minimum = quality === 'low' ? 0.58 : quality === 'medium' ? 0.68 : 0.78;
     return Math.min(window.devicePixelRatio || 1, minimum);
   }
 
@@ -6901,6 +6911,14 @@ export class FortLiteGame {
     actor.group.rotation.y = actor.yaw;
     actor.parachuteGroup.visible = actor.spawnState === 'parachuting';
     actor.lastPosition.copy(actor.position);
+    const detailed = actor === this.player || actor.spawnState === 'parachuting' ||
+      horizontalDistance(actor.position, this.player.position) <= this.getDetailedActorVisualDistance();
+    for (const part of actor.detailParts) {
+      part.visible = detailed;
+    }
+    if (!detailed) {
+      actor.heldItemRoot.visible = false;
+    }
     if (actor !== this.player) {
       actor.healthBarRoot.visible = false;
       actor.ringMesh.visible = false;

@@ -35,7 +35,8 @@ import { SeededRandom } from '../src/games/fortliteRuntime/math.ts';
 export const TICK_RATE_HZ = 20;
 export const TICK_DELTA_SECONDS = 1 / TICK_RATE_HZ;
 export const RECONNECT_GRACE_PERIOD_MS = 45000;
-export const TOTAL_MATCH_PARTICIPANTS = 10;
+export const MAX_MATCH_PARTICIPANTS = 50;
+export const TOTAL_MATCH_PARTICIPANTS = MAX_MATCH_PARTICIPANTS;
 
 export class MatchRoom {
   readonly roomCode: string;
@@ -578,7 +579,8 @@ export class MatchRoom {
     const origin = msg.origin;
 
     for (const other of this.actors.values()) {
-      if (!other.alive || other.id === actor.id) {
+      const client = other.isBot ? null : this.clients.get(other.id);
+      if (!other.alive || other.id === actor.id || (client && client.ws === null)) {
         continue;
       }
       const toTarget = [other.position[0] - origin[0], other.position[1] + 1.2 - origin[1], other.position[2] - origin[2]];
@@ -880,7 +882,8 @@ export class MatchRoom {
     let minDistSq = brain.profile.awarenessRadius * brain.profile.awarenessRadius;
 
     for (const other of this.actors.values()) {
-      if (!other.alive || other.id === actor.id) {
+      const client = other.isBot ? null : this.clients.get(other.id);
+      if (!other.alive || other.id === actor.id || (client && client.ws === null)) {
         continue;
       }
       const dx = other.position[0] - actor.position[0];
@@ -1074,6 +1077,17 @@ export class MatchRoom {
 
   get activeClientCount(): number {
     return Array.from(this.clients.values()).filter((c) => c.ws !== null).length;
+  }
+
+  get isFull(): boolean {
+    return this.clients.size >= MAX_MATCH_PARTICIPANTS;
+  }
+
+  canAcceptClient(reconnectToken?: string): boolean {
+    if (reconnectToken && Array.from(this.clients.values()).some((client) => client.reconnectToken === reconnectToken)) {
+      return true;
+    }
+    return !this.isFull;
   }
 
   /**
