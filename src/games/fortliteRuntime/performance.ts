@@ -5,6 +5,7 @@ export interface FortLiteQualityProfile {
   minimumPixelRatio: number;
   toneMappingExposure: number;
   maxShotEffects: number;
+  maxLandingDustEffects: number;
   botSimulationBudget: number;
   preciseBotSightDistance: number;
   hudUpdateIntervalMs: number;
@@ -14,6 +15,7 @@ const QUALITY_PROFILES: Record<GraphicsQuality, Omit<FortLiteQualityProfile, 'pi
   low: {
     toneMappingExposure: 1.08,
     maxShotEffects: 8,
+    maxLandingDustEffects: 3,
     botSimulationBudget: 14,
     preciseBotSightDistance: 38,
     hudUpdateIntervalMs: 320
@@ -21,6 +23,7 @@ const QUALITY_PROFILES: Record<GraphicsQuality, Omit<FortLiteQualityProfile, 'pi
   medium: {
     toneMappingExposure: 1.04,
     maxShotEffects: 14,
+    maxLandingDustEffects: 6,
     botSimulationBudget: 24,
     preciseBotSightDistance: 58,
     hudUpdateIntervalMs: 220
@@ -28,6 +31,7 @@ const QUALITY_PROFILES: Record<GraphicsQuality, Omit<FortLiteQualityProfile, 'pi
   high: {
     toneMappingExposure: 1.02,
     maxShotEffects: 20,
+    maxLandingDustEffects: 10,
     botSimulationBudget: 50,
     preciseBotSightDistance: 120,
     hudUpdateIntervalMs: 160

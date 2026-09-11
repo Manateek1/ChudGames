@@ -192,6 +192,7 @@ export class FortLiteGame {
   private matchTime = 0;
   private graphicsQuality: GraphicsQuality;
   private maxShotEffects = 72;
+  private maxLandingDustEffects = 8;
   private playerFootstepTimer = 0;
   private enemyFootstepTimer = 0;
 
@@ -2815,20 +2816,20 @@ export class FortLiteGame {
     actor.parachuteGroup.visible = false;
     actor.lastPosition.copy(actor.position);
 
-    const dust = createLandingDust(actor.position);
-    while (this.landingDustEffects.length >= 8) {
-      const oldest = this.landingDustEffects.shift();
-      if (oldest) {
-        this.effectsGroup.remove(oldest.mesh);
-        disposeLandingDust(oldest);
-      }
+    const playerLanding = actor === this.player;
+    const landingDustDistance = this.graphicsQuality === 'low' ? 48 : this.graphicsQuality === 'medium' ? 82 : 130;
+    if (playerLanding || (
+      this.landingDustEffects.length < this.maxLandingDustEffects &&
+      horizontalDistance(actor.position, this.player.position) <= landingDustDistance
+    )) {
+      this.addLandingDust(actor.position);
     }
-    this.effectsGroup.add(dust.mesh);
-    this.landingDustEffects.push(dust);
 
     if (actor.ai) {
       actor.ai.state = 'roam';
-      actor.ai.destination.copy(this.findFreePoint(MAP_RADIUS - 18, 5));
+      // Defer the expensive map search until the bot's normal decision timer.
+      // Do not make all 49 bots scan the map in the landing frame.
+      actor.ai.destination.copy(actor.position);
       actor.ai.path = [];
       actor.ai.pathIndex = 0;
       actor.ai.decisionTimer = this.getBotDecisionInterval();
@@ -3922,16 +3923,7 @@ export class FortLiteGame {
       return;
     }
 
-    const dust = createLandingDust(piece.position, 0.7);
-    while (this.landingDustEffects.length >= 8) {
-      const oldest = this.landingDustEffects.shift();
-      if (oldest) {
-        this.effectsGroup.remove(oldest.mesh);
-        disposeLandingDust(oldest);
-      }
-    }
-    this.landingDustEffects.push(dust);
-    this.effectsGroup.add(dust.mesh);
+    this.addLandingDust(piece.position, 0.7);
     this.options.audio?.fortliteHarvest();
 
     this.buildPieces = this.buildPieces.filter((entry) => entry.id !== piece.id);
@@ -4822,6 +4814,20 @@ export class FortLiteGame {
       }
       actor.group.position.lerpVectors(actor.previousPosition, actor.position, alpha);
     }
+  }
+
+  private addLandingDust(position: THREE.Vector3, duration = 0.6): void {
+    while (this.landingDustEffects.length >= this.maxLandingDustEffects) {
+      const oldest = this.landingDustEffects.shift();
+      if (oldest) {
+        this.effectsGroup.remove(oldest.mesh);
+        disposeLandingDust(oldest);
+      }
+    }
+
+    const dust = createLandingDust(position, duration);
+    this.effectsGroup.add(dust.mesh);
+    this.landingDustEffects.push(dust);
   }
 
   private isFirstPersonView(): boolean {
@@ -6442,6 +6448,7 @@ export class FortLiteGame {
     this.renderer.shadowMap.enabled = quality !== 'low';
     this.renderer.shadowMap.needsUpdate = true;
     this.maxShotEffects = profile.maxShotEffects;
+    this.maxLandingDustEffects = profile.maxLandingDustEffects;
     // Keep the inexpensive low/medium presets color-graded too. The previous
     // no-tone-mapping path made the low preset look washed out and overly soft.
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
