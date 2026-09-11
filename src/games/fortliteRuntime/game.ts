@@ -91,7 +91,6 @@ import {
   FLOOR_SIZE,
   FLOOR_THICKNESS,
   FOREST_BIOME_THETA_START,
-  FORTLITE_RENDER_INTERVAL_MS,
   GRAVITY,
   HARVEST_DISTANCE,
   INTERACT_DISTANCE,
@@ -149,6 +148,7 @@ import {
   AdaptiveResolutionController,
   BotSimulationScheduler,
   getFortLiteQualityProfile,
+  getFortLiteRenderIntervalMs,
   getHudUpdateIntervalMs,
   getPreciseBotSightDistance
 } from './performance';
@@ -568,7 +568,7 @@ export class FortLiteGame {
       return;
     }
 
-    if (this.lastFrameTime !== 0 && time - this.lastFrameTime < FORTLITE_RENDER_INTERVAL_MS) {
+    if (this.lastFrameTime !== 0 && time - this.lastFrameTime < getFortLiteRenderIntervalMs(this.graphicsQuality)) {
       if (!this.disposed) {
         this.animationFrame = window.requestAnimationFrame(this.frame);
       }

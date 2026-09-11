@@ -60,6 +60,18 @@ export function getHudUpdateIntervalMs(quality: GraphicsQuality): number {
   return QUALITY_PROFILES[quality].hudUpdateIntervalMs;
 }
 
+export function getFortLiteRenderIntervalMs(quality: GraphicsQuality): number {
+  // The simulation already advances at 30 Hz. Rendering low quality at 60 Hz
+  // doubles the GPU work without adding gameplay fidelity on constrained devices.
+  if (quality === 'low') {
+    return 1000 / 30;
+  }
+  if (quality === 'medium') {
+    return 1000 / 45;
+  }
+  return 1000 / 60;
+}
+
 export class AdaptiveResolutionController {
   private quality: GraphicsQuality;
   private devicePixelRatio: number;
