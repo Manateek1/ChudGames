@@ -7,6 +7,8 @@ export class AudioManager {
 
   private musicTimer: number | null = null;
 
+  private noiseBuffer: AudioBuffer | null = null;
+
   private beat = 0;
 
   enabled = true;
@@ -95,6 +97,98 @@ export class AudioManager {
     oscillator.stop(now + duration + release + 0.02);
   }
 
+  private sweepTone(
+    startFrequency: number,
+    endFrequency: number,
+    duration: number,
+    gainLevel: number,
+    type: OscillatorType,
+    release = 0.06,
+  ): void {
+    if (!this.enabled) {
+      return;
+    }
+
+    const context = this.ensureContext();
+    if (!context || !this.master) {
+      return;
+    }
+
+    const now = context.currentTime;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(Math.max(20, startFrequency), now);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), now + duration);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, gainLevel), now + 0.001);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration + release);
+
+    oscillator.connect(gain);
+    gain.connect(this.master);
+    oscillator.start(now);
+    oscillator.stop(now + duration + release + 0.02);
+  }
+
+  private fireNoise(
+    duration: number,
+    gainLevel: number,
+    startFrequency: number,
+    endFrequency: number,
+    filterType: BiquadFilterType,
+  ): void {
+    if (!this.enabled) {
+      return;
+    }
+
+    const context = this.ensureContext();
+    if (!context || !this.master || typeof context.createBuffer !== "function" || typeof context.createBufferSource !== "function" || typeof context.createBiquadFilter !== "function") {
+      return;
+    }
+
+    const buffer = this.getNoiseBuffer(context);
+    if (!buffer) {
+      return;
+    }
+
+    const now = context.currentTime;
+    const source = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(Math.max(40, startFrequency), now);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(40, endFrequency), now + duration);
+    filter.Q.value = filterType === "bandpass" ? 0.9 : 0.7;
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, gainLevel), now + 0.001);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.master);
+    source.start(now);
+    source.stop(now + duration + 0.02);
+  }
+
+  private getNoiseBuffer(context: AudioContext): AudioBuffer | null {
+    if (this.noiseBuffer && this.noiseBuffer.sampleRate === context.sampleRate) {
+      return this.noiseBuffer;
+    }
+
+    const bufferSize = Math.floor(context.sampleRate * 0.18);
+    const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let index = 0; index < bufferSize; index += 1) {
+      data[index] = Math.random() * 2 - 1;
+    }
+    this.noiseBuffer = buffer;
+    return buffer;
+  }
+
   ui(): void {
     this.tone(660, 0.05, 0.055, "triangle", 0.002, 0.05);
   }
@@ -144,19 +238,22 @@ export class AudioManager {
 
   fortliteFire(weaponId: string): void {
     if (weaponId === "auto-shotgun") {
-      this.tone(110, 0.07, 0.08, "square", 0.001, 0.05);
-      this.tone(72, 0.08, 0.04, "triangle", 0.001, 0.07);
+      this.fireNoise(0.14, 0.22, 980, 150, "lowpass");
+      this.sweepTone(170, 46, 0.13, 0.09, "square", 0.08);
+      this.tone(58, 0.15, 0.055, "triangle", 0.001, 0.12);
       return;
     }
 
     if (weaponId === "tactical-smg") {
-      this.tone(260, 0.03, 0.034, "square", 0.001, 0.03);
-      this.tone(180, 0.035, 0.018, "triangle", 0.001, 0.04);
+      this.fireNoise(0.035, 0.1, 3200, 900, "highpass");
+      this.sweepTone(460, 170, 0.05, 0.045, "square", 0.035);
+      this.tone(120, 0.06, 0.018, "triangle", 0.001, 0.05);
       return;
     }
 
-    this.tone(170, 0.05, 0.05, "sawtooth", 0.001, 0.04);
-    this.tone(98, 0.06, 0.026, "triangle", 0.001, 0.05);
+    this.fireNoise(0.06, 0.16, 2600, 520, "bandpass");
+    this.sweepTone(280, 88, 0.08, 0.065, "sawtooth", 0.05);
+    this.tone(78, 0.11, 0.045, "triangle", 0.001, 0.08);
   }
 
   fortlitePickup(): void {
@@ -271,5 +368,6 @@ export class AudioManager {
       void this.context.close();
       this.context = null;
     }
+    this.noiseBuffer = null;
   }
 }

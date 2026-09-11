@@ -71,6 +71,27 @@ describe('FortLite Stage 5 Release Polish', () => {
       expect(toneSpy).toHaveBeenCalledWith(62, 0.42, 0.05, 'sawtooth', 0.03, 0.35);
     });
 
+    it('gives each FortLite weapon a punchy transient and pitch drop', () => {
+      const noiseSpy = vi.spyOn(
+        audio as unknown as { fireNoise: (...args: unknown[]) => void },
+        'fireNoise'
+      ).mockImplementation(() => undefined);
+      const sweepSpy = vi.spyOn(
+        audio as unknown as { sweepTone: (...args: unknown[]) => void },
+        'sweepTone'
+      ).mockImplementation(() => undefined);
+
+      audio.fortliteFire('ranger-rifle');
+      expect(noiseSpy).toHaveBeenCalledWith(0.06, 0.16, 2600, 520, 'bandpass');
+      expect(sweepSpy).toHaveBeenCalledWith(280, 88, 0.08, 0.065, 'sawtooth', 0.05);
+
+      noiseSpy.mockClear();
+      sweepSpy.mockClear();
+      audio.fortliteFire('auto-shotgun');
+      expect(noiseSpy).toHaveBeenCalledWith(0.14, 0.22, 980, 150, 'lowpass');
+      expect(sweepSpy).toHaveBeenCalledWith(170, 46, 0.13, 0.09, 'square', 0.08);
+    });
+
     it('synthesizes critical hit ping with high frequency harmonics', () => {
       const toneSpy = vi.spyOn(audio as unknown as { tone: (...args: unknown[]) => void }, 'tone');
       audio.fortliteCriticalHit();
@@ -251,4 +272,3 @@ describe('FortLite Stage 5 Release Polish', () => {
     });
   });
 });
-
