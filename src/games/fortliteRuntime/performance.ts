@@ -11,6 +11,13 @@ export interface FortLiteQualityProfile {
   hudUpdateIntervalMs: number;
 }
 
+export interface FortLiteWorldRenderBudget {
+  cameraFar: number;
+  fogDistance: number;
+  skyRadius: number;
+  maxVisibleActors: number;
+}
+
 const QUALITY_PROFILES: Record<GraphicsQuality, Omit<FortLiteQualityProfile, 'pixelRatio' | 'minimumPixelRatio'>> = {
   low: {
     toneMappingExposure: 1.08,
@@ -61,17 +68,52 @@ export function getHudUpdateIntervalMs(quality: GraphicsQuality): number {
 }
 
 export function getFortLiteRenderIntervalMs(quality: GraphicsQuality): number {
-  // The simulation advances at 30 Hz, but low quality still benefits from
-  // interpolated transforms at 45 Hz. This keeps movement from feeling
-  // choppy while staying below the old 60 Hz render cost on constrained
-  // devices.
+  // Low quality is a fixed 30 Hz gameplay presentation. A stable budget is
+  // more important than trying to render extra frames while the GPU is
+  // already constrained; transforms still interpolate between simulation
+  // updates so near movement remains smooth.
   if (quality === 'low') {
-    return 1000 / 45;
+    return 1000 / 30;
   }
   if (quality === 'medium') {
     return 1000 / 45;
   }
   return 1000 / 60;
+}
+
+/**
+ * Keeps the low preset focused on the playable area around the camera. The
+ * scene fades into fog before the far plane, so hiding distant world detail
+ * does not create a visible pop-in boundary.
+ */
+export function getFortLiteWorldRenderBudget(
+  quality: GraphicsQuality,
+  mapRadius: number
+): FortLiteWorldRenderBudget {
+  if (quality === 'low') {
+    return {
+      cameraFar: Math.min(186, mapRadius * 0.5),
+      fogDistance: Math.min(180, mapRadius * 0.48),
+      skyRadius: Math.min(166, mapRadius * 0.44),
+      maxVisibleActors: 10
+    };
+  }
+
+  if (quality === 'medium') {
+    return {
+      cameraFar: Math.min(284, mapRadius * 0.76),
+      fogDistance: Math.min(246, mapRadius * 0.66),
+      skyRadius: Math.min(236, mapRadius * 0.63),
+      maxVisibleActors: 24
+    };
+  }
+
+  return {
+    cameraFar: mapRadius * 2.6,
+    fogDistance: mapRadius,
+    skyRadius: mapRadius * 2.2,
+    maxVisibleActors: Number.POSITIVE_INFINITY
+  };
 }
 
 export class AdaptiveResolutionController {

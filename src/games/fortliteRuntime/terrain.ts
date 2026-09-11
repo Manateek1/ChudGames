@@ -94,7 +94,7 @@ export class IslandTerrain {
         this.size = mapRadius * 2.2;
         
         switch (quality) {
-            case 'low': this.widthSegments = 128; break;
+            case 'low': this.widthSegments = 96; break;
             case 'medium': this.widthSegments = 192; break;
             case 'high': this.widthSegments = 256; break;
             default: this.widthSegments = 192;
@@ -214,7 +214,7 @@ export class IslandTerrain {
         this.waterMesh.receiveShadow = true;
 
         // Trees
-        let treeCount = 200;
+        let treeCount = 120;
         if (quality === 'medium') treeCount = 350;
         if (quality === 'high') treeCount = 500;
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { BotSimulationScheduler, getFortLiteQualityProfile } from '../performance';
+import {
+  BotSimulationScheduler,
+  getFortLiteQualityProfile,
+  getFortLiteRenderIntervalMs,
+  getFortLiteWorldRenderBudget
+} from '../performance';
 
 interface TestActor {
   alive: boolean;
@@ -8,6 +13,16 @@ interface TestActor {
 }
 
 describe('FortLite performance budgets', () => {
+  it('gives the low preset a bounded world-render budget', () => {
+    const low = getFortLiteWorldRenderBudget('low', 396);
+    const medium = getFortLiteWorldRenderBudget('medium', 396);
+
+    expect(low.maxVisibleActors).toBe(10);
+    expect(low.cameraFar).toBeLessThan(medium.cameraFar);
+    expect(low.fogDistance).toBeLessThanOrEqual(low.cameraFar);
+    expect(getFortLiteRenderIntervalMs('low')).toBeCloseTo(1000 / 30);
+  });
+
   it('keeps the low preset bot decision budget bounded', () => {
     const scheduler = new BotSimulationScheduler<TestActor>();
     const actors = Array.from({ length: 49 }, (_, index) => ({

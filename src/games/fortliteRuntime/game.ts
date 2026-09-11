@@ -149,6 +149,7 @@ import {
   BotSimulationScheduler,
   getFortLiteQualityProfile,
   getFortLiteRenderIntervalMs,
+  getFortLiteWorldRenderBudget,
   getHudUpdateIntervalMs,
   getPreciseBotSightDistance
 } from './performance';
@@ -170,6 +171,7 @@ export class FortLiteGame {
   private readonly pathfinder = new GridPathfinder(PATHFINDING_GRID_SIZE, PATHFINDING_CELL_SIZE);
   private readonly collisionIndex = new ObstacleSpatialIndex();
   private readonly botSimulationScheduler = new BotSimulationScheduler<Actor>();
+  private readonly lowQualityVisibleActorIds = new Set<string>();
   private readonly raycaster = new THREE.Raycaster();
   private readonly tempVectorA = new THREE.Vector3();
   private readonly tempVectorB = new THREE.Vector3();
@@ -685,6 +687,7 @@ export class FortLiteGame {
     this.playerFootstepTimer = 0;
     this.enemyFootstepTimer = 0;
     this.enemyShotAudioCooldown = 0;
+    this.lowQualityVisibleActorIds.clear();
 
     this.clearMatchRoot();
 
@@ -718,6 +721,7 @@ export class FortLiteGame {
     this.spawnLoot();
     this.initializeStorm();
     this.ensurePreviewMesh();
+    this.updateLowQualityActorRenderBudget();
     this.syncViewModel(true);
     this.hud.hideEndScreen();
     this.showMessage(
@@ -2779,6 +2783,8 @@ export class FortLiteGame {
         }
       }
 
+      this.updateLowQualityActorRenderBudget();
+
       for (let actorIndex = 0; actorIndex < this.actors.length; actorIndex += 1) {
         const actor = this.actors[actorIndex];
         if (!actor.alive) {
@@ -3499,7 +3505,10 @@ export class FortLiteGame {
     for (const pickup of this.loot) {
       const dx = pickup.position.x - this.player.position.x;
       const dz = pickup.position.z - this.player.position.z;
-      if (lootRenderDistance !== Infinity && (dx * dx) + (dz * dz) > lootRenderDistanceSquared) {
+      if (
+        (lootRenderDistance !== Infinity && (dx * dx) + (dz * dz) > lootRenderDistanceSquared) ||
+        !this.isLowQualityWorldPositionVisible(pickup.position, lootRenderDistance)
+      ) {
         pickup.mesh.visible = false;
         continue;
       }
@@ -4904,7 +4913,7 @@ export class FortLiteGame {
 
   private updateRenderTransforms(alpha: number): void {
     for (const actor of this.actors) {
-      if (!actor.alive && actor !== this.player) {
+      if ((!actor.alive && actor !== this.player) || (actor !== this.player && !actor.group.visible)) {
         continue;
       }
       actor.group.position.lerpVectors(actor.previousPosition, actor.position, alpha);
@@ -4921,7 +4930,9 @@ export class FortLiteGame {
     for (const node of this.resourceNodes) {
       const dx = node.position.x - this.player.position.x;
       const dz = node.position.z - this.player.position.z;
-      node.mesh.visible = (dx * dx) + (dz * dz) <= resourceRenderDistanceSquared;
+      node.mesh.visible =
+        (dx * dx) + (dz * dz) <= resourceRenderDistanceSquared &&
+        this.isLowQualityWorldPositionVisible(node.position, resourceRenderDistance);
     }
   }
 
@@ -6535,6 +6546,7 @@ export class FortLiteGame {
 
   private applyGraphicsQuality(quality: GraphicsQuality): void {
     const profile = getFortLiteQualityProfile(quality, window.devicePixelRatio || 1);
+    const worldBudget = getFortLiteWorldRenderBudget(quality, MAP_RADIUS);
     this.renderer.shadowMap.enabled = quality !== 'low';
     this.renderer.shadowMap.needsUpdate = true;
     this.maxShotEffects = profile.maxShotEffects;
@@ -6543,8 +6555,20 @@ export class FortLiteGame {
     // no-tone-mapping path made the low preset look washed out and overly soft.
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = profile.toneMappingExposure;
+    if (this.camera.far !== worldBudget.cameraFar) {
+      this.camera.far = worldBudget.cameraFar;
+      this.camera.updateProjectionMatrix();
+    }
+    if (this.scene.fog instanceof THREE.FogExp2) {
+      this.scene.fog.density = 1.732 / worldBudget.fogDistance;
+    }
+    if (this.skyDome) {
+      this.skyDome.scale.setScalar(worldBudget.skyRadius / (MAP_RADIUS * 2.2));
+      this.skyDome.frustumCulled = false;
+    }
     this.resolutionController.reset(quality, window.devicePixelRatio || 1);
     this.applyRendererResolution();
+    this.updateLowQualityActorRenderBudget();
   }
 
   private applyRendererResolution(): void {
@@ -6662,7 +6686,7 @@ export class FortLiteGame {
 
   private getActorRenderDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 132;
+      return 94;
     }
     if (this.graphicsQuality === 'medium') {
       return 220;
@@ -6672,7 +6696,7 @@ export class FortLiteGame {
 
   private getParachuteRenderDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 168;
+      return 112;
     }
     if (this.graphicsQuality === 'medium') {
       return 280;
@@ -6682,7 +6706,7 @@ export class FortLiteGame {
 
   private getLootRenderDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 144;
+      return 86;
     }
     if (this.graphicsQuality === 'medium') {
       return 240;
@@ -6692,7 +6716,7 @@ export class FortLiteGame {
 
   private getResourceRenderDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 168;
+      return 104;
     }
     if (this.graphicsQuality === 'medium') {
       return 280;
@@ -6709,11 +6733,81 @@ export class FortLiteGame {
       return false;
     }
 
+    if (this.graphicsQuality === 'low') {
+      return this.lowQualityVisibleActorIds.has(actor.id);
+    }
+
     const distanceToPlayer = horizontalDistance(actor.position, this.player.position);
     const maxDistance = actor.spawnState === 'parachuting'
       ? this.getParachuteRenderDistance()
       : this.getActorRenderDistance();
     return distanceToPlayer <= maxDistance;
+  }
+
+  private updateLowQualityActorRenderBudget(): void {
+    this.lowQualityVisibleActorIds.clear();
+    if (this.graphicsQuality !== 'low' || !this.player) {
+      return;
+    }
+
+    const forwardX = Math.sin(this.cameraYaw);
+    const forwardZ = Math.cos(this.cameraYaw);
+    const candidates: Array<{ actor: Actor; score: number }> = [];
+
+    for (const actor of this.actors) {
+      if (actor === this.player || !actor.alive) {
+        continue;
+      }
+
+      const dx = actor.position.x - this.player.position.x;
+      const dz = actor.position.z - this.player.position.z;
+      const distanceSquared = (dx * dx) + (dz * dz);
+      const maxDistance = actor.spawnState === 'parachuting'
+        ? this.getParachuteRenderDistance()
+        : this.getActorRenderDistance();
+      if (distanceSquared > maxDistance * maxDistance) {
+        continue;
+      }
+
+      const distance = Math.sqrt(distanceSquared);
+      const facingDot = distance > 0.001 ? ((dx * forwardX) + (dz * forwardZ)) / distance : 1;
+      const behindCameraPenalty = distance > 24 && facingDot < -0.28
+        ? 120
+        : distance > 24 && facingDot < 0.12
+          ? 26
+          : 0;
+      const combatPriority = actor.ai?.state === 'engage' || actor.ai?.targetActorId ? 16 : 0;
+      candidates.push({ actor, score: distance + behindCameraPenalty - combatPriority });
+    }
+
+    candidates.sort((a, b) => a.score - b.score);
+    const maxVisibleActors = getFortLiteWorldRenderBudget(this.graphicsQuality, MAP_RADIUS).maxVisibleActors;
+    for (let index = 0; index < candidates.length && index < maxVisibleActors; index += 1) {
+      this.lowQualityVisibleActorIds.add(candidates[index].actor.id);
+    }
+  }
+
+  private isLowQualityWorldPositionVisible(position: THREE.Vector3, maxDistance: number): boolean {
+    if (this.graphicsQuality !== 'low') {
+      return true;
+    }
+
+    const dx = position.x - this.player.position.x;
+    const dz = position.z - this.player.position.z;
+    const distanceSquared = (dx * dx) + (dz * dz);
+    if (distanceSquared > maxDistance * maxDistance) {
+      return false;
+    }
+
+    const nearbyDistance = 26;
+    if (distanceSquared <= nearbyDistance * nearbyDistance) {
+      return true;
+    }
+
+    const distance = Math.sqrt(distanceSquared);
+    const forwardX = Math.sin(this.cameraYaw);
+    const forwardZ = Math.cos(this.cameraYaw);
+    return ((dx * forwardX) + (dz * forwardZ)) / Math.max(distance, 0.001) >= -0.28;
   }
 
   private getIndicatorDistance(): number {
