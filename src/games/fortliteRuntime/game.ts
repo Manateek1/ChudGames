@@ -3710,6 +3710,17 @@ export class FortLiteGame {
 
     for (let pellet = 0; pellet < weapon.definition.pellets; pellet += 1) {
       const shotDirection = this.applyWeaponSpread(direction, effectiveSpread, playerOwned);
+
+      // Low quality bots do not render tracer effects, so a full recursive
+      // Three.js raycast for every bot pellet only adds CPU work without
+      // improving what the player can see. Keep player fire and higher
+      // quality bot fire on the precise path, while using the collision index
+      // and a lightweight actor capsule test for the low preset.
+      if (!playerOwned && this.graphicsQuality === 'low') {
+        this.resolveLowQualityBotShot(actor, origin, shotDirection, weapon);
+        continue;
+      }
+
       this.raycaster.set(origin, shotDirection);
       this.raycaster.far = weapon.definition.range;
       const hits = this.raycaster.intersectObjects(this.raycastTargets, true);
@@ -3772,6 +3783,71 @@ export class FortLiteGame {
         this.createShotEffect(visualOrigin, impactPoint, weapon.definition.color);
       }
     }
+  }
+
+  private resolveLowQualityBotShot(
+    actor: Actor,
+    origin: THREE.Vector3,
+    direction: THREE.Vector3,
+    weapon: WeaponInstance
+  ): void {
+    let closestTarget: Actor | null = null;
+    let closestDistance = weapon.definition.range;
+    let closestHitY = 0;
+    const hitRadius = ACTOR_RADIUS + 0.28;
+    const hitRadiusSquared = hitRadius * hitRadius;
+
+    for (const target of this.actors) {
+      if (
+        !target.alive ||
+        target.spawnState !== 'grounded' ||
+        target.id === actor.id ||
+        this.areTeammates(actor, target)
+      ) {
+        continue;
+      }
+
+      const targetCenterX = target.position.x;
+      const targetCenterY = target.position.y + 1.35;
+      const targetCenterZ = target.position.z;
+      const offsetX = targetCenterX - origin.x;
+      const offsetY = targetCenterY - origin.y;
+      const offsetZ = targetCenterZ - origin.z;
+      const projectedDistance = (offsetX * direction.x) + (offsetY * direction.y) + (offsetZ * direction.z);
+      if (projectedDistance <= 0 || projectedDistance >= closestDistance) {
+        continue;
+      }
+
+      const hitX = origin.x + direction.x * projectedDistance;
+      const hitY = origin.y + direction.y * projectedDistance;
+      const hitZ = origin.z + direction.z * projectedDistance;
+      const clampedTargetY = clamp(hitY, target.position.y + 0.25, target.position.y + 2.55);
+      const deltaX = targetCenterX - hitX;
+      const deltaY = clampedTargetY - hitY;
+      const deltaZ = targetCenterZ - hitZ;
+      if ((deltaX * deltaX) + (deltaY * deltaY) + (deltaZ * deltaZ) > hitRadiusSquared) {
+        continue;
+      }
+
+      if (!this.hasCheapLineOfSight(actor, target)) {
+        continue;
+      }
+
+      closestTarget = target;
+      closestDistance = projectedDistance;
+      closestHitY = hitY;
+    }
+
+    if (!closestTarget) {
+      return;
+    }
+
+    let damage = calculateDamageWithFalloff(weapon.definition, closestDistance);
+    const isCritical = (closestHitY - closestTarget.position.y) > 1.32;
+    if (isCritical) {
+      damage = Math.round(damage * 1.5);
+    }
+    this.applyDamage(closestTarget, damage, actor, 'weapon', isCritical);
   }
 
   private tryStartReload(actor: Actor): void {
