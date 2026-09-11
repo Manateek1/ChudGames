@@ -23,6 +23,7 @@ import {
 } from './content';
 import { angleLerp, clamp, clampToCircle, horizontalDistance, randomPointInCircle, SeededRandom, snap, yawToDirection } from './math';
 import { GridPathfinder } from './pathfinding';
+import { ObstacleSpatialIndex } from './collisionGrid';
 import { getRequestedBuildPiece, getRequestedWeaponSlot } from './controls';
 import type {
   ActorKind,
@@ -168,6 +169,7 @@ export class FortLiteGame {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly hud: FortLiteHud;
   private readonly pathfinder = new GridPathfinder(PATHFINDING_GRID_SIZE, PATHFINDING_CELL_SIZE);
+  private readonly collisionIndex = new ObstacleSpatialIndex();
   private readonly botSimulationScheduler = new BotSimulationScheduler<Actor>();
   private readonly raycaster = new THREE.Raycaster();
   private readonly tempVectorA = new THREE.Vector3();
@@ -707,6 +709,7 @@ export class FortLiteGame {
     this.raycastTargets = [];
     this.cameraObstacles = [];
     this.collisionObstacles = [];
+    this.collisionIndex.rebuild([]);
     this.waterZones = [];
 
     this.buildWorld();
@@ -4232,7 +4235,7 @@ export class FortLiteGame {
       return true;
     }
 
-    for (const obstacle of this.collisionObstacles) {
+    for (const obstacle of this.collisionIndex.queryCircle(position.x, position.z, radius)) {
       if (height > obstacle.height + 0.2) {
         continue;
       }
@@ -5062,6 +5065,7 @@ export class FortLiteGame {
       .map((piece) => piece.obstacle)
       .filter((entry): entry is ObstacleBox => Boolean(entry));
     this.collisionObstacles = [...this.staticObstacles, ...this.resourceNodes.map((node) => node.obstacle), ...dynamicObstacles];
+    this.collisionIndex.rebuild(this.collisionObstacles);
     this.pathfinder.rebuild(this.collisionObstacles);
   }
 
@@ -5331,8 +5335,12 @@ export class FortLiteGame {
     const originY = from.position.y + PLAYER_EYE_HEIGHT;
     const targetY = to.position.y + 1.35;
     const minSightHeight = Math.min(originY, targetY) - 0.08;
+    const minX = Math.min(from.position.x, to.position.x);
+    const maxX = Math.max(from.position.x, to.position.x);
+    const minZ = Math.min(from.position.z, to.position.z);
+    const maxZ = Math.max(from.position.z, to.position.z);
 
-    for (const obstacle of this.collisionObstacles) {
+    for (const obstacle of this.collisionIndex.queryBounds(minX, minZ, maxX, maxZ)) {
       if (obstacle.height < minSightHeight) {
         continue;
       }
