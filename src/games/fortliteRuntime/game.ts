@@ -2093,7 +2093,11 @@ export class FortLiteGame {
     this.player.id = localId;
     this.player.name = this.options.localPlayerName || 'Player';
     this.player.yaw = this.cameraYaw;
-    this.player.dropTarget.set(this.player.dropStart.x, 0, this.player.dropStart.z);
+    // The player starts above the island, but must steer toward the actual
+    // validated spawn point. Landing at dropStart put the player in the
+    // center-water staging area, away from the guaranteed starter kit, so
+    // bots could kill the player before the round was meaningfully playable.
+    this.player.dropTarget.copy(localSpawn).setY(0);
     this.actors.push(this.player);
 
     if (this.networkClient) {
