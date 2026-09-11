@@ -21,14 +21,14 @@ export class SnapshotInterpolator {
   private snapshots: WorldSnapshotMessage[] = [];
   private readonly renderDelayMs: number;
 
-  constructor(renderDelayMs = 100) {
+  constructor(renderDelayMs = 120) {
     this.renderDelayMs = renderDelayMs;
   }
 
   pushSnapshot(snapshot: WorldSnapshotMessage): void {
     this.snapshots.push(snapshot);
-    // Keep max 20 snapshots in buffer (1 second at 20Hz)
-    if (this.snapshots.length > 20) {
+    // Keep roughly one second of snapshots at the 10Hz world update rate.
+    if (this.snapshots.length > 12) {
       this.snapshots.shift();
     }
   }
@@ -60,13 +60,15 @@ export class SnapshotInterpolator {
 
     const duration = Math.max(1, toSnap.timestamp - fromSnap.timestamp);
     const alpha = Math.max(0, Math.min(1, (renderTime - fromSnap.timestamp) / duration));
+    const fromPlayersById = new Map(fromSnap.players.map((player) => [player.id, player]));
+    const fromBotsById = new Map(fromSnap.bots.map((bot) => [bot.id, bot]));
 
     // Interpolate remote players (skip local player who uses client-side prediction)
     for (const toPlayer of toSnap.players) {
       if (toPlayer.id === localPlayerId) {
         continue;
       }
-      const fromPlayer = fromSnap.players.find((p) => p.id === toPlayer.id);
+      const fromPlayer = fromPlayersById.get(toPlayer.id);
       if (!fromPlayer) {
         players.set(toPlayer.id, {
           id: toPlayer.id,
@@ -103,7 +105,7 @@ export class SnapshotInterpolator {
 
     // Interpolate bots
     for (const toBot of toSnap.bots) {
-      const fromBot = fromSnap.bots.find((b) => b.id === toBot.id);
+      const fromBot = fromBotsById.get(toBot.id);
       if (!fromBot) {
         bots.set(toBot.id, {
           id: toBot.id,

@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { WebSocket } from 'ws';
-import { MatchRoom, TICK_DELTA_SECONDS, TOTAL_MATCH_PARTICIPANTS } from '../matchRoom.ts';
+import {
+  MatchRoom,
+  SNAPSHOT_TICK_INTERVAL,
+  TICK_DELTA_SECONDS,
+  TOTAL_MATCH_PARTICIPANTS
+} from '../matchRoom.ts';
 import { RoomManager } from '../roomManager.ts';
 import {
   generateRandomRoomCode,
@@ -518,6 +523,7 @@ describe('FortLite Multiplayer Server Suite', () => {
       // Verify world snapshots were sent
       const snapshots = wsA.getMessagesOfType<WorldSnapshotMessage>('world_snapshot');
       expect(snapshots.length).toBeGreaterThan(0);
+      expect(snapshots.length).toBeLessThanOrEqual(Math.ceil(room.currentTick / SNAPSHOT_TICK_INTERVAL) + 1);
 
       // Clean disposal
       room.dispose();

@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import type { AudioManager } from '../../engine/audio';
 import type { GraphicsQuality } from '../../types/arcade';
 import { RollingFps, TARGET_FRAME_DELTA_SECONDS } from '../../engine/fps';
 import {
@@ -27,7 +26,6 @@ import { GridPathfinder } from './pathfinding';
 import { getRequestedBuildPiece, getRequestedWeaponSlot } from './controls';
 import type {
   ActorKind,
-  BotState,
   BuildPiece,
   BuildPieceType,
   InventoryState,
@@ -45,7 +43,6 @@ import {
   CombatTelemetryTracker
 } from './combat';
 import {
-  type BotSkillProfile,
   generateBotSkillProfile,
   canPerceiveTarget,
   shouldBotRetreat,
@@ -72,240 +69,96 @@ import {
 import type { FortLiteNetworkClient } from './multiplayer/client';
 import { LocalPlayerPredictor } from './multiplayer/prediction';
 import { SnapshotInterpolator, type InterpolatedActor } from './multiplayer/interpolation';
+import { createFortLiteNetworkCallbacks } from './multiplayer/gameNetworkCallbacks';
 import type {
-  WorldSnapshotMessage,
-  ShotBroadcastMessage,
-  DamageEventMessage,
-  EliminationEventMessage,
-  BuildEventMessage,
-  LootEventMessage,
-  MatchEndedMessage,
   BuildSnapshot,
   LootSnapshot
 } from './multiplayer/protocol';
-
-type MatchState = 'boot' | 'inProgress' | 'ended';
-type StormMode = 'pause' | 'shrink' | 'done';
-type Biome = 'regular' | 'forest' | 'desert';
-type FortLiteMode = 'solo' | 'duos';
-type SpawnState = 'parachuting' | 'grounded';
-
-interface Actor {
-  id: string;
-  name?: string;
-  kind: ActorKind;
-  teamId: number;
-  group: THREE.Group;
-  visualRoot: THREE.Group;
-  bodyMesh: THREE.Mesh;
-  headMesh: THREE.Mesh;
-  ringMesh: THREE.Mesh;
-  shadowMesh: THREE.Mesh;
-  leftArmPivot: THREE.Group;
-  rightArmPivot: THREE.Group;
-  leftLegPivot: THREE.Group;
-  rightLegPivot: THREE.Group;
-  healthBarRoot: THREE.Group;
-  healthBarFill: THREE.Mesh;
-  bodyParts: THREE.Object3D[];
-  detailParts: THREE.Object3D[];
-  heldItemRoot: THREE.Group;
-  heldItemMesh: THREE.Object3D | null;
-  heldItemKey: string;
-  parachuteGroup: THREE.Group;
-  position: THREE.Vector3;
-  lastPosition: THREE.Vector3;
-  verticalVelocity: number;
-  yaw: number;
-  radius: number;
-  health: number;
-  maxHealth: number;
-  alive: boolean;
-  grounded: boolean;
-  inventory: InventoryState;
-  fireCooldown: number;
-  reloadTimer: number;
-  reloadWeaponId: string | null;
-  harvestCooldown: number;
-  eliminationCount: number;
-  moveBlend: number;
-  stepTime: number;
-  spawnState: SpawnState;
-  spawnTimer: number;
-  dropStart: THREE.Vector3;
-  dropTarget: THREE.Vector3;
-  ai?: BotBrain;
-}
-
-interface BotBrain {
-  state: BotState;
-  profile: BotSkillProfile;
-  targetLootId?: string;
-  targetNodeId?: string;
-  targetActorId?: string;
-  lastSeenTargetPosition?: THREE.Vector3;
-  targetMemoryTimer: number;
-  destination: THREE.Vector3;
-  path: THREE.Vector3[];
-  pathIndex: number;
-  decisionTimer: number;
-  repathTimer: number;
-  senseTimer: number;
-  strafeDirection: number;
-  strafeTimer: number;
-  buildCooldown: number;
-  harvestTimer: number;
-  burstShotsRemaining: number;
-  burstCooldownTimer: number;
-  healTimer: number;
-  retreatTimer: number;
-}
-
-interface StormRuntime {
-  mode: StormMode;
-  phaseIndex: number;
-  timer: number;
-  currentCenter: THREE.Vector3;
-  currentRadius: number;
-  startCenter: THREE.Vector3;
-  startRadius: number;
-  targetCenter: THREE.Vector3;
-  targetRadius: number;
-  currentDamagePerSecond: number;
-}
-
-interface TimedMessage {
-  text: string;
-  timeRemaining: number;
-}
-
-interface WaterZone {
-  center: THREE.Vector3;
-  radiusX: number;
-  radiusZ: number;
-  rotation: number;
-  moveMultiplier: number;
-}
-
-interface WalkableSurface {
-  minX: number;
-  maxX: number;
-  minZ: number;
-  maxZ: number;
-  height: number;
-  minApproachY: number;
-}
-
-interface TerrainMound {
-  center: THREE.Vector3;
-  radiusX: number;
-  radiusZ: number;
-  height: number;
-}
-
-interface ShotEffect {
-  group: THREE.Group;
-  lineMaterial: THREE.LineBasicMaterial;
-  sparkMaterial: THREE.MeshStandardMaterial;
-  timeRemaining: number;
-  duration: number;
-}
-
-type HarvestTarget =
-  | { kind: 'resource'; node: ResourceNode }
-  | { kind: 'build'; piece: BuildPiece };
-
-const GRAVITY = 22;
-const DESERT_BIOME_THETA_START = 0;
-const FOREST_BIOME_THETA_START = Math.PI * 0.5;
-const QUARTER_BIOME_THETA_LENGTH = Math.PI * 0.5;
-const REGULAR_BIOME_THETA_START = Math.PI;
-const REGULAR_BIOME_THETA_LENGTH = Math.PI;
-const DEFAULT_CAMERA_FOV = 76;
-const ZOOMED_CAMERA_FOV = 52;
-const CAMERA_FOV_LERP = 0.18;
-const PLAYER_MOVE_SPEED = 8;
-const PLAYER_SPRINT_SPEED = 12;
-const BOT_BUFF_MULTIPLIER = 1.2;
-const BOT_MOVE_SPEED = 5.8 * 0.9 * BOT_BUFF_MULTIPLIER;
-const BOT_SPRINT_SPEED = 7.1 * 0.9 * BOT_BUFF_MULTIPLIER;
-const JUMP_SPEED = 8;
-const INTERACT_DISTANCE = 3;
-const HARVEST_DISTANCE = 4.6;
-const PICKAXE_STRUCTURE_DAMAGE = 80;
-const WATER_MOVE_MULTIPLIER = 0.58;
-const WALL_WIDTH = 4;
-const WALL_HEIGHT = 4;
-const WALL_THICKNESS = 0.35;
-const FLOOR_SIZE = 4;
-const FLOOR_THICKNESS = 0.24;
-const RAMP_WIDTH = 4;
-const RAMP_LENGTH = 5.2;
-const RAMP_HEIGHT = 3;
-const RAMP_THICKNESS = 0.28;
-const RAMP_ANGLE = Math.atan2(RAMP_HEIGHT, RAMP_LENGTH);
-const DUOS_TEAM_SIZE = 2;
-const FLOOR_MATERIAL_PICKUP_AMOUNT = 200;
-const PLAYER_SPAWN_PADDING = 7;
-const PLAYER_SPAWN_SEPARATION = 34;
-const PLAYER_STARTER_LOOT_OFFSET = 4.2;
-const BOT_STARTER_RIFLE_AMMO = 8;
-const BOT_STARTER_WOOD = 60;
-const BOT_STARTER_STONE = 20;
-const MEDKIT_SPAWN_COUNT = 10;
-const WORLD_CENTER = new THREE.Vector3(0, 0, 0);
-const PARACHUTE_DURATION = 10;
-const STORM_START_DELAY = 0;
-const SKYDIVE_ALTITUDE = 92;
-const COVER_DENSITY_MULTIPLIER = 1.5;
-const LARGE_BUILDING_SCALE = 2;
-const THIRD_PERSON_CAMERA_DISTANCE = 6.8;
-const THIRD_PERSON_CAMERA_HEIGHT = 1.9;
-const THIRD_PERSON_CAMERA_SHOULDER = 0.92;
-const PARACHUTE_CAMERA_DISTANCE = 8.8;
-const PARACHUTE_STEER_SPEED = 32;
-const CAMERA_POSITION_LERP = 0.22;
-const CAMERA_LOOK_LERP = 0.3;
-const CAMERA_COLLISION_PADDING = 0.45;
-const DYNAMIC_RESOLUTION_DROP_FPS = 50;
-const DYNAMIC_RESOLUTION_RECOVER_FPS = 58;
-const DYNAMIC_RESOLUTION_DROP_DELAY = 0.25;
-const DYNAMIC_RESOLUTION_RECOVER_DELAY = 1.6;
-const DYNAMIC_RESOLUTION_DROP_STEP = 0.12;
-const DYNAMIC_RESOLUTION_RECOVER_STEP = 0.04;
-const BOT_NEAR_PRIORITY_DISTANCE = 72;
-const BOT_MID_PRIORITY_DISTANCE = 120;
-const FORTLITE_RENDER_INTERVAL_MS = 1000 / 60;
-
-export interface FortLiteMatchResult {
-  won: boolean;
-  placement: number;
-  eliminations: number;
-  survivalTime: number;
-}
-
-export interface FortLiteGameOptions {
-  audio?: AudioManager;
-  graphicsQuality?: GraphicsQuality;
-  mode?: FortLiteMode;
-  onFpsChange?: (fps: number) => void;
-  seedBase?: number;
-  onPlacementChange?: (placement: number) => void;
-  onMatchEnd?: (result: FortLiteMatchResult) => void;
-  showEndScreen?: boolean;
-  networkClient?: FortLiteNetworkClient;
-  localPlayerName?: string;
-  matchSeed?: number;
-  dropStartPositions?: Record<string, [number, number, number]>;
-  onPauseToggle?: () => void;
-}
+import {
+  BOT_NEAR_PRIORITY_DISTANCE,
+  BOT_MID_PRIORITY_DISTANCE,
+  CAMERA_COLLISION_PADDING,
+  CAMERA_FOV_LERP,
+  CAMERA_LOOK_LERP,
+  CAMERA_POSITION_LERP,
+  COVER_DENSITY_MULTIPLIER,
+  DEFAULT_CAMERA_FOV,
+  DESERT_BIOME_THETA_START,
+  DUOS_TEAM_SIZE,
+  FLOOR_MATERIAL_PICKUP_AMOUNT,
+  FLOOR_SIZE,
+  FLOOR_THICKNESS,
+  FOREST_BIOME_THETA_START,
+  FORTLITE_RENDER_INTERVAL_MS,
+  GRAVITY,
+  HARVEST_DISTANCE,
+  INTERACT_DISTANCE,
+  JUMP_SPEED,
+  LARGE_BUILDING_SCALE,
+  MEDKIT_SPAWN_COUNT,
+  PARACHUTE_CAMERA_DISTANCE,
+  PARACHUTE_DURATION,
+  PARACHUTE_STEER_SPEED,
+  PICKAXE_STRUCTURE_DAMAGE,
+  PLAYER_MOVE_SPEED,
+  PLAYER_SPAWN_PADDING,
+  PLAYER_SPAWN_SEPARATION,
+  PLAYER_SPRINT_SPEED,
+  PLAYER_STARTER_LOOT_OFFSET,
+  QUARTER_BIOME_THETA_LENGTH,
+  RAMP_ANGLE,
+  RAMP_HEIGHT,
+  RAMP_LENGTH,
+  RAMP_THICKNESS,
+  RAMP_WIDTH,
+  REGULAR_BIOME_THETA_LENGTH,
+  REGULAR_BIOME_THETA_START,
+  SKYDIVE_ALTITUDE,
+  STORM_START_DELAY,
+  THIRD_PERSON_CAMERA_DISTANCE,
+  THIRD_PERSON_CAMERA_HEIGHT,
+  THIRD_PERSON_CAMERA_SHOULDER,
+  WALL_HEIGHT,
+  WALL_THICKNESS,
+  WALL_WIDTH,
+  WATER_MOVE_MULTIPLIER,
+  WORLD_CENTER,
+  ZOOMED_CAMERA_FOV,
+  BOT_MOVE_SPEED,
+  BOT_SPRINT_SPEED,
+  BOT_STARTER_RIFLE_AMMO,
+  BOT_STARTER_STONE,
+  BOT_STARTER_WOOD
+} from './constants';
+import type {
+  Actor,
+  Biome,
+  BotBrain,
+  FortLiteGameOptions,
+  FortLiteMode,
+  HarvestTarget,
+  MatchState,
+  ShotEffect,
+  StormRuntime,
+  TerrainMound,
+  TimedMessage,
+  WalkableSurface,
+  WaterZone
+} from './runtimeTypes';
+import {
+  AdaptiveResolutionController,
+  BotSimulationScheduler,
+  getFortLiteQualityProfile,
+  getHudUpdateIntervalMs,
+  getPreciseBotSightDistance
+} from './performance';
 
 export class FortLiteGame {
   private readonly root: HTMLDivElement;
   private readonly options: FortLiteGameOptions;
   private readonly matchMode: FortLiteMode;
   private networkClient?: FortLiteNetworkClient;
-  private readonly interpolator = new SnapshotInterpolator(100);
+  private readonly interpolator = new SnapshotInterpolator(120);
   private readonly predictor = new LocalPlayerPredictor();
   private spectatingTargetId: string | null = null;
   private inputSeq = 0;
@@ -315,6 +168,7 @@ export class FortLiteGame {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly hud: FortLiteHud;
   private readonly pathfinder = new GridPathfinder(PATHFINDING_GRID_SIZE, PATHFINDING_CELL_SIZE);
+  private readonly botSimulationScheduler = new BotSimulationScheduler<Actor>();
   private readonly raycaster = new THREE.Raycaster();
   private readonly tempVectorA = new THREE.Vector3();
   private readonly tempVectorB = new THREE.Vector3();
@@ -327,6 +181,7 @@ export class FortLiteGame {
   private readonly tempVectorI = new THREE.Vector3();
   private readonly tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private readonly fpsMeter = new RollingFps();
+  private resolutionController!: AdaptiveResolutionController;
 
   private animationFrame = 0;
   private lastFrameTime = 0;
@@ -420,9 +275,6 @@ export class FortLiteGame {
   private helpVisible = false;
   private playerDamageSoundCooldown = 0;
   private lastHudRenderTime = 0;
-  private currentPixelRatio = 1;
-  private lowFpsTime = 0;
-  private highFpsTime = 0;
   private simulationTick = 0;
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
@@ -552,7 +404,14 @@ export class FortLiteGame {
     this.renderer.toneMappingExposure = 1.04;
     this.renderer.shadowMap.enabled = this.graphicsQuality !== 'low';
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.currentPixelRatio = this.getPixelRatioForQuality(this.graphicsQuality);
+    this.resolutionController = new AdaptiveResolutionController(
+      this.graphicsQuality,
+      window.devicePixelRatio || 1,
+      (ratio) => {
+        this.renderer.setPixelRatio(ratio);
+        this.renderer.setSize(this.root.clientWidth, this.root.clientHeight, false);
+      }
+    );
     this.renderer.setClearColor(0xc6dff0, 1);
     this.applyRendererResolution();
     this.renderer.domElement.className = 'fortlite-canvas';
@@ -727,7 +586,7 @@ export class FortLiteGame {
     const fps = this.fpsMeter.next(time);
     if (fps > 0) {
       this.options.onFpsChange?.(fps);
-      this.updateDynamicResolution(fps, deltaSeconds);
+      this.resolutionController.update(fps, deltaSeconds);
     }
     this.lastFrameTime = time;
     this.accumulator += deltaSeconds;
@@ -2463,6 +2322,7 @@ export class FortLiteGame {
       heldItemKey: 'hidden',
       parachuteGroup: parachute,
       position: group.position.clone(),
+      previousPosition: group.position.clone(),
       lastPosition: group.position.clone(),
       verticalVelocity: 0,
       yaw: Math.PI,
@@ -2871,6 +2731,9 @@ export class FortLiteGame {
 
     this.matchTime += dt;
     this.simulationTick = (this.simulationTick + 1) % 12;
+    for (const actor of this.actors) {
+      actor.previousPosition.copy(actor.position);
+    }
     this.viewModelKick = Math.max(0, this.viewModelKick - dt * 6.5);
     this.muzzleFlashTime = Math.max(0, this.muzzleFlashTime - dt * 7.5);
     this.viewModelSway.multiplyScalar(Math.max(0, 1 - dt * 7.5));
@@ -2895,17 +2758,18 @@ export class FortLiteGame {
     this.processPlayer(dt);
 
     if (!this.networkClient) {
-      for (let actorIndex = 0; actorIndex < this.actors.length; actorIndex += 1) {
-        const actor = this.actors[actorIndex];
-        if (actor === this.player || !actor.alive) {
-          continue;
+      const botUpdates = this.botSimulationScheduler.select(
+        this.actors,
+        this.graphicsQuality,
+        (actor) => this.getBotSimulationStep(actor),
+        (actor) => this.isHighPriorityBot(actor),
+        (actor) => actor === this.player
+      );
+      for (const { actor, step } of botUpdates) {
+        this.processBot(actor, dt * step);
+        if (actor.spawnState === 'grounded') {
+          this.tryAutoPickup(actor);
         }
-        const simulationStep = this.getBotSimulationStep(actor);
-        if (!this.shouldRunBotSimulationThisTick(simulationStep, actorIndex)) {
-          continue;
-        }
-        this.processBot(actor, dt * simulationStep);
-        this.tryAutoPickup(actor);
       }
 
       for (let actorIndex = 0; actorIndex < this.actors.length; actorIndex += 1) {
@@ -2926,7 +2790,9 @@ export class FortLiteGame {
         }
       }
 
-      this.resolveActorSeparation();
+      if (this.graphicsQuality !== 'low' || this.simulationTick % 2 === 0) {
+        this.resolveActorSeparation();
+      }
     } else {
       if (this.player.alive) {
         this.updateActorTimers(this.player, dt);
@@ -4499,8 +4365,11 @@ export class FortLiteGame {
       actor.rightLegPivot.rotation.set(0.04, 0, 0.02);
     }
     actor.parachuteGroup.visible = actor.spawnState === 'parachuting';
-    this.syncActorLoadoutVisual(actor);
-    if (actor !== this.player && distanceToPlayer > heldItemDistance) {
+    const showHeldItem = actor === this.player || distanceToPlayer <= heldItemDistance;
+    if (showHeldItem) {
+      this.syncActorLoadoutVisual(actor);
+    }
+    if (!showHeldItem) {
       actor.heldItemRoot.visible = false;
     } else {
       actor.heldItemRoot.position.set(
@@ -4930,7 +4799,9 @@ export class FortLiteGame {
   }
 
   private render(): void {
-    this.updateCamera();
+    const renderAlpha = this.getRenderInterpolationAlpha();
+    this.updateRenderTransforms(renderAlpha);
+    this.updateCamera(renderAlpha);
     this.syncViewModel(false);
     const now = performance.now();
     if (this.state !== 'inProgress' || now - this.lastHudRenderTime >= this.getHudUpdateIntervalMs()) {
@@ -4938,6 +4809,19 @@ export class FortLiteGame {
       this.lastHudRenderTime = now;
     }
     this.renderer.render(this.scene, this.camera);
+  }
+
+  private getRenderInterpolationAlpha(): number {
+    return clamp(this.accumulator / FIXED_TIMESTEP, 0, 1);
+  }
+
+  private updateRenderTransforms(alpha: number): void {
+    for (const actor of this.actors) {
+      if (!actor.alive && actor !== this.player) {
+        continue;
+      }
+      actor.group.position.lerpVectors(actor.previousPosition, actor.position, alpha);
+    }
   }
 
   private isFirstPersonView(): boolean {
@@ -4982,7 +4866,7 @@ export class FortLiteGame {
     return desiredPosition;
   }
 
-  private updateCamera(): void {
+  private updateCamera(renderAlpha = 1): void {
     if (!this.player) {
       return;
     }
@@ -4996,7 +4880,8 @@ export class FortLiteGame {
 
       if (target) {
         this.hud.setSpectating(target.name || target.id);
-        const pivot = target.position.clone().add(new THREE.Vector3(0, 1.8, 0));
+        const targetPosition = this.tempVectorI.lerpVectors(target.previousPosition, target.position, renderAlpha);
+        const pivot = targetPosition.clone().add(new THREE.Vector3(0, 1.8, 0));
         const horizontalForward = this.tempVectorE.set(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
         const desiredPos = pivot.clone()
           .add(new THREE.Vector3(0, 1.6, 0))
@@ -5023,7 +4908,8 @@ export class FortLiteGame {
     const pivotHeight = this.player.spawnState === 'parachuting'
         ? 2.2
         : PLAYER_EYE_HEIGHT;
-    const pivot = this.tempVectorG.copy(this.player.position).setY(this.player.position.y + pivotHeight);
+    const playerRenderPosition = this.tempVectorI.lerpVectors(this.player.previousPosition, this.player.position, renderAlpha);
+    const pivot = this.tempVectorG.copy(playerRenderPosition).setY(playerRenderPosition.y + pivotHeight);
     let desiredPosition: THREE.Vector3;
     let lookTarget: THREE.Vector3;
 
@@ -6079,175 +5965,45 @@ export class FortLiteGame {
       return;
     }
 
-    this.networkClient.setCallbacks({
-      onWorldSnapshot: (snapshot: WorldSnapshotMessage) => {
-        this.interpolator.pushSnapshot(snapshot);
-
-        // Local player reconciliation
-        const localSnap = snapshot.players.find((p) => p.id === this.networkClient?.playerId);
-        if (localSnap && this.player) {
-          this.predictor.reconcile(localSnap);
-          this.player.health = localSnap.health;
-          this.player.maxHealth = localSnap.maxHealth;
-          this.player.alive = localSnap.alive;
-          this.player.inventory.materials = { ...localSnap.materials };
-          this.player.inventory.ammo = { ...localSnap.ammo };
-          this.player.eliminationCount = localSnap.eliminationCount;
-
-          if (!this.player.alive && !this.spectatingTargetId) {
-            this.startSpectating();
-          }
-        }
-
-        // Storm authoritative sync
-        if (snapshot.storm && this.storm) {
-          const prevPhase = this.storm.phaseIndex;
-          this.storm.currentCenter.set(snapshot.storm.center[0], snapshot.storm.center[1], snapshot.storm.center[2]);
-          this.storm.currentRadius = snapshot.storm.radius;
-          this.storm.targetCenter.set(snapshot.storm.targetCenter[0], snapshot.storm.targetCenter[1], snapshot.storm.targetCenter[2]);
-          this.storm.targetRadius = snapshot.storm.targetRadius;
-          this.storm.phaseIndex = snapshot.storm.phaseIndex;
-          this.storm.timer = snapshot.storm.timer;
-          this.storm.currentDamagePerSecond = snapshot.storm.damagePerSecond;
-          if (snapshot.storm.phaseIndex !== prevPhase) {
-            this.options.audio?.fortliteStormWarning();
-          }
-          this.updateStormVisuals();
-        }
-
-        // Build pieces sync
-        if (snapshot.builds) {
-          this.syncBuildSnapshots(snapshot.builds);
-        }
-
-        // Loot sync
-        if (snapshot.loot) {
-          this.syncLootSnapshots(snapshot.loot);
+    this.networkClient.setCallbacks(createFortLiteNetworkCallbacks({
+      client: this.networkClient,
+      interpolator: this.interpolator,
+      predictor: this.predictor,
+      audio: this.options.audio,
+      hud: this.hud,
+      getPlayer: () => this.player,
+      getStorm: () => this.storm,
+      getCameraYaw: () => this.cameraYaw,
+      getMatchTime: () => this.matchTime,
+      getPlayerDamageSoundCooldown: () => this.playerDamageSoundCooldown,
+      setPlayerDamageSoundCooldown: (value) => {
+        this.playerDamageSoundCooldown = value;
+      },
+      getSpectatingTargetId: () => this.spectatingTargetId,
+      setSpectatingTargetId: (value) => {
+        this.spectatingTargetId = value;
+      },
+      findActorById: (id) => this.findActorById(id) ?? null,
+      startSpectating: () => this.startSpectating(),
+      showMessage: (text, duration) => this.showMessage(text, duration),
+      createShotEffect: (origin, impact, color) => this.createShotEffect(origin, impact, color),
+      updateStormVisuals: () => this.updateStormVisuals(),
+      syncBuildSnapshots: (builds) => this.syncBuildSnapshots(builds),
+      syncLootSnapshots: (loot) => this.syncLootSnapshots(loot),
+      findBuildPiece: (id) => this.buildPieces.find((piece) => piece.id === id) ?? null,
+      buildPieceExists: (id) => this.buildPieces.some((piece) => piece.id === id),
+      addBuildPiece: (pieceType, materialType, position, yaw, id) => this.addBuildPiece(pieceType, materialType, position, yaw, id),
+      damageBuildPiece: (piece, damage) => this.damageBuildPiece(piece, damage),
+      removeLootById: (id) => {
+        const pickup = this.loot.find((item) => item.id === id);
+        if (pickup) {
+          this.loot = this.loot.filter((item) => item.id !== id);
+          this.lootGroup.remove(pickup.mesh);
+          this.disposeObject(pickup.mesh);
         }
       },
-
-      onShotEvent: (shot: ShotBroadcastMessage) => {
-        if (shot.actorId === this.networkClient?.playerId) {
-          return;
-        }
-
-        const origin = new THREE.Vector3(...shot.origin);
-        const direction = new THREE.Vector3(...shot.direction);
-        const impact = shot.impact ? new THREE.Vector3(...shot.impact) : origin.clone().addScaledVector(direction, 60);
-
-        const def = WEAPON_DEFINITIONS.find((w) => w.id === shot.weaponId);
-        this.createShotEffect(origin, impact, def?.color ?? 0xffd280);
-        if (this.player && horizontalDistance(origin, this.player.position) < 80) {
-          this.options.audio?.fortliteFire(shot.weaponId);
-        }
-      },
-
-      onDamageEvent: (dmg: DamageEventMessage) => {
-        if (dmg.targetId === this.networkClient?.playerId) {
-          if (this.playerDamageSoundCooldown <= 0) {
-            this.options.audio?.fortliteDamage();
-            this.playerDamageSoundCooldown = 0.12;
-          }
-          const attacker = dmg.attackerId ? this.findActorById(dmg.attackerId) : null;
-          if (attacker && this.player) {
-            const dx = attacker.position.x - this.player.position.x;
-            const dz = attacker.position.z - this.player.position.z;
-            const angle = Math.atan2(dz, dx) - this.cameraYaw;
-            this.hud.flashHit(angle);
-          } else {
-            this.hud.flashHit(0);
-          }
-          if (this.player) {
-            this.player.health = dmg.newHealth;
-          }
-        }
-
-        if (dmg.attackerId === this.networkClient?.playerId) {
-          this.hud.showHitMarker(dmg.isCritical);
-          if (dmg.isCritical) {
-            this.options.audio?.fortliteCriticalHit();
-          } else {
-            this.options.audio?.hit();
-          }
-        }
-      },
-
-      onEliminationEvent: (elim: EliminationEventMessage) => {
-        const victimName = this.findActorById(elim.targetId)?.name || elim.targetId.slice(0, 6);
-        const killerName = elim.attackerId ? (this.findActorById(elim.attackerId)?.name || elim.attackerId.slice(0, 6)) : 'The Storm';
-
-        this.showMessage(`${killerName} eliminated ${victimName}`, 2.5);
-
-        if (elim.targetId === this.networkClient?.playerId) {
-          this.spectatingTargetId = elim.attackerId;
-          this.startSpectating();
-          this.showMessage(`Eliminated by ${killerName}. Now spectating.`, 4);
-        } else if (elim.attackerId === this.networkClient?.playerId) {
-          this.options.audio?.explosion();
-          this.showMessage(`You eliminated ${victimName}!`, 2.5);
-        }
-
-        const targetActor = this.findActorById(elim.targetId);
-        if (targetActor) {
-          targetActor.alive = false;
-          targetActor.group.visible = false;
-        }
-      },
-
-      onBuildEvent: (event: BuildEventMessage) => {
-        if (event.action === 'placed') {
-          const exists = this.buildPieces.some((b) => b.id === event.piece.id);
-          if (!exists) {
-            this.addBuildPiece(
-              event.piece.pieceType,
-              event.piece.materialType,
-              new THREE.Vector3(...event.piece.position),
-              event.piece.yaw,
-              event.piece.id
-            );
-            this.options.audio?.fortliteBuild();
-          }
-        } else if (event.action === 'destroyed') {
-          const piece = this.buildPieces.find((b) => b.id === event.piece.id);
-          if (piece) {
-            this.damageBuildPiece(piece, 9999);
-          }
-        }
-      },
-
-      onLootEvent: (event: LootEventMessage) => {
-        if (event.action === 'collected') {
-          const pickup = this.loot.find((l) => l.id === event.lootId);
-          if (pickup) {
-            this.loot = this.loot.filter((l) => l.id !== event.lootId);
-            this.lootGroup.remove(pickup.mesh);
-            this.disposeObject(pickup.mesh);
-          }
-        }
-      },
-
-      onMatchEnded: (data: MatchEndedMessage) => {
-        const won = data.winnerId === this.networkClient?.playerId;
-        const myPlacement = data.placements.find((p) => p.id === this.networkClient?.playerId);
-        this.endMatch(
-          won ? 'Victory Royale' : 'Match Ended',
-          won
-            ? 'You won the match!'
-            : `Winner: ${data.winnerName}. Placement: #${myPlacement?.placement ?? '-'}.`,
-          won,
-          {
-            placement: myPlacement?.placement ?? (won ? 1 : 2),
-            eliminations: myPlacement?.eliminations ?? this.player.eliminationCount,
-            survivalTime: this.matchTime
-          },
-          false
-        );
-      },
-
-      onPingUpdate: (pingMs: number) => {
-        this.hud.setPing(pingMs);
-      }
-    });
+      endMatch: (title, subtitle, won, result, showEndScreen) => this.endMatch(title, subtitle, won, result, showEndScreen)
+    }));
   }
 
   private getOrCreateRemoteActor(id: string, name: string, isBot: boolean, initialPos: [number, number, number]): Actor {
@@ -6668,7 +6424,7 @@ export class FortLiteGame {
     const height = this.root.clientHeight;
     this.camera.aspect = Math.max(1, width / Math.max(1, height));
     this.camera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(this.currentPixelRatio);
+    this.renderer.setPixelRatio(this.resolutionController.ratio);
     this.renderer.setSize(width, height, false);
   };
 
@@ -6682,31 +6438,20 @@ export class FortLiteGame {
   }
 
   private applyGraphicsQuality(quality: GraphicsQuality): void {
+    const profile = getFortLiteQualityProfile(quality, window.devicePixelRatio || 1);
     this.renderer.shadowMap.enabled = quality !== 'low';
     this.renderer.shadowMap.needsUpdate = true;
-    this.maxShotEffects = quality === 'low' ? 8 : quality === 'medium' ? 14 : 20;
+    this.maxShotEffects = profile.maxShotEffects;
     // Keep the inexpensive low/medium presets color-graded too. The previous
     // no-tone-mapping path made the low preset look washed out and overly soft.
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = quality === 'low' ? 1.08 : quality === 'medium' ? 1.04 : 1.02;
-    this.currentPixelRatio = this.getPixelRatioForQuality(quality);
-    this.lowFpsTime = 0;
-    this.highFpsTime = 0;
+    this.renderer.toneMappingExposure = profile.toneMappingExposure;
+    this.resolutionController.reset(quality, window.devicePixelRatio || 1);
     this.applyRendererResolution();
   }
 
-  private getPixelRatioForQuality(quality: GraphicsQuality): number {
-    const target = quality === 'low' ? 0.84 : quality === 'medium' ? 0.94 : 1;
-    return Math.min(window.devicePixelRatio || 1, target);
-  }
-
-  private getMinimumPixelRatioForQuality(quality: GraphicsQuality): number {
-    const minimum = quality === 'low' ? 0.58 : quality === 'medium' ? 0.68 : 0.78;
-    return Math.min(window.devicePixelRatio || 1, minimum);
-  }
-
   private applyRendererResolution(): void {
-    this.renderer.setPixelRatio(this.currentPixelRatio);
+    this.renderer.setPixelRatio(this.resolutionController.ratio);
     this.renderer.setSize(this.root.clientWidth, this.root.clientHeight, false);
   }
 
@@ -6762,10 +6507,6 @@ export class FortLiteGame {
     }
 
     return distanceToPlayer < BOT_MID_PRIORITY_DISTANCE ? 3 : 6;
-  }
-
-  private shouldRunBotSimulationThisTick(simulationStep: number, actorIndex: number): boolean {
-    return simulationStep <= 1 || (this.simulationTick + actorIndex) % simulationStep === 0;
   }
 
   private getBotVisionRange(): number {
@@ -6853,12 +6594,10 @@ export class FortLiteGame {
   }
 
   private shouldUsePreciseBotSight(actor: Actor, target: Actor): boolean {
-    if (this.graphicsQuality === 'high') {
-      return true;
-    }
-
-    return horizontalDistance(actor.position, this.player.position) < BOT_NEAR_PRIORITY_DISTANCE ||
-      horizontalDistance(target.position, this.player.position) < BOT_NEAR_PRIORITY_DISTANCE;
+    const preciseDistance = getPreciseBotSightDistance(this.graphicsQuality);
+    return this.graphicsQuality === 'high' ||
+      horizontalDistance(actor.position, this.player.position) < preciseDistance ||
+      horizontalDistance(target.position, this.player.position) < preciseDistance;
   }
 
   private shouldUseBotPathfinding(actor: Actor, directDistance: number): boolean {
@@ -6928,36 +6667,6 @@ export class FortLiteGame {
     shadowMaterial.opacity = actor.spawnState === 'parachuting' ? 0.08 : 0;
   }
 
-  private updateDynamicResolution(fps: number, dt: number): void {
-    const minimumPixelRatio = this.getMinimumPixelRatioForQuality(this.graphicsQuality);
-    const targetPixelRatio = this.getPixelRatioForQuality(this.graphicsQuality);
-
-    if (fps <= DYNAMIC_RESOLUTION_DROP_FPS && this.currentPixelRatio > minimumPixelRatio + 0.01) {
-      this.lowFpsTime += dt;
-      this.highFpsTime = 0;
-      if (this.lowFpsTime >= DYNAMIC_RESOLUTION_DROP_DELAY) {
-        this.currentPixelRatio = Math.max(minimumPixelRatio, this.currentPixelRatio - DYNAMIC_RESOLUTION_DROP_STEP);
-        this.lowFpsTime = 0;
-        this.applyRendererResolution();
-      }
-      return;
-    }
-
-    if (fps >= DYNAMIC_RESOLUTION_RECOVER_FPS && this.currentPixelRatio < targetPixelRatio - 0.01) {
-      this.highFpsTime += dt;
-      this.lowFpsTime = 0;
-      if (this.highFpsTime >= DYNAMIC_RESOLUTION_RECOVER_DELAY) {
-        this.currentPixelRatio = Math.min(targetPixelRatio, this.currentPixelRatio + DYNAMIC_RESOLUTION_RECOVER_STEP);
-        this.highFpsTime = 0;
-        this.applyRendererResolution();
-      }
-      return;
-    }
-
-    this.lowFpsTime = 0;
-    this.highFpsTime = 0;
-  }
-
   private getAdjustedCount(base: number, minimum: number): number {
     const multiplier = this.graphicsQuality === 'low' ? 0.18 : this.graphicsQuality === 'medium' ? 0.28 : 0.42;
     return Math.max(minimum, Math.round(base * multiplier));
@@ -7024,12 +6733,6 @@ export class FortLiteGame {
   }
 
   private getHudUpdateIntervalMs(): number {
-    if (this.graphicsQuality === 'low') {
-      return 320;
-    }
-    if (this.graphicsQuality === 'medium') {
-      return 200;
-    }
-    return 120;
+    return getHudUpdateIntervalMs(this.graphicsQuality);
   }
 }

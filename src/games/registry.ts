@@ -44,10 +44,150 @@ const neonThumb = createThumbnail((ctx, elapsed, width, height) => {
 });
 
 const apexThumb = createThumbnail((ctx, elapsed, width, height) => {
-  const t = elapsed * 0.003;
-  const sky = ctx.createLinearGradient(0, 0, 0, height); sky.addColorStop(0, "#efb26a"); sky.addColorStop(0.5, "#578bc2"); sky.addColorStop(0.51, "#212a34"); sky.addColorStop(1, "#090e16"); ctx.fillStyle = sky; ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = "#151a21"; ctx.beginPath(); ctx.moveTo(width*.26,height); ctx.lineTo(width*.46,height*.43); ctx.lineTo(width*.54,height*.43); ctx.lineTo(width*.74,height); ctx.fill();
-  ctx.fillStyle = "#dc2738"; ctx.fillRect(width*.43 + Math.sin(t)*5,height*.62, width*.14,height*.23); ctx.fillStyle = "#ffeded"; ctx.fillRect(width*.46 + Math.sin(t)*5,height*.78,width*.03,height*.035); ctx.fillRect(width*.51 + Math.sin(t)*5,height*.78,width*.03,height*.035);
+  const t = elapsed * 0.0014;
+  const horizon = height * 0.47;
+  const roadY = height * 0.72;
+
+  ctx.save();
+
+  const sky = ctx.createLinearGradient(0, 0, 0, horizon + 20);
+  sky.addColorStop(0, "#253845");
+  sky.addColorStop(0.58, "#6d929b");
+  sky.addColorStop(1, "#e6b779");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, width, horizon + 24);
+
+  ctx.fillStyle = "rgba(247, 196, 121, 0.28)";
+  ctx.beginPath();
+  ctx.arc(width * 0.76, height * 0.27, height * 0.15, 0, Math.PI * 2);
+  ctx.fill();
+
+  const rearMountain = (offset: number, color: string, peak: number): void => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, horizon + 10);
+    for (let x = 0; x <= width; x += 26) {
+      const y = horizon - peak * (0.48 + 0.52 * Math.sin(x * 0.035 + offset));
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(width, horizon + 10);
+    ctx.closePath();
+    ctx.fill();
+  };
+
+  rearMountain(0.9, "#677464", 42);
+  rearMountain(2.5, "#4c5c58", 30);
+
+  ctx.fillStyle = "#202d2e";
+  ctx.beginPath();
+  ctx.moveTo(0, horizon + 14);
+  ctx.lineTo(width * 0.12, horizon - 18);
+  ctx.lineTo(width * 0.22, horizon - 2);
+  ctx.lineTo(width * 0.35, horizon - 38);
+  ctx.lineTo(width * 0.48, horizon + 2);
+  ctx.lineTo(width * 0.62, horizon - 26);
+  ctx.lineTo(width * 0.78, horizon - 8);
+  ctx.lineTo(width * 0.92, horizon - 30);
+  ctx.lineTo(width, horizon + 12);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#172126";
+  ctx.beginPath();
+  ctx.moveTo(0, height);
+  ctx.lineTo(width * 0.38, roadY - 14);
+  ctx.quadraticCurveTo(width * 0.49, roadY - 28, width * 0.59, roadY - 8);
+  ctx.lineTo(width, height);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(238, 218, 178, 0.82)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(width * 0.39, roadY - 10);
+  ctx.quadraticCurveTo(width * 0.5, roadY - 27, width * 0.61, roadY - 5);
+  ctx.lineTo(width * 0.8, height);
+  ctx.moveTo(width * 0.59, roadY - 5);
+  ctx.quadraticCurveTo(width * 0.5, roadY - 27, width * 0.39, roadY - 10);
+  ctx.lineTo(width * 0.1, height);
+  ctx.stroke();
+
+  ctx.setLineDash([11, 10]);
+  ctx.strokeStyle = "rgba(245, 231, 199, 0.74)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(width * 0.5, roadY - 18);
+  ctx.lineTo(width * (0.5 + Math.sin(t) * 0.02), height);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const drawTree = (x: number, y: number, scale: number): void => {
+    ctx.fillStyle = "#283b34";
+    ctx.fillRect(x - scale * 0.08, y, scale * 0.16, scale * 0.6);
+    ctx.fillStyle = "#18332f";
+    ctx.beginPath();
+    ctx.moveTo(x, y - scale);
+    ctx.lineTo(x - scale * 0.42, y + scale * 0.24);
+    ctx.lineTo(x + scale * 0.42, y + scale * 0.24);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#285044";
+    ctx.beginPath();
+    ctx.moveTo(x, y - scale * 0.58);
+    ctx.lineTo(x - scale * 0.34, y + scale * 0.48);
+    ctx.lineTo(x + scale * 0.34, y + scale * 0.48);
+    ctx.closePath();
+    ctx.fill();
+  };
+
+  [
+    [0.1, 0.56, 13], [0.19, 0.53, 10], [0.27, 0.57, 8],
+    [0.72, 0.56, 10], [0.82, 0.51, 14], [0.94, 0.56, 9],
+  ].forEach(([x, y, scale]) => drawTree(width * x, height * y, scale));
+
+  ctx.save();
+  ctx.translate(width * 0.5, height * 0.1);
+  ctx.rotate(-0.035);
+  ctx.fillStyle = "rgba(8, 15, 20, 0.9)";
+  ctx.fillRect(-width * 0.64, -height * 0.12, width * 1.28, height * 0.16);
+  ctx.fillStyle = "rgba(234, 220, 182, 0.9)";
+  ctx.font = "700 13px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("APEX RUN", 0, -height * 0.01);
+  ctx.restore();
+
+  const carX = width * (0.5 + Math.sin(t * 0.9) * 0.018);
+  const carY = height * 0.74 + Math.sin(t * 2.1) * 1.2;
+  ctx.save();
+  ctx.translate(carX, carY);
+  ctx.fillStyle = "#13181b";
+  ctx.fillRect(-width * 0.075, 6, width * 0.03, 14);
+  ctx.fillRect(width * 0.045, 6, width * 0.03, 14);
+  ctx.fillStyle = "#c9362f";
+  ctx.beginPath();
+  ctx.moveTo(-width * 0.11, 10);
+  ctx.lineTo(-width * 0.085, -5);
+  ctx.lineTo(-width * 0.035, -13);
+  ctx.lineTo(width * 0.055, -13);
+  ctx.lineTo(width * 0.105, -4);
+  ctx.lineTo(width * 0.125, 10);
+  ctx.quadraticCurveTo(0, 18, -width * 0.11, 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#253942";
+  ctx.beginPath();
+  ctx.moveTo(-width * 0.045, -10);
+  ctx.lineTo(width * 0.045, -10);
+  ctx.lineTo(width * 0.07, -2);
+  ctx.lineTo(-width * 0.065, -2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#f4e4c7";
+  ctx.fillRect(-width * 0.102, 5, width * 0.035, 3);
+  ctx.fillRect(width * 0.067, 5, width * 0.035, 3);
+  ctx.restore();
+
+  ctx.restore();
 });
 
 const asteroidThumb = createThumbnail((ctx, elapsed, width, height) => {
@@ -170,48 +310,133 @@ const pongThumb = createThumbnail((ctx, elapsed, width, height) => {
 });
 
 const fortLiteThumb = createThumbnail((ctx, elapsed, width, height) => {
-  const t = elapsed * 0.0016;
-  const horizon = height * 0.62;
+  const t = elapsed * 0.0012;
 
-  const sky = ctx.createLinearGradient(0, 0, 0, horizon);
-  sky.addColorStop(0, "#86d7ff");
-  sky.addColorStop(1, "#1d3d5d");
+  ctx.save();
+
+  const sky = ctx.createLinearGradient(0, 0, 0, height);
+  sky.addColorStop(0, "#9bdcff");
+  sky.addColorStop(0.54, "#e5e5d5");
+  sky.addColorStop(1, "#8db9c8");
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, width, horizon);
+  ctx.fillRect(0, 0, width, height);
 
-  const ground = ctx.createLinearGradient(0, horizon, 0, height);
-  ground.addColorStop(0, "#446f3b");
-  ground.addColorStop(1, "#20341f");
-  ctx.fillStyle = ground;
-  ctx.fillRect(0, horizon, width, height - horizon);
-
-  ctx.fillStyle = "rgba(255, 202, 120, 0.18)";
+  ctx.fillStyle = "rgba(255, 224, 158, 0.24)";
   ctx.beginPath();
-  ctx.arc(width * 0.16, height * 0.18, 44, 0, Math.PI * 2);
+  ctx.arc(width * 0.16, height * 0.16, height * 0.16, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = "rgba(81, 224, 255, 0.75)";
-  ctx.lineWidth = 3;
+  ctx.fillStyle = "rgba(89, 170, 198, 0.46)";
+  ctx.fillRect(0, height * 0.69, width, height * 0.31);
+  ctx.fillStyle = "rgba(245, 248, 236, 0.28)";
   ctx.beginPath();
-  ctx.arc(width * 0.7, horizon + 12, 42 + Math.sin(t) * 6, Math.PI, Math.PI * 2);
+  ctx.moveTo(0, height * 0.72);
+  ctx.quadraticCurveTo(width * 0.32, height * 0.68, width * 0.56, height * 0.73);
+  ctx.quadraticCurveTo(width * 0.8, height * 0.78, width, height * 0.69);
+  ctx.lineTo(width, height);
+  ctx.lineTo(0, height);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(width * 0.5, height * 0.8);
+  ctx.rotate(Math.sin(t * 0.8) * 0.025);
+  ctx.scale(1.2, 0.46);
+  ctx.fillStyle = "#d6bf84";
+  ctx.beginPath();
+  ctx.moveTo(-width * 0.4, 0);
+  ctx.lineTo(-width * 0.26, -height * 0.34);
+  ctx.lineTo(-width * 0.02, -height * 0.44);
+  ctx.lineTo(width * 0.24, -height * 0.33);
+  ctx.lineTo(width * 0.42, -height * 0.05);
+  ctx.lineTo(width * 0.29, height * 0.22);
+  ctx.lineTo(-width * 0.18, height * 0.24);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#6f9b63";
+  ctx.beginPath();
+  ctx.moveTo(-width * 0.28, -height * 0.18);
+  ctx.lineTo(-width * 0.04, -height * 0.42);
+  ctx.lineTo(width * 0.2, -height * 0.27);
+  ctx.lineTo(width * 0.24, 0);
+  ctx.lineTo(-width * 0.12, height * 0.18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#4d7b56";
+  ctx.beginPath();
+  ctx.moveTo(-width * 0.13, -height * 0.26);
+  ctx.lineTo(width * 0.08, -height * 0.16);
+  ctx.lineTo(width * 0.17, height * 0.05);
+  ctx.lineTo(-width * 0.08, height * 0.13);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#bd9a66";
+  ctx.fillRect(-width * 0.02, -height * 0.1, width * 0.09, height * 0.1);
+  ctx.fillRect(width * 0.12, -height * 0.05, width * 0.05, height * 0.06);
+  ctx.restore();
+
+  const drawTinyParachute = (x: number, y: number, scale: number): void => {
+    ctx.fillStyle = "rgba(74, 163, 174, 0.58)";
+    ctx.beginPath();
+    ctx.arc(x, y, scale, Math.PI, 0);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(x - scale * 0.7, y);
+    ctx.lineTo(x, y + scale * 2.2);
+    ctx.lineTo(x + scale * 0.7, y);
+    ctx.stroke();
+  };
+  drawTinyParachute(width * 0.17, height * 0.54, 4);
+  drawTinyParachute(width * 0.83, height * 0.56, 3.5);
+
+  const canopyX = width * (0.5 + Math.sin(t) * 0.018);
+  const canopyY = height * 0.31 + Math.sin(t * 1.6) * 1.4;
+  ctx.fillStyle = "#31c6a7";
+  ctx.beginPath();
+  ctx.moveTo(canopyX - width * 0.22, canopyY + height * 0.06);
+  ctx.quadraticCurveTo(canopyX - width * 0.17, canopyY - height * 0.15, canopyX, canopyY - height * 0.16);
+  ctx.quadraticCurveTo(canopyX + width * 0.17, canopyY - height * 0.15, canopyX + width * 0.22, canopyY + height * 0.06);
+  ctx.quadraticCurveTo(canopyX, canopyY + height * 0.17, canopyX - width * 0.22, canopyY + height * 0.06);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "rgba(157, 255, 224, 0.42)";
+  ctx.beginPath();
+  ctx.moveTo(canopyX - width * 0.17, canopyY + height * 0.02);
+  ctx.quadraticCurveTo(canopyX - width * 0.12, canopyY - height * 0.11, canopyX, canopyY - height * 0.13);
+  ctx.quadraticCurveTo(canopyX + width * 0.12, canopyY - height * 0.11, canopyX + width * 0.17, canopyY + height * 0.02);
+  ctx.quadraticCurveTo(canopyX, canopyY + height * 0.08, canopyX - width * 0.17, canopyY + height * 0.02);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.86)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(canopyX - width * 0.17, canopyY + height * 0.04);
+  ctx.lineTo(width * 0.47, height * 0.75);
+  ctx.moveTo(canopyX + width * 0.17, canopyY + height * 0.04);
+  ctx.lineTo(width * 0.53, height * 0.75);
   ctx.stroke();
 
-  ctx.fillStyle = "#7f6b54";
-  ctx.fillRect(width * 0.28, horizon - 28, 54, 28);
-  ctx.fillRect(width * 0.62, horizon - 40, 42, 40);
-
-  ctx.fillStyle = "#b49a7d";
-  ctx.fillRect(width * 0.52, horizon - 56, 14, 56);
-  ctx.fillRect(width * 0.48, horizon - 12, 72, 12);
-
-  ctx.strokeStyle = "rgba(255, 246, 234, 0.9)";
-  ctx.lineWidth = 2;
+  ctx.fillStyle = "#e7c690";
   ctx.beginPath();
-  ctx.moveTo(width * 0.5 - 12, height * 0.48);
-  ctx.lineTo(width * 0.5 + 12, height * 0.48);
-  ctx.moveTo(width * 0.5, height * 0.48 - 12);
-  ctx.lineTo(width * 0.5, height * 0.48 + 12);
-  ctx.stroke();
+  ctx.arc(width * 0.5, height * 0.76, width * 0.035, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#1e9d9d";
+  ctx.fillRect(width * 0.47, height * 0.78, width * 0.06, height * 0.13);
+  ctx.fillStyle = "#172d37";
+  ctx.fillRect(width * 0.467, height * 0.89, width * 0.025, height * 0.08);
+  ctx.fillRect(width * 0.508, height * 0.89, width * 0.025, height * 0.08);
+
+  ctx.fillStyle = "rgba(20, 45, 50, 0.7)";
+  ctx.fillRect(width * 0.04, height * 0.05, width * 0.22, height * 0.06);
+  ctx.fillStyle = "rgba(245, 255, 246, 0.92)";
+  ctx.font = "700 9px sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("FORTLITE", width * 0.055, height * 0.09);
+
+  ctx.restore();
 });
 
 export const gameRegistry: GameDefinition[] = [

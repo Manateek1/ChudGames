@@ -34,6 +34,10 @@ import { SeededRandom } from '../src/games/fortliteRuntime/math.ts';
 
 export const TICK_RATE_HZ = 20;
 export const TICK_DELTA_SECONDS = 1 / TICK_RATE_HZ;
+export const SNAPSHOT_RATE_HZ = 10;
+export const SNAPSHOT_TICK_INTERVAL = Math.max(1, Math.round(TICK_RATE_HZ / SNAPSHOT_RATE_HZ));
+export const BOT_THINK_RATE_HZ = 10;
+export const BOT_THINK_TICK_INTERVAL = Math.max(1, Math.round(TICK_RATE_HZ / BOT_THINK_RATE_HZ));
 export const RECONNECT_GRACE_PERIOD_MS = 45000;
 export const MAX_MATCH_PARTICIPANTS = 50;
 export const TOTAL_MATCH_PARTICIPANTS = MAX_MATCH_PARTICIPANTS;
@@ -488,20 +492,27 @@ export class MatchRoom {
         }
       }
 
-      // Bot simulation
-      if (actor.isBot && actor.spawnState === 'grounded') {
-        this.tickBot(actor, dt);
+      // Bot decision-making is intentionally cheaper than authoritative movement.
+      // Ten decisions per second is enough for this arcade AI and halves the
+      // repeated 50-actor nearest-target scans on low-powered hosts.
+      if (actor.isBot && actor.spawnState === 'grounded' && this.tick % BOT_THINK_TICK_INTERVAL === 0) {
+        this.tickBot(actor, dt * BOT_THINK_TICK_INTERVAL);
       }
 
       // Check loot pickups in radius
-      this.checkLootPickups(actor);
+      if (!actor.isBot || this.tick % BOT_THINK_TICK_INTERVAL === 0) {
+        this.checkLootPickups(actor);
+      }
     }
 
     // Tick storm
     this.tickStorm(dt);
 
-    // Broadcast world snapshot
-    this.broadcastSnapshot();
+    // The renderer interpolates between snapshots, so 10Hz is enough for
+    // smooth remote motion while cutting JSON serialization and Wi-Fi traffic.
+    if (this.tick % SNAPSHOT_TICK_INTERVAL === 0) {
+      this.broadcastSnapshot();
+    }
 
     // Check match victory/defeat
     this.checkMatchEnd();
