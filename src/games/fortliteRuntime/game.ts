@@ -2761,6 +2761,7 @@ export class FortLiteGame {
     this.processPlayer(dt);
 
     if (!this.networkClient) {
+      this.updateResourceVisuals();
       const botUpdates = this.botSimulationScheduler.select(
         this.actors,
         this.graphicsQuality,
@@ -2783,6 +2784,13 @@ export class FortLiteGame {
 
         this.updateActorTimers(actor, dt);
         this.applyStormDamage(actor, dt);
+        const shouldRenderActor = this.shouldRenderActor(actor);
+        actor.group.visible = shouldRenderActor;
+        if (!shouldRenderActor) {
+          actor.lastPosition.copy(actor.position);
+          continue;
+        }
+
         if (this.shouldUseDetailedActorVisualUpdate(actor, actorIndex)) {
           this.updateActorVisual(actor);
         } else {
@@ -3483,7 +3491,17 @@ export class FortLiteGame {
       return;
     }
 
+    const lootRenderDistance = this.getLootRenderDistance();
+    const lootRenderDistanceSquared = lootRenderDistance * lootRenderDistance;
     for (const pickup of this.loot) {
+      const dx = pickup.position.x - this.player.position.x;
+      const dz = pickup.position.z - this.player.position.z;
+      if (lootRenderDistance !== Infinity && (dx * dx) + (dz * dz) > lootRenderDistanceSquared) {
+        pickup.mesh.visible = false;
+        continue;
+      }
+
+      pickup.mesh.visible = true;
       pickup.mesh.position.set(
         pickup.position.x,
         pickup.position.y + 0.35 + Math.sin(time * 1.8 + pickup.bobOffset) * 0.22,
@@ -4286,7 +4304,6 @@ export class FortLiteGame {
     const shadowDistance = this.getShadowDistance();
     const useDetailedAnimation =
       actor === this.player ||
-      actor.spawnState === 'parachuting' ||
       distanceToPlayer <= detailedVisualDistance;
     for (const part of actor.detailParts) {
       part.visible = useDetailedAnimation;
@@ -4802,6 +4819,20 @@ export class FortLiteGame {
         continue;
       }
       actor.group.position.lerpVectors(actor.previousPosition, actor.position, alpha);
+    }
+  }
+
+  private updateResourceVisuals(): void {
+    const resourceRenderDistance = this.getResourceRenderDistance();
+    if (resourceRenderDistance === Infinity) {
+      return;
+    }
+
+    const resourceRenderDistanceSquared = resourceRenderDistance * resourceRenderDistance;
+    for (const node of this.resourceNodes) {
+      const dx = node.position.x - this.player.position.x;
+      const dz = node.position.z - this.player.position.z;
+      node.mesh.visible = (dx * dx) + (dz * dz) <= resourceRenderDistanceSquared;
     }
   }
 
@@ -6540,6 +6571,62 @@ export class FortLiteGame {
     return 999;
   }
 
+  private getActorRenderDistance(): number {
+    if (this.graphicsQuality === 'low') {
+      return 132;
+    }
+    if (this.graphicsQuality === 'medium') {
+      return 220;
+    }
+    return Infinity;
+  }
+
+  private getParachuteRenderDistance(): number {
+    if (this.graphicsQuality === 'low') {
+      return 168;
+    }
+    if (this.graphicsQuality === 'medium') {
+      return 280;
+    }
+    return Infinity;
+  }
+
+  private getLootRenderDistance(): number {
+    if (this.graphicsQuality === 'low') {
+      return 144;
+    }
+    if (this.graphicsQuality === 'medium') {
+      return 240;
+    }
+    return Infinity;
+  }
+
+  private getResourceRenderDistance(): number {
+    if (this.graphicsQuality === 'low') {
+      return 168;
+    }
+    if (this.graphicsQuality === 'medium') {
+      return 280;
+    }
+    return Infinity;
+  }
+
+  private shouldRenderActor(actor: Actor): boolean {
+    if (actor === this.player) {
+      return true;
+    }
+
+    if (!actor.alive) {
+      return false;
+    }
+
+    const distanceToPlayer = horizontalDistance(actor.position, this.player.position);
+    const maxDistance = actor.spawnState === 'parachuting'
+      ? this.getParachuteRenderDistance()
+      : this.getActorRenderDistance();
+    return distanceToPlayer <= maxDistance;
+  }
+
   private getIndicatorDistance(): number {
     if (this.graphicsQuality === 'low') {
       return 28;
@@ -6606,7 +6693,7 @@ export class FortLiteGame {
   }
 
   private shouldUseDetailedActorVisualUpdate(actor: Actor, actorIndex: number): boolean {
-    if (actor === this.player || actor.spawnState === 'parachuting') {
+    if (actor === this.player) {
       return true;
     }
 
@@ -6627,7 +6714,7 @@ export class FortLiteGame {
     actor.group.rotation.y = actor.yaw;
     actor.parachuteGroup.visible = actor.spawnState === 'parachuting';
     actor.lastPosition.copy(actor.position);
-    const detailed = actor === this.player || actor.spawnState === 'parachuting' ||
+    const detailed = actor === this.player ||
       horizontalDistance(actor.position, this.player.position) <= this.getDetailedActorVisualDistance();
     for (const part of actor.detailParts) {
       part.visible = detailed;
