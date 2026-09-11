@@ -68,12 +68,11 @@ export function getHudUpdateIntervalMs(quality: GraphicsQuality): number {
 }
 
 export function getFortLiteRenderIntervalMs(quality: GraphicsQuality): number {
-  // Low quality is a fixed 30 Hz gameplay presentation. A stable budget is
-  // more important than trying to render extra frames while the GPU is
-  // already constrained; transforms still interpolate between simulation
-  // updates so near movement remains smooth.
+  // The low preset keeps its reduced scene, actor, and effect budgets, but it
+  // must not feel like a 30 FPS game. Simulation remains fixed at 30 Hz while
+  // the presentation can use the display refresh rate and interpolate motion.
   if (quality === 'low') {
-    return 1000 / 30;
+    return 1000 / 60;
   }
   if (quality === 'medium') {
     return 1000 / 45;
