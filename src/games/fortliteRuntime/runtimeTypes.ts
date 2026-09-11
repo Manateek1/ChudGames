@@ -60,6 +60,7 @@ export interface Actor {
   stepTime: number;
   spawnState: SpawnState;
   spawnTimer: number;
+  spawnProtectionTimer: number;
   dropStart: THREE.Vector3;
   dropTarget: THREE.Vector3;
   ai?: BotBrain;

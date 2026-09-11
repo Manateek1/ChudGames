@@ -34,6 +34,7 @@ export const FLOOR_MATERIAL_PICKUP_AMOUNT = 200;
 export const PLAYER_SPAWN_PADDING = 7;
 export const PLAYER_SPAWN_SEPARATION = 34;
 export const PLAYER_STARTER_LOOT_OFFSET = 4.2;
+export const PLAYER_SPAWN_PROTECTION_SECONDS = 6;
 export const BOT_STARTER_RIFLE_AMMO = 8;
 export const BOT_STARTER_WOOD = 60;
 export const BOT_STARTER_STONE = 20;

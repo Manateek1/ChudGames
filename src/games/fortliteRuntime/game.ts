@@ -102,6 +102,7 @@ import {
   PARACHUTE_STEER_SPEED,
   PICKAXE_STRUCTURE_DAMAGE,
   PLAYER_MOVE_SPEED,
+  PLAYER_SPAWN_PROTECTION_SECONDS,
   PLAYER_SPAWN_PADDING,
   PLAYER_SPAWN_SEPARATION,
   PLAYER_SPRINT_SPEED,
@@ -2354,6 +2355,7 @@ export class FortLiteGame {
       stepTime: this.rng.range(0, Math.PI * 2),
       spawnState: 'parachuting',
       spawnTimer: 0,
+      spawnProtectionTimer: 0,
       dropStart: dropStart.clone(),
       dropTarget: groundSpawn.clone()
     };
@@ -2833,6 +2835,7 @@ export class FortLiteGame {
   private finishLanding(actor: Actor, groundHeight: number): void {
     actor.spawnState = 'grounded';
     actor.spawnTimer = 0;
+    actor.spawnProtectionTimer = actor === this.player ? PLAYER_SPAWN_PROTECTION_SECONDS : 0;
     actor.position.y = groundHeight;
     actor.verticalVelocity = 0;
     actor.grounded = true;
@@ -3450,6 +3453,7 @@ export class FortLiteGame {
   private updateActorTimers(actor: Actor, dt: number): void {
     actor.fireCooldown = Math.max(0, actor.fireCooldown - dt);
     actor.harvestCooldown = Math.max(0, actor.harvestCooldown - dt);
+    actor.spawnProtectionTimer = Math.max(0, actor.spawnProtectionTimer - dt);
 
     if (actor.reloadTimer > 0) {
       actor.reloadTimer = Math.max(0, actor.reloadTimer - dt);
@@ -4627,6 +4631,13 @@ export class FortLiteGame {
       return;
     }
 
+    // Give a newly landed player a short combat window to orient, pick up the
+    // guaranteed starter kit, and move. Storm damage intentionally still
+    // applies so the protection cannot be used to ignore the storm.
+    if (target === this.player && reason === 'weapon' && target.spawnProtectionTimer > 0) {
+      return;
+    }
+
     target.health -= amount;
     if (target.kind === 'player' && amount > 0.01) {
       if (this.playerDamageSoundCooldown <= 0) {
@@ -4843,6 +4854,8 @@ export class FortLiteGame {
 
     const statusText = this.player.spawnState === 'parachuting'
         ? 'Parachuting to target'
+        : this.player.spawnProtectionTimer > 0
+          ? `Drop shield ${Math.ceil(this.player.spawnProtectionTimer)}s`
         : this.player.reloadTimer > 0 && weapon
           ? `Reloading ${weapon.definition.name}`
           : this.isBuildMode()
