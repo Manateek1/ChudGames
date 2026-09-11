@@ -28,6 +28,7 @@ export const FortLite = ({
   const gameRef = useRef<FortLiteGame | null>(null);
   const scoreRef = useRef(onScore);
   const fpsRef = useRef(onFps);
+  const lastFpsReportAtRef = useRef(0);
   const fpsVisibleRef = useRef(settings.showFps);
   const graphicsQualityRef = useRef(settings.graphicsQuality);
   const gameOverRef = useRef(onGameOver);
@@ -206,9 +207,17 @@ export const FortLite = ({
       showEndScreen: false,
       onPauseToggle: () => pauseToggleRef.current(),
       onFpsChange: (fps) => {
-        if (fpsVisibleRef.current) {
-          fpsRef.current(fps);
+        if (!fpsVisibleRef.current) {
+          return;
         }
+
+        const now = performance.now();
+        if (now - lastFpsReportAtRef.current < 500) {
+          return;
+        }
+
+        lastFpsReportAtRef.current = now;
+        fpsRef.current(fps);
       },
       onPlacementChange: (placement) => {
         scoreRef.current(placement);
