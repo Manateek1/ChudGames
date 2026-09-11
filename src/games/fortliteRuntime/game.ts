@@ -196,6 +196,7 @@ export class FortLiteGame {
   private maxLandingDustEffects = 8;
   private playerFootstepTimer = 0;
   private enemyFootstepTimer = 0;
+  private enemyShotAudioCooldown = 0;
 
   private matchRoot = new THREE.Group();
   private environmentGroup = new THREE.Group();
@@ -683,6 +684,7 @@ export class FortLiteGame {
     this.simulationTick = 0;
     this.playerFootstepTimer = 0;
     this.enemyFootstepTimer = 0;
+    this.enemyShotAudioCooldown = 0;
 
     this.clearMatchRoot();
 
@@ -2741,6 +2743,7 @@ export class FortLiteGame {
     this.muzzleFlashTime = Math.max(0, this.muzzleFlashTime - dt * 7.5);
     this.viewModelSway.multiplyScalar(Math.max(0, 1 - dt * 7.5));
     this.playerDamageSoundCooldown = Math.max(0, this.playerDamageSoundCooldown - dt);
+    this.enemyShotAudioCooldown = Math.max(0, this.enemyShotAudioCooldown - dt);
     this.playerBloom.update(dt);
     if (this.bufferedWeaponSlot !== null) {
       this.bufferedSlotTimer -= dt;
@@ -3694,8 +3697,18 @@ export class FortLiteGame {
         });
       }
     } else {
-      if (this.player && this.player.alive && horizontalDistance(actor.position, this.player.position) < 75) {
+      if (
+        this.player &&
+        this.player.alive &&
+        horizontalDistance(actor.position, this.player.position) < 75 &&
+        this.enemyShotAudioCooldown <= 0
+      ) {
         this.options.audio?.fortliteFire(weapon.definition.id);
+        this.enemyShotAudioCooldown = this.graphicsQuality === 'low'
+          ? 0.075
+          : this.graphicsQuality === 'medium'
+            ? 0.05
+            : 0.03;
       }
     }
 
