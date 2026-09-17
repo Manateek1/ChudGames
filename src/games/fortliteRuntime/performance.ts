@@ -39,8 +39,10 @@ const QUALITY_PROFILES: Record<GraphicsQuality, Omit<FortLiteQualityProfile, 'pi
     toneMappingExposure: 1.02,
     maxShotEffects: 20,
     maxLandingDustEffects: 10,
-    botSimulationBudget: 50,
-    preciseBotSightDistance: 120,
+    // Keep all 50 actors in the match, but rotate background bot thinking so
+    // expensive navigation and visibility work never monopolizes a frame.
+    botSimulationBudget: 28,
+    preciseBotSightDistance: 72,
     hudUpdateIntervalMs: 160
   }
 };

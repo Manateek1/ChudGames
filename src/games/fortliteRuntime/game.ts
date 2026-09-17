@@ -6635,8 +6635,12 @@ export class FortLiteGame {
   }
 
   private getBotSimulationStep(actor: Actor): number {
-    if (this.graphicsQuality === 'high' || this.isHighPriorityBot(actor)) {
+    if (this.isHighPriorityBot(actor)) {
       return 1;
+    }
+
+    if (this.graphicsQuality === 'high') {
+      return 2;
     }
 
     const distanceToPlayer = horizontalDistance(actor.position, this.player.position);
@@ -6659,7 +6663,7 @@ export class FortLiteGame {
 
   private shouldUseFullBotLogic(actor: Actor): boolean {
     if (this.graphicsQuality === 'high') {
-      return true;
+      return this.isHighPriorityBot(actor) || horizontalDistance(actor.position, this.player.position) < BOT_MID_PRIORITY_DISTANCE;
     }
 
     const distanceToPlayer = horizontalDistance(actor.position, this.player.position);
@@ -6859,8 +6863,7 @@ export class FortLiteGame {
 
   private shouldUsePreciseBotSight(actor: Actor, target: Actor): boolean {
     const preciseDistance = getPreciseBotSightDistance(this.graphicsQuality);
-    return this.graphicsQuality === 'high' ||
-      horizontalDistance(actor.position, this.player.position) < preciseDistance ||
+    return horizontalDistance(actor.position, this.player.position) < preciseDistance ||
       horizontalDistance(target.position, this.player.position) < preciseDistance;
   }
 
@@ -6870,7 +6873,7 @@ export class FortLiteGame {
     }
 
     if (this.graphicsQuality === 'high') {
-      return true;
+      return this.isHighPriorityBot(actor) || directDistance < BOT_MID_PRIORITY_DISTANCE;
     }
 
     if (this.graphicsQuality === 'medium') {
@@ -6882,7 +6885,7 @@ export class FortLiteGame {
 
   private shouldAllowBotBuilding(actor: Actor): boolean {
     if (this.graphicsQuality === 'high') {
-      return true;
+      return this.isHighPriorityBot(actor) || horizontalDistance(actor.position, this.player.position) < BOT_MID_PRIORITY_DISTANCE;
     }
 
     if (this.graphicsQuality === 'medium') {

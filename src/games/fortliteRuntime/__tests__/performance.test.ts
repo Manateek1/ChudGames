@@ -21,6 +21,7 @@ describe('FortLite performance budgets', () => {
     expect(low.cameraFar).toBeLessThan(medium.cameraFar);
     expect(low.fogDistance).toBeLessThanOrEqual(low.cameraFar);
     expect(getFortLiteRenderIntervalMs('low')).toBeCloseTo(1000 / 60);
+    expect(getFortLiteQualityProfile('high').botSimulationBudget).toBe(28);
   });
 
   it('keeps the low preset bot decision budget bounded', () => {
