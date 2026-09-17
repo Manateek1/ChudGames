@@ -183,6 +183,10 @@ export class FortLiteGame {
   private readonly tempVectorG = new THREE.Vector3();
   private readonly tempVectorH = new THREE.Vector3();
   private readonly tempVectorI = new THREE.Vector3();
+  private readonly botMoveVector = new THREE.Vector3();
+  private readonly botSafeVector = new THREE.Vector3();
+  private readonly botAimTarget = new THREE.Vector3();
+  private readonly botAimOrigin = new THREE.Vector3();
   private readonly tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private readonly fpsMeter = new RollingFps();
   private resolutionController!: AdaptiveResolutionController;
@@ -3320,7 +3324,7 @@ export class FortLiteGame {
     const weapon = this.chooseBestWeapon(actor, distance);
     const optimalDistance = weapon?.definition.id === 'auto-shotgun' ? 10 : weapon?.definition.id === 'tactical-smg' ? 17 : 25;
     const strafe = this.tempVectorC.set(-desiredDirection.z, 0, desiredDirection.x).multiplyScalar(brain.strafeDirection);
-    const move = new THREE.Vector3();
+    const move = this.botMoveVector.set(0, 0, 0);
     const stormPressure = this.getStormPressure(actor.position);
     const hasSight = this.shouldUsePreciseBotSight(actor, target)
       ? this.hasLineOfSight(actor, target)
@@ -3340,7 +3344,7 @@ export class FortLiteGame {
     }
 
     if (stormPressure > 0.1 || this.shouldRotateToSafeZone(actor.position)) {
-      const safeVector = this.getSafeZoneDestination(actor.position).sub(actor.position);
+      const safeVector = this.botSafeVector.copy(this.getSafeZoneDestination(actor.position)).sub(actor.position);
       safeVector.y = 0;
       if (safeVector.lengthSq() > 0.01) {
         move.addScaledVector(safeVector.normalize(), THREE.MathUtils.lerp(0.35, 1.15, stormPressure));
@@ -3373,12 +3377,14 @@ export class FortLiteGame {
         }
 
         const aimJitter = brain.profile.aimError * distance;
-        const aimTarget = target.position.clone().add(new THREE.Vector3(
-          this.rng.range(-aimJitter, aimJitter),
-          this.rng.range(1.14, 1.68),
-          this.rng.range(-aimJitter, aimJitter)
-        ));
-        const direction = aimTarget.sub(actor.position.clone().add(new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0))).normalize();
+        const aimTarget = this.botAimTarget.copy(target.position).set(
+          target.position.x + this.rng.range(-aimJitter, aimJitter),
+          target.position.y + this.rng.range(1.14, 1.68),
+          target.position.z + this.rng.range(-aimJitter, aimJitter)
+        );
+        const aimOrigin = this.botAimOrigin.copy(actor.position);
+        aimOrigin.y += PLAYER_EYE_HEIGHT;
+        const direction = aimTarget.sub(aimOrigin).normalize();
         this.tryFireWeapon(actor, direction, false);
 
         brain.burstShotsRemaining -= 1;
@@ -3741,20 +3747,22 @@ export class FortLiteGame {
     for (let pellet = 0; pellet < weapon.definition.pellets; pellet += 1) {
       const shotDirection = this.applyWeaponSpread(direction, effectiveSpread, playerOwned);
 
-      // Low quality bots do not render tracer effects, so a full recursive
-      // Three.js raycast for every bot pellet only adds CPU work without
-      // improving what the player can see. Keep player fire and higher
-      // quality bot fire on the precise path, while using the collision index
-      // and a lightweight actor capsule test for the low preset.
-      if (!playerOwned && this.graphicsQuality === 'low') {
-        this.resolveLowQualityBotShot(actor, origin, shotDirection, weapon);
+      const impactPoint = this.tempVectorE.copy(origin).addScaledVector(shotDirection, weapon.definition.range);
+
+      // Bot fire uses the collision index and a lightweight actor capsule test.
+      // The player still gets the precise Three.js raycast path; doing that
+      // recursively for every AI pellet was the largest sustained tick spike.
+      if (!playerOwned) {
+        this.resolveBotShot(actor, origin, shotDirection, weapon, impactPoint);
+        if (renderShotEffects && visualOrigin) {
+          this.createShotEffect(visualOrigin, impactPoint, weapon.definition.color);
+        }
         continue;
       }
 
       this.raycaster.set(origin, shotDirection);
       this.raycaster.far = weapon.definition.range;
       const hits = this.raycaster.intersectObjects(this.raycastTargets, true);
-      const impactPoint = this.tempVectorE.copy(origin).addScaledVector(shotDirection, weapon.definition.range);
 
       for (const hit of hits) {
         const kind = hit.object.userData.kind as string | undefined;
@@ -3815,12 +3823,14 @@ export class FortLiteGame {
     }
   }
 
-  private resolveLowQualityBotShot(
+  private resolveBotShot(
     actor: Actor,
     origin: THREE.Vector3,
     direction: THREE.Vector3,
-    weapon: WeaponInstance
+    weapon: WeaponInstance,
+    impactPoint: THREE.Vector3
   ): void {
+    impactPoint.copy(origin).addScaledVector(direction, weapon.definition.range);
     let closestTarget: Actor | null = null;
     let closestDistance = weapon.definition.range;
     let closestHitY = 0;
@@ -5491,32 +5501,7 @@ export class FortLiteGame {
   }
 
   private hasLineOfSight(from: Actor, to: Actor): boolean {
-    if (this.graphicsQuality !== 'high') {
-      return this.hasCheapLineOfSight(from, to);
-    }
-
-    const origin = this.tempVectorF.copy(from.position).setY(from.position.y + PLAYER_EYE_HEIGHT);
-    const target = this.tempVectorG.copy(to.position).setY(to.position.y + 1.35);
-    const direction = this.tempVectorH.copy(target).sub(origin);
-    const distance = direction.length();
-    direction.normalize();
-
-    this.raycaster.set(origin, direction);
-    this.raycaster.far = distance;
-    const hits = this.raycaster.intersectObjects(this.raycastTargets, true);
-    for (const hit of hits) {
-      const hitKind = hit.object.userData.kind as string | undefined;
-      const ref = hit.object.userData.ref as Actor | BuildPiece | null | undefined;
-      if (hitKind === 'actor' && ref && (ref as Actor).id === from.id) {
-        continue;
-      }
-      if (hitKind === 'actor' && ref && (ref as Actor).id === to.id) {
-        return true;
-      }
-      return false;
-    }
-
-    return true;
+    return this.hasCheapLineOfSight(from, to);
   }
 
   private findActorById(id: string): Actor | undefined {
