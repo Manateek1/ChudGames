@@ -17,7 +17,7 @@ describe('FortLite performance budgets', () => {
     const low = getFortLiteWorldRenderBudget('low', 396);
     const medium = getFortLiteWorldRenderBudget('medium', 396);
 
-    expect(low.maxVisibleActors).toBe(10);
+    expect(low.maxVisibleActors).toBe(13);
     expect(low.cameraFar).toBeLessThan(medium.cameraFar);
     expect(low.fogDistance).toBeLessThanOrEqual(low.cameraFar);
     expect(getFortLiteRenderIntervalMs('low')).toBeCloseTo(1000 / 60);

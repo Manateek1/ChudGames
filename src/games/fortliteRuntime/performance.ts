@@ -51,8 +51,8 @@ export function getFortLiteQualityProfile(quality: GraphicsQuality, devicePixelR
   const profile = QUALITY_PROFILES[quality];
   // Keep the low preset readable on normal hardware. Adaptive scaling only
   // moves below this floor when the device is genuinely struggling.
-  const pixelRatioTarget = quality === 'low' ? 0.9 : quality === 'medium' ? 0.98 : 1;
-  const pixelRatioMinimum = quality === 'low' ? 0.68 : quality === 'medium' ? 0.76 : 0.84;
+  const pixelRatioTarget = quality === 'low' ? 0.96 : quality === 'medium' ? 0.98 : 1;
+  const pixelRatioMinimum = quality === 'low' ? 0.72 : quality === 'medium' ? 0.76 : 0.84;
 
   return {
     ...profile,
@@ -93,10 +93,10 @@ export function getFortLiteWorldRenderBudget(
 ): FortLiteWorldRenderBudget {
   if (quality === 'low') {
     return {
-      cameraFar: Math.min(186, mapRadius * 0.5),
-      fogDistance: Math.min(180, mapRadius * 0.48),
-      skyRadius: Math.min(166, mapRadius * 0.44),
-      maxVisibleActors: 10
+      cameraFar: Math.min(232, mapRadius * 0.59),
+      fogDistance: Math.min(225, mapRadius * 0.57),
+      skyRadius: Math.min(208, mapRadius * 0.55),
+      maxVisibleActors: 13
     };
   }
 

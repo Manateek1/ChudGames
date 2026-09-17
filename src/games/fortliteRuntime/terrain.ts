@@ -94,7 +94,7 @@ export class IslandTerrain {
         this.size = mapRadius * 2.2;
         
         switch (quality) {
-            case 'low': this.widthSegments = 96; break;
+            case 'low': this.widthSegments = 108; break;
             case 'medium': this.widthSegments = 192; break;
             case 'high': this.widthSegments = 256; break;
             default: this.widthSegments = 192;

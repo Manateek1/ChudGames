@@ -1122,10 +1122,10 @@ export class FortLiteGame {
   }
 
   private addCloudLayer(): void {
-    const cloudCount = this.graphicsQuality === 'low' ? 2 + MAP_SCALE : this.graphicsQuality === 'medium' ? 4 + MAP_SCALE : 6 + MAP_SCALE;
-    const puffSegments = this.graphicsQuality === 'low' ? 3 : this.graphicsQuality === 'medium' ? 4 : 5;
+    const cloudCount = this.graphicsQuality === 'low' ? 3 + MAP_SCALE : this.graphicsQuality === 'medium' ? 4 + MAP_SCALE : 6 + MAP_SCALE;
+    const puffSegments = this.graphicsQuality === 'low' ? 4 : this.graphicsQuality === 'medium' ? 4 : 5;
     const minPuffs = this.graphicsQuality === 'low' ? 1 : 2;
-    const maxPuffs = this.graphicsQuality === 'low' ? 2 : this.graphicsQuality === 'medium' ? 2 : 3;
+    const maxPuffs = this.graphicsQuality === 'low' ? 3 : this.graphicsQuality === 'medium' ? 2 : 3;
 
     for (let index = 0; index < cloudCount; index += 1) {
       const anchor = randomPointInCircle(this.rng, MAP_RADIUS + 140);
@@ -1837,7 +1837,7 @@ export class FortLiteGame {
   }
 
   private populateTerrainRelief(): void {
-    const moundCount = this.graphicsQuality === 'low' ? 8 : this.graphicsQuality === 'medium' ? 11 : 14;
+    const moundCount = this.graphicsQuality === 'low' ? 10 : this.graphicsQuality === 'medium' ? 11 : 14;
     const biomeOrder: Biome[] = ['regular', 'forest', 'desert'];
     const biomeColors: Record<Biome, number[]> = {
       regular: [0x6e8855, 0x748d5c, 0x5f774a],
@@ -1864,7 +1864,7 @@ export class FortLiteGame {
 
   private addTerrainMound(center: THREE.Vector3, radiusX: number, radiusZ: number, height: number, color: number): void {
     const mound = new THREE.Mesh(
-      new THREE.SphereGeometry(1, this.graphicsQuality === 'low' ? 16 : 22, this.graphicsQuality === 'low' ? 8 : 12, 0, Math.PI * 2, 0, Math.PI * 0.5),
+      new THREE.SphereGeometry(1, this.graphicsQuality === 'low' ? 18 : 22, this.graphicsQuality === 'low' ? 9 : 12, 0, Math.PI * 2, 0, Math.PI * 0.5),
       new THREE.MeshStandardMaterial({ color, roughness: 0.98, metalness: 0.01 })
     );
     mound.position.set(center.x, height - 0.08, center.z);
@@ -2062,7 +2062,11 @@ export class FortLiteGame {
 
   private makeSkyDropStart(groundSpawn: THREE.Vector3, playerControlled: boolean): THREE.Vector3 {
     const horizontalStart = playerControlled
-      ? randomPointInCircle(this.rng, MAP_RADIUS * 0.08)
+      ? clampToCircle(
+          groundSpawn.clone().add(randomPointInCircle(this.rng, MAP_RADIUS * 0.045)),
+          WORLD_CENTER,
+          MAP_RADIUS - PLAYER_SPAWN_PADDING - 1
+        )
       : clampToCircle(
           groundSpawn.clone().add(randomPointInCircle(this.rng, MAP_RADIUS * 0.18)),
           WORLD_CENTER,
@@ -2157,9 +2161,9 @@ export class FortLiteGame {
 
   private createParachuteMesh(color: number, accent: number): THREE.Group {
     const group = new THREE.Group();
-    const canopySegments = this.graphicsQuality === 'low' ? 12 : this.graphicsQuality === 'medium' ? 16 : 18;
-    const canopyRings = this.graphicsQuality === 'low' ? 8 : this.graphicsQuality === 'medium' ? 10 : 12;
-    const trimSegments = this.graphicsQuality === 'low' ? 16 : this.graphicsQuality === 'medium' ? 20 : 26;
+    const canopySegments = this.graphicsQuality === 'low' ? 15 : this.graphicsQuality === 'medium' ? 16 : 18;
+    const canopyRings = this.graphicsQuality === 'low' ? 10 : this.graphicsQuality === 'medium' ? 10 : 12;
+    const trimSegments = this.graphicsQuality === 'low' ? 20 : this.graphicsQuality === 'medium' ? 20 : 26;
     const canopy = new THREE.Mesh(
       new THREE.SphereGeometry(2.35, canopySegments, canopyRings, 0, Math.PI * 2, 0, Math.PI * 0.5),
       new THREE.MeshStandardMaterial({ color, roughness: 0.56, metalness: 0.08 })
@@ -6682,7 +6686,7 @@ export class FortLiteGame {
 
   private getDetailedActorVisualDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 24;
+      return 30;
     }
     if (this.graphicsQuality === 'medium') {
       return 48;
@@ -6692,7 +6696,7 @@ export class FortLiteGame {
 
   private getActorRenderDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 94;
+      return 118;
     }
     if (this.graphicsQuality === 'medium') {
       return 220;
@@ -6702,7 +6706,7 @@ export class FortLiteGame {
 
   private getParachuteRenderDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 112;
+      return 140;
     }
     if (this.graphicsQuality === 'medium') {
       return 280;
@@ -6712,7 +6716,7 @@ export class FortLiteGame {
 
   private getLootRenderDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 86;
+      return 108;
     }
     if (this.graphicsQuality === 'medium') {
       return 240;
@@ -6722,7 +6726,7 @@ export class FortLiteGame {
 
   private getResourceRenderDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 104;
+      return 130;
     }
     if (this.graphicsQuality === 'medium') {
       return 280;
@@ -6805,7 +6809,7 @@ export class FortLiteGame {
       return false;
     }
 
-    const nearbyDistance = 26;
+    const nearbyDistance = 32;
     if (distanceSquared <= nearbyDistance * nearbyDistance) {
       return true;
     }
@@ -6818,7 +6822,7 @@ export class FortLiteGame {
 
   private getIndicatorDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 28;
+      return 35;
     }
     if (this.graphicsQuality === 'medium') {
       return 46;
@@ -6828,7 +6832,7 @@ export class FortLiteGame {
 
   private getHeldItemVisualDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 30;
+      return 38;
     }
     if (this.graphicsQuality === 'medium') {
       return 56;
@@ -6838,7 +6842,7 @@ export class FortLiteGame {
 
   private getShadowDistance(): number {
     if (this.graphicsQuality === 'low') {
-      return 36;
+      return 45;
     }
     if (this.graphicsQuality === 'medium') {
       return 64;
