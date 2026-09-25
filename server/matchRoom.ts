@@ -425,8 +425,25 @@ export class MatchRoom {
         id,
         kind,
         position: [x, 0.5, z],
-        itemId: kind === 'weapon' ? 'ranger-rifle' : undefined,
+        itemId: kind === 'weapon' ? this.rng.pick(WEAPON_DEFINITIONS).id : undefined,
         amount: kind === 'ammo' ? 30 : kind === 'material' ? 40 : undefined
+      });
+    }
+
+    // Keep a small weapon cache in the center so players can find close-range
+    // options even when the random world drops land near the map edge.
+    const centerWeapons = [
+      { id: 'auto-shotgun', x: -5, z: 0 },
+      { id: 'tactical-smg', x: 5, z: 0 },
+      { id: 'ranger-rifle', x: 0, z: 7 }
+    ];
+    for (const [index, weapon] of centerWeapons.entries()) {
+      const id = `center_weapon_${index}`;
+      this.loot.set(id, {
+        id,
+        kind: 'weapon',
+        position: [weapon.x, 0.5, weapon.z],
+        itemId: weapon.id
       });
     }
   }

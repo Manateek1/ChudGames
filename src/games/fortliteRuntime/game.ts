@@ -2477,6 +2477,20 @@ export class FortLiteGame {
       }
     }
 
+    if (!this.networkClient) {
+      // Give solo players a visible cache at the map crossroads as well as
+      // the landmark drops around the island.
+      const centerWeapons = [
+        { weapon: WEAPON_DEFINITIONS[1], x: -5, z: 0 },
+        { weapon: WEAPON_DEFINITIONS[2], x: 5, z: 0 },
+        { weapon: WEAPON_DEFINITIONS[0], x: 0, z: 7 }
+      ];
+      for (const drop of centerWeapons) {
+        const position = new THREE.Vector3(drop.x, this.sampleBaseTerrainHeight(drop.x, drop.z), drop.z);
+        this.createWeaponPickup(position, drop.weapon, true);
+      }
+    }
+
     // Bots already receive their starter loadout in spawnParticipants. Keeping
     // physical starter kits for every bot creates 150+ extra pickup meshes and
     // makes every bot scan a much larger loot list on every simulation step.
@@ -2536,7 +2550,7 @@ export class FortLiteGame {
     }
   }
 
-  private createWeaponPickup(position: THREE.Vector3, weapon: WeaponDefinition, guaranteed: boolean): void {
+  private createWeaponPickup(position: THREE.Vector3, weapon: WeaponDefinition, guaranteed: boolean, id?: string): void {
     const mesh = new THREE.Group();
 
     const plate = new THREE.Mesh(
@@ -2558,7 +2572,7 @@ export class FortLiteGame {
     mesh.add(plate, glow, weaponMesh);
 
     const pickup: LootPickup = {
-      id: `loot-weapon-${this.loot.length}`,
+      id: id ?? `loot-weapon-${this.loot.length}`,
       kind: 'weapon',
       mesh,
       position: position.clone(),
@@ -2569,7 +2583,7 @@ export class FortLiteGame {
     this.attachPickup(pickup);
   }
 
-  private createAmmoPickup(position: THREE.Vector3, ammoType: 'light' | 'shells', amount: number): void {
+  private createAmmoPickup(position: THREE.Vector3, ammoType: 'light' | 'shells', amount: number, id?: string): void {
     const mesh = new THREE.Group();
     const baseColor = ammoType === 'light' ? 0xffd166 : 0xff924c;
 
@@ -2583,7 +2597,7 @@ export class FortLiteGame {
     }
 
     const pickup: LootPickup = {
-      id: `loot-ammo-${this.loot.length}`,
+      id: id ?? `loot-ammo-${this.loot.length}`,
       kind: 'ammo',
       mesh,
       position: position.clone(),
@@ -2595,7 +2609,7 @@ export class FortLiteGame {
     this.attachPickup(pickup);
   }
 
-  private createMaterialPickup(position: THREE.Vector3, materialType: MaterialType, amount: number): void {
+  private createMaterialPickup(position: THREE.Vector3, materialType: MaterialType, amount: number, id?: string): void {
     const mesh = new THREE.Group();
     const color = materialType === 'wood' ? 0xb97a3d : materialType === 'stone' ? 0xa1a9b2 : 0x9fb6c8;
     const pickupAmount = Math.max(FLOOR_MATERIAL_PICKUP_AMOUNT, amount);
@@ -2608,7 +2622,7 @@ export class FortLiteGame {
     mesh.add(box);
 
     const pickup: LootPickup = {
-      id: `loot-material-${this.loot.length}`,
+      id: id ?? `loot-material-${this.loot.length}`,
       kind: 'material',
       mesh,
       position: position.clone(),
@@ -2620,7 +2634,7 @@ export class FortLiteGame {
     this.attachPickup(pickup);
   }
 
-  private createMedkitPickup(position: THREE.Vector3): void {
+  private createMedkitPickup(position: THREE.Vector3, id?: string): void {
     const mesh = new THREE.Group();
 
     const bagMaterial = new THREE.MeshStandardMaterial({ color: 0xc83d55, roughness: 0.58, metalness: 0.04 });
@@ -2645,7 +2659,7 @@ export class FortLiteGame {
     mesh.add(bag, lid, strap, crossVertical, crossHorizontal);
 
     const pickup: LootPickup = {
-      id: `loot-medkit-${this.loot.length}`,
+      id: id ?? `loot-medkit-${this.loot.length}`,
       kind: 'medkit',
       mesh,
       position: position.clone(),
@@ -6242,6 +6256,34 @@ export class FortLiteGame {
         this.disposeObject(item.mesh);
         this.loot.splice(i, 1);
       }
+    }
+
+    const existingIds = new Set(this.loot.map((item) => item.id));
+    for (const snapshot of lootList) {
+      if (existingIds.has(snapshot.id)) {
+        continue;
+      }
+
+      const position = new THREE.Vector3(...snapshot.position);
+      switch (snapshot.kind) {
+        case 'weapon': {
+          const weapon = WEAPON_DEFINITIONS.find((candidate) => candidate.id === snapshot.itemId);
+          if (weapon) {
+            this.createWeaponPickup(position, weapon, false, snapshot.id);
+          }
+          break;
+        }
+        case 'ammo':
+          this.createAmmoPickup(position, 'light', snapshot.amount ?? 30, snapshot.id);
+          break;
+        case 'material':
+          this.createMaterialPickup(position, 'wood', snapshot.amount ?? 30, snapshot.id);
+          break;
+        case 'medkit':
+          this.createMedkitPickup(position, snapshot.id);
+          break;
+      }
+      existingIds.add(snapshot.id);
     }
   }
 

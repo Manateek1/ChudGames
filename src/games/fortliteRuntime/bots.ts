@@ -23,8 +23,8 @@ export interface BotSkillProfile {
 export function generateBotSkillProfile(rng: SeededRandom): BotSkillProfile {
   const roll = rng.next();
 
-  if (roll < 0.25) {
-    // Recruit (25%): Forgiving, slower reactions, larger spread
+  if (roll < 0.2) {
+    // Recruit (20%): Forgiving, slower reactions, larger spread
     return {
       tier: 'recruit',
       reactionTime: 0.52,
@@ -40,7 +40,7 @@ export function generateBotSkillProfile(rng: SeededRandom): BotSkillProfile {
     };
   }
 
-  if (roll < 0.7) {
+  if (roll < 0.65) {
     // Soldier (45%): Standard combatant, balanced aim and building
     return {
       tier: 'soldier',
@@ -58,7 +58,7 @@ export function generateBotSkillProfile(rng: SeededRandom): BotSkillProfile {
   }
 
   if (roll < 0.9) {
-    // Veteran (20%): Fast reaction, disciplined bursts, active builder
+    // Veteran (25%): Fast reaction, disciplined bursts, active builder
     return {
       tier: 'veteran',
       reactionTime: 0.22,
