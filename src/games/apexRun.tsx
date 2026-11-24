@@ -7,6 +7,7 @@ import type { ApexSettings, Quality } from "./apex/settings";
 import { getApexTrack } from "./apex/track";
 import { apexCourses, getApexCourse } from "./apex/courses";
 import type { ApexCourseId } from "./apex/courses";
+import { apexCars, getApexCar, getCarTopSpeed } from "./apex/vehicles";
 import "./apexRun.css";
 
 const emptyHud: Telemetry = {
@@ -44,6 +45,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
     ),
   );
   const settingsRef = useRef(settings);
+  const car = getApexCar(settings.carId);
   const [courseId, setCourseId] = useState(() => getApexCourse(props.mode).id);
   const course = getApexCourse(courseId);
   const track = getApexTrack(courseId);
@@ -154,6 +156,13 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
     if (props.paused) props.onPauseToggle();
     runtime.current?.start();
   };
+  const openGarage = () => {
+    if (hud.phase !== "menu") {
+      runtime.current?.openGarage();
+      if (props.paused) props.onPauseToggle();
+    }
+    setPanel("car");
+  };
   const controls = (
     <dl className="apex-controls-list">
       <div>
@@ -258,7 +267,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
                 DRIVE NOW <span aria-hidden="true">↗</span>
               </button>
               <nav aria-label="Apex Run menu">
-                <button onClick={() => setPanel("car")}>Car</button>
+                <button onClick={openGarage}>Garage</button>
                 <button onClick={() => setPanel("settings")}>Settings</button>
                 <button onClick={() => setPanel("controls")}>
                   How to play
@@ -276,8 +285,8 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
           )}
           {hud.phase === "menu" && !panel && (
             <div className="apex-car-caption">
-              <span>SOLSTICE GT</span>
-              <p>Rear-wheel drive / 6-speed / twin turbo</p>
+              <span>{car.name}</span>
+              <p>{car.colorName} · {car.engine} · {car.gearRatios.length}-speed</p>
             </div>
           )}
           {(hud.phase === "race" || hud.phase === "countdown") && (
@@ -334,7 +343,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
                     <i
                       key={i}
                       className={
-                        (hud.rpm / 8000) * 28 > i
+                        (hud.rpm / car.redline) * 28 > i
                           ? i > 23
                             ? "hot"
                             : "lit"
@@ -405,6 +414,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
               >
                 Tune settings
               </button>
+              <button className="apex-text-button" onClick={openGarage}>Garage</button>
             </div>
           )}
           {props.paused && hud.phase !== "finish" && !panel && (
@@ -416,6 +426,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
                   RESUME DRIVE
                 </button>
                 <button onClick={start}>Restart time attack</button>
+                {hud.phase !== "menu" && <button onClick={openGarage}>Return to garage</button>}
                 <button onClick={() => setPanel("settings")}>Settings</button>
                 <button onClick={() => setPanel("controls")}>
                   How to play
@@ -424,14 +435,14 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
             </div>
           )}
           {panel && (
-            <div className="apex-overlay">
+            <div className={panel === "car" ? "apex-overlay apex-garage-overlay" : "apex-overlay"}>
               <div className="apex-panel">
                 <div className="apex-panel-heading">
                   <h2>
                     {panel === "settings"
                       ? "Your setup."
                       : panel === "car"
-                        ? "Solstice GT."
+                        ? "Choose your car"
                         : "Own the road."}
                   </h2>
                   <button
@@ -489,35 +500,27 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
                 )}
                 {panel === "car" && (
                   <>
-                    <p className="apex-panel-copy">
-                      An original grand tourer built for the mountain. Sculpted
-                      aero, rear-wheel drive, and a six-speed automatic.
-                    </p>
-                    <label className="apex-setting">
-                      Body colour
-                      <input
-                        type="color"
-                        value={settings.paint}
-                        onChange={(e) => changeSetting("paint", e.target.value)}
-                      />
-                    </label>
-                    <div className="apex-paints">
-                      {[
-                        "#c73d26",
-                        "#c9b887",
-                        "#285951",
-                        "#9baeb8",
-                        "#24292e",
-                      ].map((color) => (
+                    <div className="apex-garage-options" role="group" aria-label="Available cars">
+                      {apexCars.map((option) => (
                         <button
-                          key={color}
-                          aria-label={`Paint ${color}`}
-                          aria-pressed={settings.paint === color}
-                          style={{ background: color }}
-                          onClick={() => changeSetting("paint", color)}
-                        />
+                          type="button"
+                          key={option.id}
+                          aria-pressed={car.id === option.id}
+                          onClick={() => changeSetting("carId", option.id)}
+                        >
+                          <i aria-hidden="true" style={{ backgroundColor: option.color }} />
+                          <span>
+                            <strong>{option.name}</strong>
+                            <small>{option.colorName} · {option.engine} · {option.gearRatios.length}-speed</small>
+                          </span>
+                          <span className="apex-garage-speed">
+                            <strong>{getCarTopSpeed(option)}</strong>
+                            <small>km/h</small>
+                          </span>
+                        </button>
                       ))}
                     </div>
+                    <p className="apex-garage-note">{car.handling}</p>
                   </>
                 )}
                 {panel === "controls" && (
@@ -540,7 +543,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
                     ? "PAUSE"
                     : hud.phase === "finish"
                       ? "RESULTS"
-                      : "CAR"}
+                      : "COURSE"}
                 </button>
               </div>
             </div>

@@ -1,7 +1,10 @@
+import { DEFAULT_CAR_ID, getApexCar } from "./vehicles";
+import type { ApexCarId } from "./vehicles";
+
 export type Quality = "low" | "medium" | "high" | "ultra";
 export interface ApexSettings {
   quality: Quality;
-  paint: string;
+  carId: ApexCarId;
   assists: boolean;
   sound: boolean;
   reducedMotion: boolean;
@@ -47,7 +50,7 @@ export function loadApexSettings(
 ): ApexSettings {
   const defaults = {
     quality,
-    paint: "#c73d26",
+    carId: DEFAULT_CAR_ID,
     assists: true,
     sound: true,
     reducedMotion,
@@ -57,7 +60,7 @@ export function loadApexSettings(
     const s = JSON.parse(localStorage.getItem("apex:settings:2") ?? "{}");
     return {
       quality: Object.hasOwn(presets, s.quality) ? s.quality : quality,
-      paint: /^#[0-9a-f]{6}$/i.test(s.paint) ? s.paint : defaults.paint,
+      carId: getApexCar(s.carId).id,
       assists: typeof s.assists === "boolean" ? s.assists : true,
       sound: typeof s.sound === "boolean" ? s.sound : true,
       reducedMotion: reducedMotion || s.reducedMotion === true,

@@ -20,6 +20,8 @@ import { RoadEffects } from "./effects";
 import { trackPoint } from "./track";
 import type { ApexTrack } from "./track";
 import { getApexCourse } from "./courses";
+import { getApexCar } from "./vehicles";
+import type { ApexCar } from "./vehicles";
 
 export type Phase = "menu" | "countdown" | "race" | "finish";
 export interface Telemetry {
@@ -78,6 +80,29 @@ interface Hooks {
   onFinish: (result: GameResult) => void;
   onError: (message: string) => void;
 }
+
+function disposeMeshResources(root: THREE.Object3D): void {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  const textures = new Set<THREE.Texture>();
+  root.traverse((object) => {
+    if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
+      geometries.add(object.geometry);
+      const entries = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of entries) {
+        materials.add(material);
+        for (const value of Object.values(material)) {
+          if (value instanceof THREE.Texture) textures.add(value);
+        }
+      }
+      if (object instanceof THREE.InstancedMesh) object.dispose();
+    }
+  });
+  geometries.forEach((geometry) => geometry.dispose());
+  materials.forEach((material) => material.dispose());
+  textures.forEach((texture) => texture.dispose());
+}
+
 export class ApexRuntime {
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.12, 2400);
@@ -136,11 +161,12 @@ export class ApexRuntime {
     this.settings = settings;
     this.hooks = hooks;
     this.track = track;
-    this.state = createVehicle(0, track);
+    const profile = getApexCar(settings.carId);
+    this.state = createVehicle(0, track, profile);
     const { x, y, z, heading } = this.state;
     this.previous = { x, y, z, heading };
     this.race = createRace(track.length);
-    this.best = loadBest(hooks.difficulty, track.version);
+    this.best = loadBest(hooks.difficulty, track.version, profile.id);
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       powerPreference: "high-performance",
@@ -156,8 +182,8 @@ export class ApexRuntime {
     mount.appendChild(this.renderer.domElement);
     try {
       this.world = buildWorld(this.scene, settings.quality, track);
-      this.car = createCar(settings.paint);
-      this.ghost = createCar("#b7dddd", true);
+      this.car = createCar(profile);
+      this.ghost = createCar(profile, true);
       this.scene.add(this.car.root, this.ghost.root);
       this.ghost.root.visible = false;
       this.effects = new RoadEffects(this.scene);
@@ -263,6 +289,9 @@ export class ApexRuntime {
     this.camera.updateProjectionMatrix();
   };
   applySettings(settings: ApexSettings): void {
+    if (this.phase === "menu" && settings.carId !== this.state.car.id) {
+      this.replaceCar(getApexCar(settings.carId));
+    }
     const previousShadow = this.settings
         ? presets[this.settings.quality].shadow
         : -1,
@@ -273,7 +302,6 @@ export class ApexRuntime {
     const cfg = presets[settings.quality];
     this.world.setQuality(settings.quality);
     this.effects.limit = cfg.particles;
-    this.car.paint.color.set(settings.paint);
     this.renderer.shadowMap.enabled = cfg.shadow > 0;
     this.world.sun.shadow.mapSize.set(cfg.shadow || 512, cfg.shadow || 512);
     if (previousShadow !== cfg.shadow && this.world.sun.shadow.map) {
@@ -293,15 +321,46 @@ export class ApexRuntime {
     this.publish();
     if (!paused) this.sound.start();
   }
+
+  private placeCar(progress: number, profile = this.state.car): void {
+    this.state = createVehicle(progress, this.track, profile);
+    const { x, y, z, heading } = this.state;
+    this.previous = { x, y, z, heading };
+    this.car.root.position.set(x, y, z);
+    this.car.root.rotation.y = heading;
+  }
+
+  private replaceCar(profile: ApexCar): void {
+    const newCar = createCar(profile);
+    const newGhost = createCar(profile, true);
+    newGhost.root.visible = false;
+    for (const model of [this.car, this.ghost]) {
+      model.root.removeFromParent();
+      disposeMeshResources(model.root);
+    }
+    this.car = newCar;
+    this.ghost = newGhost;
+    this.scene.add(newCar.root, newGhost.root);
+    this.placeCar(0, profile);
+    this.best = loadBest(this.hooks.difficulty, this.track.version, profile.id);
+    this.storageFailed = false;
+    this.publish();
+  }
+
+  openGarage(): void {
+    this.phase = "menu";
+    this.race = createRace(this.track.length);
+    this.placeCar(0);
+    this.accumulator = 0;
+    this.newBest = false;
+    this.message = "";
+    this.hooks.onScore(0);
+    this.publish();
+  }
+
   start(): void {
     this.sound.start();
-    this.state = createVehicle(0, this.track);
-    this.previous = {
-      x: this.state.x,
-      y: this.state.y,
-      z: this.state.z,
-      heading: this.state.heading,
-    };
+    this.placeCar(0);
     this.race = createRace(this.track.length);
     this.recording = [
       [0, this.state.x, this.state.y, this.state.z, this.state.heading],
@@ -322,13 +381,7 @@ export class ApexRuntime {
   }
   resetCar(): void {
     const p = resetRacePosition(this.race);
-    this.state = createVehicle(p, this.track);
-    this.previous = {
-      x: this.state.x,
-      y: this.state.y,
-      z: this.state.z,
-      heading: this.state.heading,
-    };
+    this.placeCar(p);
     this.message = "BACK ON TRACK  /  +3.000 SEC";
     this.messageUntil = this.elapsed + 3;
   }
@@ -369,7 +422,7 @@ export class ApexRuntime {
     this.newBest = !this.best || this.race.time < this.best.time;
     if (this.newBest) {
       this.best = { time: this.race.time, frames: this.recording };
-      this.storageFailed = !saveBest(this.hooks.difficulty, this.best, this.track.version);
+      this.storageFailed = !saveBest(this.hooks.difficulty, this.best, this.track.version, this.state.car.id);
     }
     const score = Math.max(
       100,
@@ -650,24 +703,7 @@ export class ApexRuntime {
       "webglcontextlost",
       this.contextLost,
     );
-    const geometries = new Set<THREE.BufferGeometry>(),
-      materials = new Set<THREE.Material>(),
-      textures = new Set<THREE.Texture>();
-    this.scene.traverse((o) => {
-      if (o instanceof THREE.Mesh || o instanceof THREE.Points) {
-        geometries.add(o.geometry);
-        const mats = Array.isArray(o.material) ? o.material : [o.material];
-        for (const mat of mats) {
-          materials.add(mat);
-          for (const value of Object.values(mat))
-            if (value instanceof THREE.Texture) textures.add(value);
-        }
-        if (o instanceof THREE.InstancedMesh) o.dispose();
-      }
-    });
-    geometries.forEach((g) => g.dispose());
-    materials.forEach((m) => m.dispose());
-    textures.forEach((t) => t.dispose());
+    disposeMeshResources(this.scene);
     this.world?.sun.shadow.dispose();
     this.environment?.dispose();
     this.renderer.dispose();

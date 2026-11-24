@@ -1,6 +1,8 @@
 import { GameThumbnail } from "./GameThumbnail";
 import { apexCourses, getApexCourse } from "../games/apex/courses";
 import { formatTime, loadBest } from "../games/apex/race";
+import { loadApexSettings } from "../games/apex/settings";
+import { getApexCar } from "../games/apex/vehicles";
 import type { Difficulty, GameDefinition } from "../types/arcade";
 import "./GameDetail.css";
 
@@ -43,7 +45,8 @@ export function GameDetail({
 }: GameDetailProps): React.JSX.Element {
   const fortLite = game.id === "fortlite";
   const course = game.id === "apex-run" ? getApexCourse(mode) : null;
-  const best = course && loadBest(difficulty, course.version);
+  const car = course ? getApexCar(loadApexSettings("low", false).carId) : null;
+  const best = course && loadBest(difficulty, course.version, car?.id);
   const available = game.isAvailable !== false;
   const controls = course ? apexControls : fortLite ? fortLiteControls : null;
 
@@ -118,7 +121,7 @@ export function GameDetail({
           {course && (
             <div className="game-launch-record">
               <h3>Course best</h3>
-              <p><span>{course.label}</span><strong>{best ? formatTime(best.time) : "No lap yet"}</strong></p>
+              <p><span>{car?.name}</span><strong>{best ? formatTime(best.time) : "No lap yet"}</strong></p>
             </div>
           )}
         </section>

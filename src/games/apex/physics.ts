@@ -1,6 +1,8 @@
 import { clamp } from "../../engine/math";
 import { getApexTrack, locateRoad, trackPoint, TRACK_LENGTH } from "./track";
 import type { ApexTrack, RoadLocation } from "./track";
+import { DEFAULT_CAR_ID, getApexCar, MIN_DRIVE_FORCE, ROAD_ROLLING_RESISTANCE } from "./vehicles";
+import type { ApexCar } from "./vehicles";
 
 export interface DriveInput {
   throttle: number;
@@ -10,6 +12,7 @@ export interface DriveInput {
 }
 export interface VehicleState {
   track: ApexTrack;
+  car: ApexCar;
   x: number;
   y: number;
   z: number;
@@ -28,10 +31,11 @@ export interface VehicleState {
   road: RoadLocation;
 }
 export const FIXED_STEP = 1 / 120;
-export function createVehicle(progress = 0, track = getApexTrack("solstice")): VehicleState {
+export function createVehicle(progress = 0, track = getApexTrack("solstice"), car = getApexCar(DEFAULT_CAR_ID)): VehicleState {
   const p = trackPoint(progress, track);
   return {
     track,
+    car,
     x: p.x,
     y: p.y,
     z: p.z,
@@ -52,7 +56,6 @@ export function createVehicle(progress = 0, track = getApexTrack("solstice")): V
 }
 const damp = (a: number, b: number, rate: number, dt: number) =>
   a + (b - a) * (1 - Math.exp(-rate * dt));
-const ratios = [0, 3.2, 2.15, 1.58, 1.21, 0.96, 0.79];
 
 // A bicycle steering model with a friction-limited lateral force. Velocities are
 // world-space; steering changes the tire force, never the position directly.
@@ -63,6 +66,7 @@ export function stepVehicle(
   assists = true,
   gripScale = 1,
 ): void {
+  const { car } = s;
   const sin = Math.sin(s.heading),
     cos = Math.cos(s.heading);
   let forward = s.vx * sin + s.vz * cos,
@@ -71,15 +75,15 @@ export function stepVehicle(
     offroad = Math.abs(s.road.lateral) > 6.15;
   s.steering = damp(
     s.steering,
-    input.steer * (0.72 / (1 + abs * 0.021)),
-    10,
+    input.steer * (car.steering / (1 + abs * 0.021)),
+    car.steeringResponse,
     dt,
   );
   const grip =
-    (offroad ? 7.5 : 29 + abs * abs * 0.0008) *
+    (offroad ? 7.5 : car.tireGrip + abs * abs * car.aeroGrip) *
     (input.handbrake ? 0.47 : 1) *
     gripScale * (s.track.id === "whitecap" ? 0.85 : 1);
-  const desiredYaw = (forward / 2.72) * Math.tan(s.steering);
+  const desiredYaw = (forward / car.wheelbase) * Math.tan(s.steering);
   const limitedYaw = clamp(
     desiredYaw,
     -grip / Math.max(abs, 3),
@@ -88,13 +92,13 @@ export function stepVehicle(
   s.yaw = damp(s.yaw, limitedYaw * (input.handbrake ? 1.35 : 1), 9, dt);
   s.heading += s.yaw * dt;
   s.shift = Math.max(0, s.shift - dt);
-  const torque = Math.max(2.6, 11.5 - abs * 0.095) * (s.shift > 0 ? 0.25 : 1);
+  const torque = Math.max(MIN_DRIVE_FORCE, car.launchForce - abs * car.powerTaper) * (s.shift > 0 ? 0.25 : 1);
   let force =
     input.throttle * torque -
-    forward * Math.abs(forward) * 0.0012 -
-    forward * (offroad ? 0.18 : 0.014);
+    forward * Math.abs(forward) * car.drag -
+    forward * (offroad ? 0.18 : ROAD_ROLLING_RESISTANCE);
   if (input.brake > 0)
-    force -= input.brake * (forward > 0.6 ? 16 : forward > -9 ? 5 : 0);
+    force -= input.brake * (forward > 0.6 ? car.braking : forward > -9 ? 5 : 0);
   if (input.handbrake && abs > 0.2) force -= Math.sign(forward) * 5.5;
   if (input.throttle === 0 && input.brake === 0 && abs < 0.12) forward = 0;
   force -=
@@ -102,7 +106,7 @@ export function stepVehicle(
       Math.atan2(trackPoint(s.road.progress + 0.002, s.track).y - s.road.y, 4.5 * s.track.length / TRACK_LENGTH),
     ) * 9.81;
   s.acceleration = damp(s.acceleration, force, 8, dt);
-  forward = clamp(forward + force * dt, -9, 86);
+  forward = clamp(forward + force * dt, -9, car.speedLimit);
   // Slip is retained during handbrake turns; stability assist damps recovery.
   const lateralForce = clamp(
     -lateral * (input.handbrake ? 2.4 : assists ? 16 : 9),
@@ -122,8 +126,8 @@ export function stepVehicle(
   const road = locateRoad(nextX, nextZ, s.road.index, s.track);
   s.impact = Math.max(0, s.impact - dt * 2.5);
   const obstacle = s.track.obstacles.find(({ progress, lateral, width, depth }) =>
-    Math.abs(road.progress - progress) * s.track.length < depth / 2 + 2.15 &&
-    Math.abs(road.lateral - lateral) < width / 2 + 0.95
+    Math.abs(road.progress - progress) * s.track.length < depth / 2 + car.halfLength &&
+    Math.abs(road.lateral - lateral) < width / 2 + car.halfWidth
   );
   if (obstacle) {
     s.impact = Math.max(s.impact, Math.min(1, Math.abs(forward) / 10));
@@ -152,15 +156,15 @@ export function stepVehicle(
   s.slip = Math.abs(
     Math.atan2(s.vx * nc - s.vz * ns, Math.max(3, Math.abs(s.speed))),
   );
-  const wheelRpm = (Math.abs(s.speed) / (2 * Math.PI * 0.36)) * 60;
-  let rpm = wheelRpm * ratios[s.gear] * 3.45;
-  if (s.shift === 0 && rpm > 7100 && s.gear < 6) {
+  const wheelRpm = (Math.abs(s.speed) / (2 * Math.PI * car.wheelRadius)) * 60;
+  let rpm = wheelRpm * car.gearRatios[s.gear - 1] * car.finalDrive;
+  if (s.shift === 0 && rpm > car.shiftRpm && s.gear < car.gearRatios.length) {
     s.gear++;
-    s.shift = 0.18;
+    s.shift = car.shiftTime;
   } else if (s.shift === 0 && rpm < 2800 && s.gear > 1) {
     s.gear--;
-    s.shift = 0.12;
+    s.shift = car.shiftTime * (2 / 3);
   }
-  rpm = wheelRpm * ratios[s.gear] * 3.45;
-  s.rpm = damp(s.rpm, clamp(rpm + input.throttle * 500, 950, 7800), 12, dt);
+  rpm = wheelRpm * car.gearRatios[s.gear - 1] * car.finalDrive;
+  s.rpm = damp(s.rpm, clamp(rpm + input.throttle * 500, 950, car.redline), 12, dt);
 }

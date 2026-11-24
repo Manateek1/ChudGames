@@ -103,7 +103,7 @@ export class ApexAudio {
     if (!audible) return;
     for (let i = 0; i < this.engine.length; i++) {
       this.engine[i].frequency.setTargetAtTime(
-        (s.rpm / 60) * (i === 2 ? 4 : 2),
+        (s.rpm / 60) * s.car.cylinders * (i === 2 ? 1 : 0.5),
         t,
         0.03,
       );
