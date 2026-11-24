@@ -50,10 +50,12 @@ import {
   shouldBotRetreat,
   calculateDefensiveWallPlacement
 } from './bots';
-import { IslandTerrain } from './terrain';
-import { MaterialPalette, createSkyDome, createAtmosphericFog, createIslandLighting } from './atmosphere';
+import { createBroadleafCanopy, IslandTerrain } from './terrain';
+import { ISLAND_HAZE, MaterialPalette, createSkyDome, createAtmosphericFog, createIslandLighting } from './atmosphere';
+import { createOperatorAppearance, createParafoil } from './operatorVisuals';
 import {
   createHarborDistrict,
+  createBuildingSurfaces,
   createHillSettlement,
   createLighthouseOverlook,
   createSmallOutpost,
@@ -214,7 +216,6 @@ export class FortLiteGame {
   private stormGroup = new THREE.Group();
 
   private stormWall: THREE.Mesh | null = null;
-  private stormInnerWall: THREE.Mesh | null = null;
   private safeZoneRing: THREE.LineLoop | null = null;
   private safeZoneDisc: THREE.Mesh | null = null;
   private storm!: StormRuntime;
@@ -236,7 +237,9 @@ export class FortLiteGame {
   private cameraObstacles: THREE.Object3D[] = [];
   private islandTerrain: IslandTerrain | null = null;
   private materialPalette = new MaterialPalette();
-  private skyDome: THREE.Mesh | null = null;
+  private skyDome: ReturnType<typeof createSkyDome> | null = null;
+  private readonly sun: THREE.DirectionalLight;
+  private readonly buildingSurfaces = createBuildingSurfaces();
   private landingDustEffects: LandingDustEffect[] = [];
   private buildAnimations: BuildPlaceAnimation[] = [];
 
@@ -412,8 +415,8 @@ export class FortLiteGame {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.04;
-    this.renderer.shadowMap.enabled = this.graphicsQuality !== 'low';
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.resolutionController = new AdaptiveResolutionController(
       this.graphicsQuality,
       window.devicePixelRatio || 1,
@@ -422,16 +425,17 @@ export class FortLiteGame {
         this.renderer.setSize(this.root.clientWidth, this.root.clientHeight, false);
       }
     );
-    this.renderer.setClearColor(0xc6dff0, 1);
+    this.renderer.setClearColor(ISLAND_HAZE, 1);
     this.applyRendererResolution();
     this.renderer.domElement.className = 'fortlite-canvas';
     this.shell.append(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xc6dff0);
+    this.scene.background = new THREE.Color(ISLAND_HAZE);
     this.skyDome = createSkyDome(MAP_RADIUS * 2.2);
     this.scene.add(this.skyDome);
     this.scene.fog = createAtmosphericFog(MAP_RADIUS);
+    this.sun = createIslandLighting(this.scene);
 
     this.camera = new THREE.PerspectiveCamera(DEFAULT_CAMERA_FOV, Math.max(1, this.root.clientWidth / Math.max(1, this.root.clientHeight)), 0.05, MAP_RADIUS * 2.6);
     this.camera.rotation.order = 'YXZ';
@@ -485,7 +489,6 @@ export class FortLiteGame {
 
     this.applyGraphicsQuality(this.graphicsQuality);
 
-    this.installLighting();
     this.installEvents();
 
     this.networkClient = options.networkClient;
@@ -556,9 +559,13 @@ export class FortLiteGame {
     this.clearMatchRoot();
     if (this.skyDome) {
       this.skyDome.geometry.dispose();
-      (this.skyDome.material as THREE.Material).dispose();
+      this.skyDome.material.uniforms.cloudMap.value.dispose();
+      this.skyDome.material.dispose();
       this.skyDome = null;
     }
+    this.sun.shadow.dispose();
+    this.buildingSurfaces.siding.dispose();
+    this.buildingSurfaces.roof.dispose();
     this.materialPalette.dispose();
     this.renderer.dispose();
     this.hud.dispose();
@@ -614,10 +621,6 @@ export class FortLiteGame {
       this.animationFrame = window.requestAnimationFrame(this.frame);
     }
   };
-
-  private installLighting(): void {
-    createIslandLighting(this.scene, this.graphicsQuality);
-  }
 
   private installEvents(): void {
     window.addEventListener('resize', this.handleResize);
@@ -816,17 +819,17 @@ export class FortLiteGame {
 
     // Anchor Location 1: Hill Settlement (North)
     const settlementCenter = new THREE.Vector3(0, 0, -MAP_RADIUS * 0.5);
-    const settlement = createHillSettlement(settlementCenter, this.rng, heightSampler);
+    const settlement = createHillSettlement(settlementCenter, this.rng, heightSampler, this.buildingSurfaces);
     this.integrateLocationResult(settlement);
 
     // Anchor Location 2: Lighthouse Overlook (West cliff)
     const lighthouseCenter = new THREE.Vector3(-MAP_RADIUS * 0.6, 0, 0);
-    const lighthouse = createLighthouseOverlook(lighthouseCenter, this.rng, heightSampler);
+    const lighthouse = createLighthouseOverlook(lighthouseCenter, this.rng, heightSampler, this.buildingSurfaces);
     this.integrateLocationResult(lighthouse);
 
     // Anchor Location 3: Harbor District (Southeast coast)
     const harborCenter = new THREE.Vector3(MAP_RADIUS * 0.5, 0, MAP_RADIUS * 0.5);
-    const harbor = createHarborDistrict(harborCenter, this.rng, heightSampler);
+    const harbor = createHarborDistrict(harborCenter, this.rng, heightSampler, this.buildingSurfaces);
     this.integrateLocationResult(harbor);
 
     // Outposts between anchor locations
@@ -839,7 +842,7 @@ export class FortLiteGame {
       new THREE.Vector3(MAP_RADIUS * 0.38, 0, -MAP_RADIUS * 0.1),
     ];
     for (const outpostPos of outpostPositions) {
-      const outpost = createSmallOutpost(outpostPos, this.rng, heightSampler);
+      const outpost = createSmallOutpost(outpostPos, this.rng, heightSampler, this.buildingSurfaces);
       this.integrateLocationResult(outpost);
     }
 
@@ -882,6 +885,7 @@ export class FortLiteGame {
     }
 
     this.spawnResourceNodes();
+    this.renderer.shadowMap.needsUpdate = true;
   }
 
   private createCompound(
@@ -1199,14 +1203,31 @@ export class FortLiteGame {
 
   private addRoad(start: THREE.Vector3, end: THREE.Vector3, width: number, color: number): void {
     const delta = end.clone().sub(start);
-    const length = Math.max(2, delta.length());
-    const road = new THREE.Mesh(
-      new THREE.BoxGeometry(width, 0.08, length),
-      new THREE.MeshStandardMaterial({ color, roughness: 0.95 })
-    );
-    road.position.copy(start.clone().add(end).multiplyScalar(0.5));
-    road.position.y = 0.02;
-    road.rotation.y = Math.atan2(delta.x, delta.z);
+    const length = Math.max(2, Math.hypot(delta.x, delta.z));
+    const midpoint = start.clone().add(end).multiplyScalar(0.5);
+    const geometry = new THREE.PlaneGeometry(width, length, 4, Math.ceil(length / 4));
+    geometry.rotateX(-Math.PI / 2);
+    geometry.rotateY(Math.atan2(delta.x, delta.z));
+    const positions = geometry.attributes.position;
+    const uv = geometry.attributes.uv;
+    const colors = new Float32Array(positions.count * 3);
+    for (let i = 0; i < positions.count; i += 1) {
+      const x = positions.getX(i) + midpoint.x;
+      const z = positions.getZ(i) + midpoint.z;
+      const edge = Math.abs(uv.getX(i) * 2 - 1);
+      const track = 0.90 - Math.pow(Math.sin(edge * Math.PI), 6) * 0.21;
+      colors.set([track, track, track], i * 3);
+      positions.setXYZ(i, x, this.sampleBaseTerrainHeight(x, z) + 0.10, z);
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.computeVertexNormals();
+    const road = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({
+      color,
+      vertexColors: true,
+      polygonOffset: true,
+      polygonOffsetFactor: -1
+    }));
+    road.receiveShadow = true;
     this.environmentGroup.add(road);
   }
 
@@ -2006,16 +2027,16 @@ export class FortLiteGame {
     if (materialType === 'wood') {
       const trunkHeight = biome === 'forest' ? 3.6 : biome === 'desert' ? 2.8 : 3.1;
       const canopySize = biome === 'forest' ? 2.25 : biome === 'desert' ? 1.45 : 1.9;
-      const canopyColor = biome === 'forest' ? 0x4d8e37 : biome === 'desert' ? 0x8a9550 : 0x5f8f43;
+      const canopyColor = biome === 'forest' ? 0x4e7045 : biome === 'desert' ? 0x899153 : 0x64834c;
       const trunk = new THREE.Mesh(
         new THREE.CylinderGeometry(0.42, 0.6, trunkHeight, 8),
-        new THREE.MeshStandardMaterial({ color: 0x6d4c2e, roughness: 1 })
+        new THREE.MeshLambertMaterial({ color: 0x6b543f })
       );
       trunk.position.y = trunkHeight * 0.5;
 
       const canopy = new THREE.Mesh(
-        new THREE.SphereGeometry(canopySize, 10, 10),
-        new THREE.MeshStandardMaterial({ color: canopyColor, roughness: 1 })
+        createBroadleafCanopy(canopySize),
+        new THREE.MeshLambertMaterial({ color: canopyColor, vertexColors: true })
       );
       canopy.position.y = trunkHeight + (canopySize * 0.92);
       mesh.add(trunk, canopy);
@@ -2159,42 +2180,6 @@ export class FortLiteGame {
     this.lastFirstPersonView = false;
   }
 
-  private createParachuteMesh(color: number, accent: number): THREE.Group {
-    const group = new THREE.Group();
-    const canopySegments = this.graphicsQuality === 'low' ? 15 : this.graphicsQuality === 'medium' ? 16 : 18;
-    const canopyRings = this.graphicsQuality === 'low' ? 10 : this.graphicsQuality === 'medium' ? 10 : 12;
-    const trimSegments = this.graphicsQuality === 'low' ? 20 : this.graphicsQuality === 'medium' ? 20 : 26;
-    const canopy = new THREE.Mesh(
-      new THREE.SphereGeometry(2.35, canopySegments, canopyRings, 0, Math.PI * 2, 0, Math.PI * 0.5),
-      new THREE.MeshStandardMaterial({ color, roughness: 0.56, metalness: 0.08 })
-    );
-    canopy.position.y = 4.6;
-    canopy.scale.y = 0.7;
-
-    const trim = new THREE.Mesh(
-      new THREE.TorusGeometry(2.08, 0.08, 8, trimSegments),
-      new THREE.MeshStandardMaterial({ color: accent, roughness: 0.42, metalness: 0.14 })
-    );
-    trim.rotation.x = Math.PI / 2;
-    trim.position.y = 4.08;
-
-    // One line-segment draw call replaces four cylinder meshes per player.
-    const linePoints = [
-      new THREE.Vector3(-0.45, 1.7, 0), new THREE.Vector3(-1.4, 4.05, -0.6),
-      new THREE.Vector3(0.45, 1.7, 0), new THREE.Vector3(1.4, 4.05, -0.6),
-      new THREE.Vector3(-0.3, 1.7, 0), new THREE.Vector3(-1.4, 4.05, 0.6),
-      new THREE.Vector3(0.3, 1.7, 0), new THREE.Vector3(1.4, 4.05, 0.6)
-    ];
-    const lines = new THREE.LineSegments(
-      new THREE.BufferGeometry().setFromPoints(linePoints),
-      new THREE.LineBasicMaterial({ color: 0xe6f1f7, transparent: true, opacity: 0.82 })
-    );
-
-    group.add(canopy, trim, lines);
-    group.visible = false;
-    return group;
-  }
-
   private createActor(
     kind: ActorKind,
     groundSpawn: THREE.Vector3,
@@ -2213,48 +2198,31 @@ export class FortLiteGame {
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.03;
 
-    const clothMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.8 });
-    const accentMaterial = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.42, metalness: 0.12 });
-    const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xffdfc0, roughness: 0.92 });
-    const limbMaterial = new THREE.MeshStandardMaterial({ color: 0x243241, roughness: 0.72, metalness: 0.12 });
-
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 1.34, 10), clothMaterial);
+    const appearance = createOperatorAppearance(color, accent);
+    const hitTargetMaterial = new THREE.MeshBasicMaterial({ visible: false });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 1.34, 10), hitTargetMaterial);
     body.position.y = 1.36;
+    body.add(appearance.torso);
 
-    const bodyBand = new THREE.Mesh(new THREE.TorusGeometry(0.29, 0.05, 6, 14), accentMaterial);
-    bodyBand.position.y = 1.46;
-    bodyBand.rotation.x = Math.PI / 2;
-
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 12), skinMaterial);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 12), hitTargetMaterial);
     head.position.y = 2.34;
-
-    const headBand = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.025, 6, 14), accentMaterial);
-    headBand.position.set(0, 2.34, 0.1);
-    headBand.rotation.x = Math.PI / 2;
+    head.add(appearance.helmet);
 
     const leftArmPivot = new THREE.Group();
     leftArmPivot.position.set(-0.48, 1.76, 0.04);
-    const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.9, 8), limbMaterial);
-    leftArm.position.y = -0.44;
-    leftArmPivot.add(leftArm);
+    leftArmPivot.add(appearance.sleeve);
 
     const rightArmPivot = new THREE.Group();
     rightArmPivot.position.set(0.48, 1.76, 0.04);
-    const rightArm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.9, 8), limbMaterial);
-    rightArm.position.y = -0.44;
-    rightArmPivot.add(rightArm);
+    rightArmPivot.add(appearance.sleeve.clone());
 
     const leftLegPivot = new THREE.Group();
     leftLegPivot.position.set(-0.18, 0.7, 0.02);
-    const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.1, 1.04, 8), limbMaterial);
-    leftLeg.position.y = -0.52;
-    leftLegPivot.add(leftLeg);
+    leftLegPivot.add(appearance.boot);
 
     const rightLegPivot = new THREE.Group();
     rightLegPivot.position.set(0.18, 0.7, 0.02);
-    const rightLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.1, 1.04, 8), limbMaterial);
-    rightLeg.position.y = -0.52;
-    rightLegPivot.add(rightLeg);
+    rightLegPivot.add(appearance.boot.clone());
 
     const heldItemRoot = new THREE.Group();
     heldItemRoot.position.set(0.58, 1.54, 0.24);
@@ -2293,13 +2261,11 @@ export class FortLiteGame {
 
     healthBarRoot.add(healthBarFrame, healthBarBack, healthBarFill);
 
-    const parachute = this.createParachuteMesh(new THREE.Color(color).offsetHSL(0, 0.02, 0.1).getHex(), accent);
+    const parachute = createParafoil(color, accent, this.graphicsQuality !== 'low');
 
     visualRoot.add(
       body,
-      bodyBand,
       head,
-      headBand,
       leftArmPivot,
       rightArmPivot,
       leftLegPivot,
@@ -2338,7 +2304,7 @@ export class FortLiteGame {
       healthBarRoot,
       healthBarFill,
       bodyParts: [visualRoot, shadow],
-      detailParts: [bodyBand, headBand, leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot],
+      detailParts: [leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot],
       heldItemRoot,
       heldItemMesh: null,
       heldItemKey: 'hidden',
@@ -2693,34 +2659,31 @@ export class FortLiteGame {
 
     this.prepareNextStormTarget();
 
+    const stormGeometry = new THREE.CylinderGeometry(1, 1, 28, 64, 6, true);
+    const positions = stormGeometry.attributes.position;
+    const stormColors = new Float32Array(positions.count * 4);
+    for (let i = 0; i < positions.count; i += 1) {
+      const height = positions.getY(i) / 28 + 0.5;
+      const band = 1 - THREE.MathUtils.smoothstep(0.10, 1, height);
+      stormColors.set([1, 1, 1, band * 0.76], i * 4);
+    }
+    stormGeometry.setAttribute('color', new THREE.BufferAttribute(stormColors, 4));
     const stormMaterial = new THREE.MeshBasicMaterial({
-      color: 0x6b34d8,
+      color: 0x7657c0,
+      vertexColors: true,
       transparent: true,
-      opacity: 0.38,
+      opacity: 0.52,
       depthWrite: false,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      forceSinglePass: true
     });
 
-    this.stormWall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 28, 64, 1, true), stormMaterial);
-    this.stormWall.position.y = 14;
+    this.stormWall = new THREE.Mesh(stormGeometry, stormMaterial);
     this.stormGroup.add(this.stormWall);
-
-    this.stormInnerWall = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.04, 1.04, 34, 64, 1, true),
-      new THREE.MeshBasicMaterial({
-        color: 0x16091f,
-        transparent: true,
-        opacity: 0.26,
-        depthWrite: false,
-        side: THREE.BackSide
-      })
-    );
-    this.stormInnerWall.position.y = 17;
-    this.stormGroup.add(this.stormInnerWall);
 
     this.safeZoneDisc = new THREE.Mesh(
       new THREE.CircleGeometry(1, 64),
-      new THREE.MeshBasicMaterial({ color: 0xffefba, transparent: true, opacity: 0.11, side: THREE.DoubleSide, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xffefba, transparent: true, opacity: 0.045, side: THREE.DoubleSide, depthWrite: false })
     );
     this.safeZoneDisc.rotation.x = -Math.PI / 2;
     this.safeZoneDisc.position.y = 0.03;
@@ -3686,14 +3649,12 @@ export class FortLiteGame {
   }
 
   private updateStormVisuals(): void {
-    if (!this.stormWall || !this.stormInnerWall || !this.safeZoneRing || !this.safeZoneDisc) {
+    if (!this.stormWall || !this.safeZoneRing || !this.safeZoneDisc) {
       return;
     }
 
     this.stormWall.position.set(this.storm.currentCenter.x, 9, this.storm.currentCenter.z);
     this.stormWall.scale.set(this.storm.currentRadius, 1, this.storm.currentRadius);
-    this.stormInnerWall.position.set(this.storm.currentCenter.x, 17, this.storm.currentCenter.z);
-    this.stormInnerWall.scale.set(this.storm.currentRadius, 1, this.storm.currentRadius);
 
     this.safeZoneRing.position.set(this.storm.targetCenter.x, 0.05, this.storm.targetCenter.z);
     this.safeZoneRing.scale.set(this.storm.targetRadius, this.storm.targetRadius, this.storm.targetRadius);
@@ -4943,13 +4904,32 @@ export class FortLiteGame {
     const renderAlpha = this.getRenderInterpolationAlpha();
     this.updateRenderTransforms(renderAlpha);
     this.updateCamera(renderAlpha);
+    this.updateShadowRegion();
     this.syncViewModel(false);
     const now = performance.now();
     if (this.state !== 'inProgress' || now - this.lastHudRenderTime >= this.getHudUpdateIntervalMs()) {
       this.updateHud();
       this.lastHudRenderTime = now;
     }
+    if (this.islandTerrain) {
+      this.islandTerrain.waterMesh.material.uniforms.elapsed.value = this.matchTime;
+    }
     this.renderer.render(this.scene, this.camera);
+  }
+
+  private updateShadowRegion(): void {
+    if (!this.sun.castShadow) return;
+    const x = snap(this.camera.position.x, 32);
+    const z = snap(this.camera.position.z, 32);
+    const target = this.sun.target.position;
+    if (target.x === x && target.z === z) return;
+
+    // Only static island meshes cast shadows. Reuse the map while the
+    // camera stays within the same region.
+    this.sun.position.x += x - target.x;
+    this.sun.position.z += z - target.z;
+    target.set(x, 0, z);
+    this.renderer.shadowMap.needsUpdate = true;
   }
 
   private getRenderInterpolationAlpha(): number {
@@ -5117,7 +5097,7 @@ export class FortLiteGame {
     this.camera.position.copy(this.cameraRigPosition);
     this.camera.lookAt(this.cameraLookPosition);
     if (this.skyDome) {
-      this.skyDome.position.set(this.camera.position.x, 0, this.camera.position.z);
+      this.skyDome.position.copy(this.camera.position);
     }
     this.updatePlayerPerspectiveVisibility(firstPerson);
     this.lastFirstPersonView = firstPerson;
@@ -6595,7 +6575,14 @@ export class FortLiteGame {
   private applyGraphicsQuality(quality: GraphicsQuality): void {
     const profile = getFortLiteQualityProfile(quality, window.devicePixelRatio || 1);
     const worldBudget = getFortLiteWorldRenderBudget(quality, MAP_RADIUS);
-    this.renderer.shadowMap.enabled = quality !== 'low';
+    this.sun.castShadow = quality !== 'low';
+    this.renderer.shadowMap.enabled = this.sun.castShadow;
+    const shadowSize = quality === 'high' ? 2048 : 1024;
+    if (this.sun.shadow.mapSize.x !== shadowSize) {
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+      this.sun.shadow.mapSize.setScalar(shadowSize);
+    }
     this.renderer.shadowMap.needsUpdate = true;
     this.maxShotEffects = profile.maxShotEffects;
     this.maxLandingDustEffects = profile.maxLandingDustEffects;
@@ -6612,7 +6599,6 @@ export class FortLiteGame {
     }
     if (this.skyDome) {
       this.skyDome.scale.setScalar(worldBudget.skyRadius / (MAP_RADIUS * 2.2));
-      this.skyDome.frustumCulled = false;
     }
     this.resolutionController.reset(quality, window.devicePixelRatio || 1);
     this.applyRendererResolution();

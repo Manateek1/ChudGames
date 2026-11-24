@@ -1,6 +1,9 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { GraphicsQuality } from '../../types/arcade';
 import { SeededRandom } from './math';
+import { createIslandWater } from './ocean';
+import { createTileTexture, tileNoise } from './surfaceTextures';
 
 function smoothstep(edge0: number, edge1: number, x: number): number {
     const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
@@ -9,6 +12,25 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 
 function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
+}
+
+export function createBroadleafCanopy(radius: number) {
+    const geometry = new THREE.SphereGeometry(radius, 11, 8);
+    const positions = geometry.attributes.position;
+    const colors = new Float32Array(positions.count * 3);
+    for (let i = 0; i < positions.count; i += 1) {
+        const x = positions.getX(i) / radius;
+        const y = positions.getY(i) / radius;
+        const z = positions.getZ(i) / radius;
+        const cluster = Math.sin(8.1 * x + 3.4 * y) * Math.cos(7.6 * z - 1.8 * y);
+        const lobe = 0.91 + 0.15 * cluster;
+        positions.setXYZ(i, x * radius * lobe, y * radius * lobe * 0.89, z * radius * lobe);
+        const shade = 0.64 + 0.27 * (y * 0.5 + 0.5) + 0.08 * cluster;
+        colors.set([shade, shade, shade * 0.94], i * 3);
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.computeVertexNormals();
+    return geometry;
 }
 
 // Simple value noise
@@ -79,7 +101,7 @@ interface Hill {
 
 export class IslandTerrain {
     public readonly terrainMesh: THREE.Mesh;
-    public readonly waterMesh: THREE.Mesh;
+    public readonly waterMesh: ReturnType<typeof createIslandWater>;
     public readonly treeTrunks: THREE.InstancedMesh;
     public readonly treeCanopies: THREE.InstancedMesh;
     
@@ -88,6 +110,7 @@ export class IslandTerrain {
     private heightSegments: number;
     private size: number;
     private mapRadius: number;
+    private readonly groundTexture: THREE.DataTexture;
 
     constructor(rng: SeededRandom, mapRadius: number, quality: GraphicsQuality) {
         this.mapRadius = mapRadius;
@@ -127,10 +150,11 @@ export class IslandTerrain {
         const colorAttr = new THREE.BufferAttribute(new Float32Array(posAttr.count * 3), 3);
         
         const tempColor = new THREE.Color();
-        const sand = new THREE.Color(0xd0aa66);
-        const grass = new THREE.Color(0x5c7650);
-        const dirt = new THREE.Color(0x8b6a45);
-        const rock = new THREE.Color(0x6f7a80);
+        const sand = new THREE.Color(0xc7ad80);
+        const grass = new THREE.Color(0x657d43);
+        const scrub = new THREE.Color(0x435938);
+        const dirt = new THREE.Color(0x8e7951);
+        const rock = new THREE.Color(0x79817d);
 
         // Precompute heights
         for (let i = 0; i < posAttr.count; i++) {
@@ -168,50 +192,36 @@ export class IslandTerrain {
             const h = posAttr.getY(i);
             const ny = normAttr.getY(i);
             
-            const slope = 1.0 - ny; // approx slope
+            const patch = noise.fbm2D(posAttr.getX(i) * 0.032, posAttr.getZ(i) * 0.032, 3);
+            const exposedStone = Math.max(smoothstep(0.045, 0.24, 1 - ny), smoothstep(14, 23, h) * 0.44);
 
-            if (slope > 0.6) {
-                tempColor.copy(rock);
-            } else if (h < 0.3) {
-                tempColor.copy(sand);
-            } else if (h < 2.0) {
-                tempColor.copy(sand).lerp(grass, smoothstep(0.3, 2.0, h));
-            } else if (h < 10.0) {
-                tempColor.copy(grass);
-            } else if (h < 16.0) {
-                tempColor.copy(grass).lerp(dirt, smoothstep(10.0, 16.0, h));
-            } else {
-                tempColor.copy(rock);
-            }
+            tempColor.copy(grass)
+                .lerp(scrub, smoothstep(0.40, 0.68, patch))
+                .lerp(dirt, (1 - smoothstep(0.20, 0.43, patch)) * 0.76)
+                .lerp(rock, exposedStone)
+                .lerp(sand, 1 - smoothstep(0.15, 2.5, h))
+                .multiplyScalar(0.87 + patch * 0.30);
 
             colorAttr.setXYZ(i, tempColor.r, tempColor.g, tempColor.b);
         }
 
         geometry.setAttribute('color', colorAttr);
+        this.groundTexture = createTileTexture(128, (u, v) =>
+            0.55 + tileNoise(u, v, 9) * 0.16 + tileNoise(u, v, 31) * 0.21 +
+            tileNoise(u, v, 61) * 0.08,
+        'Rock and grass grain');
+        this.groundTexture.repeat.setScalar(this.size / 10);
 
         const material = new THREE.MeshStandardMaterial({
             vertexColors: true,
-            roughness: 0.8,
-            metalness: 0.1,
+            map: this.groundTexture,
+            roughness: 1,
         });
 
         this.terrainMesh = new THREE.Mesh(geometry, material);
         this.terrainMesh.receiveShadow = true;
 
-        // Water
-        const waterGeom = new THREE.PlaneGeometry(mapRadius * 2.4, mapRadius * 2.4, 1, 1);
-        waterGeom.rotateX(-Math.PI / 2);
-        const waterMat = new THREE.MeshStandardMaterial({
-            color: 0x3a8fbf,
-            opacity: 0.65,
-            transparent: true,
-            roughness: 0.15,
-            metalness: 0.1,
-            side: THREE.DoubleSide
-        });
-        this.waterMesh = new THREE.Mesh(waterGeom, waterMat);
-        this.waterMesh.position.y = 0.08;
-        this.waterMesh.receiveShadow = true;
+        this.waterMesh = createIslandWater(this.size, this.heights, this.widthSegments + 1);
 
         // Trees
         let treeCount = 120;
@@ -220,21 +230,34 @@ export class IslandTerrain {
 
         const trunkGeom = new THREE.CylinderGeometry(0.3, 0.4, 3, 5);
         trunkGeom.translate(0, 1.5, 0); // origin at bottom
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.9 });
+        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x6e5741 });
         this.treeTrunks = new THREE.InstancedMesh(trunkGeom, trunkMat, treeCount);
         this.treeTrunks.castShadow = true;
         this.treeTrunks.receiveShadow = true;
 
-        const canopyGeom = new THREE.ConeGeometry(1.8, 4, 7);
-        canopyGeom.translate(0, 3 + 2, 0); // on top of trunk
-        const canopyMat = new THREE.MeshStandardMaterial({ color: 0x3d6b2e, roughness: 0.8 });
+        // The three branch whorls share a single instance batch across the island.
+        const tiers = [
+            new THREE.ConeGeometry(1.98, 3.0, 6).translate(0, 3.88, 0),
+            new THREE.ConeGeometry(1.48, 2.9, 6).rotateY(0.41).translate(0.12, 5.18, 0),
+            new THREE.ConeGeometry(0.94, 2.55, 6).rotateY(0.8).translate(-0.08, 6.46, 0.04)
+        ];
+        const canopyGeom = mergeGeometries(tiers);
+        for (const tier of tiers) tier.dispose();
+        const canopyColors = new Float32Array(canopyGeom.attributes.position.count * 3);
+        const canopyY = canopyGeom.attributes.position;
+        for (let i = 0; i < canopyY.count; i += 1) {
+            const color = 0.52 + smoothstep(2.3, 7.75, canopyY.getY(i)) * 0.48;
+            canopyColors.fill(color, i * 3, i * 3 + 3);
+        }
+        canopyGeom.setAttribute('color', new THREE.BufferAttribute(canopyColors, 3));
+        const canopyMat = new THREE.MeshLambertMaterial({ vertexColors: true });
         this.treeCanopies = new THREE.InstancedMesh(canopyGeom, canopyMat, treeCount);
         this.treeCanopies.castShadow = true;
         this.treeCanopies.receiveShadow = true;
 
         const dummy = new THREE.Object3D();
         const treeColor = new THREE.Color();
-        const baseCanopy = new THREE.Color(0x3d6b2e);
+        const baseCanopy = new THREE.Color(0x4a6940);
 
         let placed = 0;
         let attempts = 0;
@@ -253,7 +276,7 @@ export class IslandTerrain {
             const scale = 0.7 + rng.next() * 0.6;
             dummy.position.set(tx, th, tz);
             dummy.rotation.set(0, rng.next() * Math.PI * 2, 0);
-            dummy.scale.set(scale, scale, scale);
+            dummy.scale.set(scale * (0.86 + 0.22 * th / 14), scale, scale);
             dummy.updateMatrix();
 
             this.treeTrunks.setMatrixAt(placed, dummy.matrix);
@@ -324,16 +347,25 @@ export class IslandTerrain {
     }
 
     public dispose(): void {
+        this.terrainMesh.removeFromParent();
+        this.waterMesh.removeFromParent();
+        this.treeTrunks.removeFromParent();
+        this.treeCanopies.removeFromParent();
         this.terrainMesh.geometry.dispose();
         (this.terrainMesh.material as THREE.Material).dispose();
+        this.groundTexture.dispose();
         
         this.waterMesh.geometry.dispose();
-        (this.waterMesh.material as THREE.Material).dispose();
+        this.waterMesh.material.uniforms.shoreMap.value.dispose();
+        this.waterMesh.material.uniforms.rippleMap.value.dispose();
+        this.waterMesh.material.dispose();
 
         this.treeTrunks.geometry.dispose();
         (this.treeTrunks.material as THREE.Material).dispose();
+        this.treeTrunks.dispose();
 
         this.treeCanopies.geometry.dispose();
         (this.treeCanopies.material as THREE.Material).dispose();
+        this.treeCanopies.dispose();
     }
 }

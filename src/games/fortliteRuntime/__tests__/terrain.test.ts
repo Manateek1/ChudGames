@@ -80,4 +80,21 @@ describe('IslandTerrain Procedural Generation', () => {
 
     terrain.dispose();
   });
+
+  it('bakes the shoreline from the terrain grid and disposes its textures on reset', () => {
+    const terrain = new IslandTerrain(new SeededRandom(1337), MAP_RADIUS, 'low');
+    const positions = terrain.terrainMesh.geometry.attributes.position;
+    const { shoreMap, rippleMap } = terrain.waterMesh.material.uniforms;
+    const depth = shoreMap.value.image.data as Uint8Array;
+    expect(depth.length).toBe(positions.count);
+    expect(depth[0]).toBe(255);
+    expect(depth.includes(0)).toBe(true);
+
+    const disposedTextures = new Set();
+    for (const texture of [shoreMap.value, rippleMap.value]) {
+      texture.addEventListener('dispose', () => disposedTextures.add(texture));
+    }
+    terrain.dispose();
+    expect(disposedTextures.size).toBe(2);
+  });
 });
