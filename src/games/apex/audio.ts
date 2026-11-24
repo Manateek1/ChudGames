@@ -11,8 +11,6 @@ export class ApexAudio {
   private noise: AudioBufferSourceNode | null = null;
   private wind: GainNode | null = null;
   private tires: GainNode | null = null;
-  private squeal: OscillatorNode | null = null;
-  private squealGain: GainNode | null = null;
   private impact: GainNode | null = null;
   private previousImpact = 0;
   start(): void {
@@ -80,16 +78,6 @@ export class ApexAudio {
       this.wind = layer(700, "highpass");
       this.tires = layer(420, "bandpass");
       this.impact = layer(170, "lowpass");
-      const squeal = c.createOscillator(),
-        squealGain = c.createGain();
-      squeal.type = "triangle";
-      squeal.frequency.value = 700;
-      squealGain.gain.value = 0;
-      squeal.connect(squealGain);
-      squealGain.connect(master);
-      squeal.start();
-      this.squeal = squeal;
-      this.squealGain = squealGain;
       void c.resume().catch(() => {});
     } catch {
       /* Audio is optional on browsers without an available audio device. */
@@ -128,20 +116,6 @@ export class ApexAudio {
       t,
       0.08,
     );
-    this.squealGain?.gain.setTargetAtTime(
-      Math.min(
-        0.07,
-        Math.max(0, s.slip - 0.045) * 0.35 +
-          (input.handbrake && s.speed > 8 ? 0.035 : 0),
-      ),
-      t,
-      0.04,
-    );
-    this.squeal?.frequency.setTargetAtTime(
-      620 + s.slip * 900 + Math.sin(t * 33) * 35,
-      t,
-      0.03,
-    );
     if (s.impact > this.previousImpact + 0.1 && this.impact) {
       this.impact.gain.cancelScheduledValues(t);
       this.impact.gain.setValueAtTime(s.impact * 1.5, t);
@@ -170,7 +144,6 @@ export class ApexAudio {
   dispose(): void {
     this.engine.forEach((o) => o.stop());
     this.noise?.stop();
-    this.squeal?.stop();
     if (this.context) void this.context.close().catch(() => {});
     this.context = null;
   }
