@@ -1,5 +1,5 @@
 import { Block } from "./blocks";
-import type { BlockEdit, ChunkPacket, Realm, SectionPacket } from "./protocol";
+import type { BlockEdit, ChunkPacket, Realm, SectionPacket, TerrainRevision } from "./protocol";
 import { CHUNK_SIZE, Terrain, WORLD_MAX_Y, WORLD_MIN_Y } from "./terrain";
 
 export { CHUNK_SIZE, WORLD_MAX_Y, WORLD_MIN_Y } from "./terrain";
@@ -120,8 +120,8 @@ export class VoxelWorld {
   private readonly chunks = new Map<string, GeneratedChunk>();
   private readonly changes = new Map<string, Map<number, BlockEdit>>();
 
-  constructor(seed: string, realm: Realm, edits: BlockEdit[] = []) {
-    this.terrain = new Terrain(seed, realm);
+  constructor(seed: string, realm: Realm, edits: BlockEdit[] = [], revision: TerrainRevision = 2) {
+    this.terrain = new Terrain(seed, realm, revision);
     for (const [x, y, z, code] of edits) {
       if (this.valid(x, y, z, code)) this.record(x, y, z, code);
     }

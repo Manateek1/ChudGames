@@ -55,6 +55,7 @@ export class Simulation {
   private readonly loaded = new Set<string>();
   private readonly dirty = new Set<string>();
   private readonly savedEdits: SaveData["realms"];
+  private readonly terrainRevision: NonNullable<SaveData["terrainRevision"]>;
   private realm: Realm;
   private position: Position;
   private velocity: Position = [0, 0, 0];
@@ -93,6 +94,7 @@ export class Simulation {
     this.seedHash = [...this.seed].reduce((hash, character) => Math.imul(hash ^ character.charCodeAt(0), 16777619), 2166136261);
     this.realm = saved && realms.includes(saved.realm) ? saved.realm : "surface";
     this.savedEdits = saved?.realms ?? { surface: [], underdeep: [], skyreach: [] };
+    this.terrainRevision = saved ? saved.terrainRevision ?? 1 : 2;
     this.radius = clamp(Math.round(finite(message.radius, 2)), 1, 5);
     this.tickNumber = Math.max(0, Math.floor(finite(saved?.tick ?? 0)));
     const player = saved?.player;
@@ -127,7 +129,7 @@ export class Simulation {
     let local = this.localRealms.get(this.realm);
     if (!local) {
       const edits = this.savedEdits[this.realm] ?? [];
-      local = { world: new VoxelWorld(this.seed, this.realm, edits), circuits: new Circuits(edits), events: new Map() };
+      local = { world: new VoxelWorld(this.seed, this.realm, edits, this.terrainRevision), circuits: new Circuits(edits), events: new Map() };
       for (const [x, y, z, code] of edits) if (blockOf(code) === Block.BerryBush && stateOf(code) === 1) {
         local.events.set(pointKey([x, y, z]), { point: [x, y, z], at: this.tickNumber + 240 });
       }
@@ -824,7 +826,7 @@ export class Simulation {
       selected: this.selected, dead: this.dead,
     };
     this.send({ type: "save", data: {
-      version: 1, seed: this.seed, mode: this.mode, realm: this.realm, tick: this.tickNumber, player,
+      version: 1, terrainRevision: this.terrainRevision, seed: this.seed, mode: this.mode, realm: this.realm, tick: this.tickNumber, player,
       realms: {
         surface: this.localRealms.get("surface")?.world.edits() ?? this.savedEdits.surface,
         underdeep: this.localRealms.get("underdeep")?.world.edits() ?? this.savedEdits.underdeep,

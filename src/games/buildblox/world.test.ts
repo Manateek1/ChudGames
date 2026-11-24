@@ -46,6 +46,17 @@ describe("BuildBlox voxel world", () => {
     expect(c.packet(-1, 0)).not.toEqual(first);
   });
 
+  it("places a snow ridge and lake in revised worlds while preserving legacy elevation", () => {
+    const seed = "Juniper Vale";
+    const legacy = new VoxelWorld(seed, "surface", [], 1);
+    const upgraded = new VoxelWorld(seed, "surface", [], 2);
+    expect(upgraded.surfaceY(0, 0)).toEqual(legacy.surfaceY(0, 0));
+    const summit = upgraded.surfaceY(24, -43);
+    expect(summit).toBeGreaterThan(legacy.surfaceY(24, -43) + 24);
+    expect([Block.Snow, Block.Frostglass]).toContain(upgraded.get(24, summit, -43));
+    expect(upgraded.get(-25, 63, -37)).toBe(Block.Water);
+  });
+
   it.each<Realm>(["surface", "underdeep", "skyreach"])("provides a safe %s spawn", (realm) => {
     const world = new VoxelWorld("juniper", realm);
     const y = world.surfaceY(0, 0);

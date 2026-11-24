@@ -6,7 +6,7 @@ import type { Actor } from "./models";
 import type { HudState, MeshLayer, MeshMessage, MobView, Pose, Realm } from "./protocol";
 
 const drawDistances: Record<GraphicsQuality, [near: number, far: number, resolution: number]> = {
-  low: [15, 34, 1], medium: [23, 55, 1.2], high: [31, 74, 1.5],
+  low: [20, 34, 1], medium: [39, 62, 1.2], high: [53, 78, 1.5],
 };
 
 const dayTicks = 24_000;
@@ -21,7 +21,7 @@ const borderIdle = new THREE.Color(0xffedbc);
 const borderActive = new THREE.Color(0xfdbb70);
 const nightTerrain = new THREE.Color(0.28, 0.38, 0.54);
 const caveTerrain = new THREE.Color(1.44, 1.31, 1.42);
-const dayTerrain = new THREE.Color(1.73, 1.61, 1.46);
+const dayTerrain = new THREE.Color(1.48, 1.43, 1.36);
 const skyTerrain = new THREE.Color(1.73, 1.58, 1.84);
 
 function meshLayer(layer: MeshLayer, material: THREE.Material) {
@@ -29,6 +29,8 @@ function meshLayer(layer: MeshLayer, material: THREE.Material) {
   geometry.setAttribute("position", new THREE.BufferAttribute(layer.positions, 3));
   geometry.setAttribute("normal", new THREE.BufferAttribute(layer.normals, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(layer.colors, 3));
+  geometry.setAttribute("tileUv", new THREE.BufferAttribute(layer.uvs, 2, true));
+  geometry.setAttribute("tileIndex", new THREE.BufferAttribute(layer.tiles, 1));
   geometry.setIndex(new THREE.BufferAttribute(layer.indices, 1));
   geometry.computeBoundingSphere();
   return new THREE.Mesh(geometry, material);
@@ -97,7 +99,7 @@ export class BuildBloxRenderer {
   private readonly clouds = createClouds();
   private readonly rain = rain();
   private readonly voxel = createVoxelMaterials();
-  private readonly hand = new VoxelHand();
+  private readonly hand = new VoxelHand(this.voxel.palette);
   private readonly models = new VoxelActors();
   private readonly chunks = new Map<string, { x: number; z: number; meshes: THREE.Mesh[] }>();
   private readonly actors = new Map<string, Actor>();
@@ -212,6 +214,8 @@ export class BuildBloxRenderer {
     this.zenith.copy(palette.night).lerp(palette.zenith, daylight).lerp(stormTint, rainfall * 0.51);
     this.horizon.copy(palette.nightHorizon).lerp(palette.horizon, daylight)
       .lerp(dusk, twilight * 0.30).lerp(stormTint, rainfall * 0.47);
+    this.voxel.waterSky.value.copy(this.horizon).lerp(this.zenith, 0.45).multiplyScalar(0.84);
+    this.voxel.waterSun.value.copy(this.sunDirection).y = Math.max(elevation, 0.10);
     const [near, far] = drawDistances[this.quality];
     this.fog.color.copy(this.horizon);
     this.fog.near = cave ? 5.6 : near * (1 - rainfall * 0.37);
@@ -320,6 +324,7 @@ export class BuildBloxRenderer {
     this.outline.material.dispose();
     this.voxel.solid.dispose();
     this.voxel.liquid.dispose();
+    this.voxel.palette.dispose();
     this.renderer.dispose();
     this.canvas.remove();
   }

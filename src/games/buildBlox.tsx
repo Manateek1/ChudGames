@@ -135,7 +135,6 @@ function Session({ seed, mode, settings, paused, audio, onFps, onPauseToggle, le
           <p>{state.biome} <span aria-hidden="true">·</span> Day {1 + Math.floor(state.tick / 24000)}</p>
         </div>
         <div className="bb-status">
-          {mode !== "creative" && <div className="bb-vitals"><Meter label="Health" value={state.health} kind="health" /><Meter label="Food" value={state.hunger} kind="food" /></div>}
           <div className="bb-hud-actions">
             <button type="button" onClick={() => setPanel("guide")}>Guide</button>
             <button type="button" onClick={() => setPanel("pack")}>Backpack <kbd>E</kbd></button>
@@ -153,6 +152,11 @@ function Session({ seed, mode, settings, paused, audio, onFps, onPauseToggle, le
       <footer className="bb-hud-bottom">
         {state.notice && !panel && <div className="bb-toast" role="status">{state.notice}</div>}
         <span className="bb-held-name">{held ? itemInfo(held.id).name : "Empty hand"}</span>
+        {mode !== "creative" && <div className="bb-vitals">
+          <Meter label="Health" value={state.health} kind="health" />
+          <span className="bb-xp" aria-label={state.xp + " experience points"}>{state.xp} XP</span>
+          <Meter label="Food" value={state.hunger} kind="food" />
+        </div>}
         <div className="bb-hotbar" aria-label="Hotbar">
           {Array.from({ length: 9 }, (_, index) => <Slot key={index} stack={state.inventory[index]} number={index + 1}
             selected={state.selected === index} onClick={() => client.current?.send({ type: "select", slot: index })} />)}
@@ -222,6 +226,7 @@ export function BuildBlox({ mode: selectedMode, ...props }: GameComponentProps):
           <button className="bb-primary" type="submit">Enter world <span aria-hidden="true">↗</span></button>
         </div>
         <p className="bb-muted">Reenter the same seed and mode to resume your local save.</p>
+        <p className="bb-muted">Independent voxel graphics demo. Unaffiliated with Minecraft or Mojang.</p>
       </form>
     </div>
   </div>;

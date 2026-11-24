@@ -13,7 +13,7 @@ let realm: Realm = "surface";
 let scheduled = false;
 
 function buffers(layer: MeshLayer): ArrayBuffer[] {
-  return [layer.positions.buffer, layer.normals.buffer, layer.colors.buffer, layer.indices.buffer] as ArrayBuffer[];
+  return [layer.positions.buffer, layer.normals.buffer, layer.colors.buffer, layer.indices.buffer, layer.uvs.buffer, layer.tiles.buffer] as ArrayBuffer[];
 }
 
 function schedule(): void {

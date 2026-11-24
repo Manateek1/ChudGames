@@ -1,5 +1,5 @@
 import { Block, withState } from "./blocks";
-import type { Realm } from "./protocol";
+import type { Realm, TerrainRevision } from "./protocol";
 
 export const WORLD_MIN_Y = -64;
 export const WORLD_MAX_Y = 319;
@@ -39,8 +39,10 @@ export class Terrain {
   private readonly seed: number;
   private readonly salt: number;
   private readonly realm: Realm;
-  constructor(seed: string, realm: Realm) {
+  private readonly revised: boolean;
+  constructor(seed: string, realm: Realm, revision: TerrainRevision) {
     this.realm = realm;
+    this.revised = revision >= 2;
     const value = seed64(seed);
     this.seed = mix(Number(value & 0xffffffffn) ^ 0xca5e743b);
     this.salt = mix(Number(value >> 32n) ^ 0x01dad263);
@@ -127,17 +129,29 @@ export class Terrain {
     const pathGrade = ramp(-z, 5, 10) * (1 - ramp(-z, 37, 63)) * (1 - ramp(Math.abs(x - pathX), 4, 16));
     const pathHeight = 71 - ramp(-z, 6, 37) * 5;
     const cove = 1 - ramp(Math.hypot((x + 6) * 0.81, (z + 69) * 0.87), 13, 34);
-    const y = Math.floor(blend(blend(field, pathHeight, pathGrade), 60 + continental * 9, cove));
+    let height = blend(blend(field, pathHeight, pathGrade), 60 + continental * 9, cove);
+    if (this.revised) {
+      const eastRidge = 1 - ramp(Math.hypot((x - 24) * 0.75, (z + 43) * 0.92), 3, 29);
+      const westRidge = 1 - ramp(Math.hypot((x + 39) * 0.80, (z + 66) * 0.70), 4, 35);
+      height += (eastRidge * 43 + westRidge * 39) * (0.82 + depth * 0.65);
+      const lake = 1 - ramp(Math.hypot((x + 25) * 0.88, (z + 37) * 1.10), 9, 21);
+      height = blend(height, 57 + depth * 8, lake * (1 - pathGrade));
+    }
+    const y = Math.floor(height);
     const warm = temperature + weirdness * 0.15 > 0.19;
     const high = y > 94 - temperature * 18;
     const dry = warm && moisture < -0.045;
     const coastal = y <= WATERLINE + 2;
     const woodland = moisture + depth * 0.12 > 0.015 || near < 43;
     const onPath = -z >= 5 && -z <= 32 && Math.abs(x - pathX) < 1.4 + depth * 2;
-    const cover = coastal || dry ? Block.Sand : onPath ? Block.Gravel : high ? Block.Stone :
+    const alpine = this.revised && y >= 91 + depth * 9;
+    const grove = this.revised && x < 11 && z < 5 && z > -57 && !coastal && !dry;
+    const cover = alpine ? (y > 98 && depth > 0.13 ? Block.Frostglass : Block.Snow) :
+      coastal || dry ? Block.Sand : onPath ? Block.Gravel : high ? Block.Stone :
       moisture > 0.22 && y < 75 ? Block.Moss : Block.Sod;
     const name = y < WATERLINE - 5 ? "Tidal shallows" : coastal ? "Sandy inlets" :
-      high ? "Pale ridges" : dry ? "Glass dunes" : woodland ? "Juniper basin" : "Amber steppe";
+      alpine ? "Frostglass Ridge" : high ? "Pale ridges" : dry ? "Glass dunes" : grove ? "Silverbloom Grove" :
+        woodland ? "Juniper basin" : "Amber steppe";
     return {
       y, bottom: WORLD_MIN_Y, ceiling: WORLD_MAX_Y + 1, cover, name, cave: depth * 2,
       damp: moisture + continental * 0.3 > 0.08,
@@ -177,6 +191,7 @@ export class Terrain {
     const ground = profile.y - y;
     if (ground <= 3) {
       if (ground === 0) return profile.cover;
+      if (profile.cover === Block.Snow || profile.cover === Block.Frostglass) return Block.Stone;
       if (profile.cover === Block.Sand) return ground < 3 ? Block.Sand : Block.Sandstone;
       if (profile.cover === Block.Stone) return Block.Stone;
       return Block.Soil;
@@ -239,8 +254,32 @@ export class Terrain {
     const tree = (x: number, z: number, size: number) => {
       const ground = this.profile(x, z);
       if (ground.y <= WATERLINE || ground.cover === Block.Stone || ground.cover === Block.Sand) return;
+      if (ground.cover === Block.Frostglass) return;
       const crown = ground.y + size;
       const lean = this.unit(x, z, 736) < 0.5 ? -1 : 1;
+      if (this.revised) {
+        const blossom = ground.name === "Silverbloom Grove" && this.unit(x, z, 824) > 0.24;
+        const fir = !blossom && (ground.y > 77 || this.unit(x, z, 825) < 0.31);
+        const leaf = blossom ? 3 : fir ? 4 : 5;
+        const trunk = withState(Block.Timber, blossom ? 1 : fir ? 2 : 0);
+        const top = crown + (fir ? 2 : 0);
+        for (let dy = -3; dy <= 2; dy++) {
+          const radius = fir ? (dy === 2 ? 0 : (dy & 1) === 0 ? 1 : dy === -3 ? 3 : 2) : [1, 2, 3, 3, 2, 0][dy + 3];
+          const offset = blossom && dy >= -1 ? lean : 0;
+          for (let dz = -radius; dz <= radius; dz++) for (let dx = -radius; dx <= radius; dx++) {
+            if (Math.abs(dx) + Math.abs(dz) > radius + 1) continue;
+            if ((dx || dz) && this.unit(x + dx, z + dz, 302, top + dy) < 0.14) continue;
+            put(x + dx + offset, top + dy, z + dz, withState(Block.Leaves, leaf));
+          }
+        }
+        for (let y = ground.y + 1; y <= top; y++) put(x, y, z, trunk);
+        if (blossom) {
+          put(x + lean, crown - 2, z, trunk);
+          put(x + lean * 2, crown - 1, z, trunk);
+          put(x, crown - 2, z + 1, trunk);
+        }
+        return;
+      }
       for (let dy = -2; dy <= 2; dy++) {
         const radius = dy === 2 ? 0 : (dy === -2 || dy === 1 ? 1 : 2);
         const offset = dy >= 1 ? lean : 0;
@@ -254,19 +293,20 @@ export class Terrain {
       for (let i = 1; i <= size; i++) put(x, ground.y + i, z, Block.Timber);
       put(x + lean, crown - 2, z, Block.Timber);
     };
-    const cell = 8;
-    for (let gz = Math.floor((minZ - 2) / cell); gz <= Math.floor((maxZ + 2) / cell); gz++) {
-      for (let gx = Math.floor((minX - 2) / cell); gx <= Math.floor((maxX + 2) / cell); gx++) {
+    const cell = this.revised ? 7 : 8;
+    const treeReach = this.revised ? 4 : 2;
+    for (let gz = Math.floor((minZ - treeReach) / cell); gz <= Math.floor((maxZ + treeReach) / cell); gz++) {
+      for (let gx = Math.floor((minX - treeReach) / cell); gx <= Math.floor((maxX + treeReach) / cell); gx++) {
         const x = gx * cell + 2 + Math.floor(this.unit(gx, gz, 709) * 4);
         const z = gz * cell + 2 + Math.floor(this.unit(gx, gz, 710) * 4);
-        if (Math.hypot(x, z) < 25) continue;
-        if (this.field(x, z, 39, 808) + this.unit(gx, gz, 711) * 0.58 > 0.30) {
+        if (Math.hypot(x, z) < (this.revised ? 20 : 25) || this.revised && z > -30 && z < 0 && Math.abs(x) < 5) continue;
+        if (this.field(x, z, 39, 808) + this.unit(gx, gz, 711) * 0.58 > (this.revised ? 0.22 : 0.30)) {
           tree(x, z, 4 + Math.floor(this.unit(x, z, 712) * 3));
         }
       }
     }
     for (const [x, z, size] of [[-10, -10, 5], [9, -13, 5], [-14, -19, 6], [6, -26, 4], [-14, 8, 4], [11, 10, 5]]) {
-      if (x + 2 >= minX && x - 2 <= maxX && z + 2 >= minZ && z - 2 <= maxZ) tree(x, z, size);
+      if (x + treeReach >= minX && x - treeReach <= maxX && z + treeReach >= minZ && z - treeReach <= maxZ) tree(x, z, size);
     }
 
     const ruin = (x: number, z: number) => {
