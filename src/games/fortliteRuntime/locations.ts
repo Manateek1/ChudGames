@@ -1,6 +1,31 @@
 import * as THREE from 'three';
 import type { ObstacleBox } from './types';
 import { SeededRandom } from './math';
+import { createTileTexture, tileNoise } from './surfaceTextures';
+
+export function createBuildingSurfaces() {
+  const siding = createTileTexture(128, (u, v) => {
+    const grain = tileNoise(u, v, 27) * 0.12;
+    const weathering = tileNoise(u, v, 4) * 0.18;
+    const board = (v * 15) % 1;
+    const framing = u > 0.24 && u < 0.76 && v > 0.42 && v < 0.77;
+    const shutter = u > 0.29 && u < 0.71 && v > 0.45 && v < 0.74;
+    if (shutter) return 0.27 + grain + (((v * 82) % 1) < 0.36 ? 0.12 : 0);
+    if (framing || (v > 0.13 && v < 0.16)) return 0.81 + grain;
+    const foundation = v < 0.13;
+    return (foundation ? 0.40 : 0.64) + grain + weathering - (board < 0.10 ? 0.14 : 0);
+  }, 'Weathered siding and storm shutters');
+
+  const roof = createTileTexture(64, (u, v) => {
+    const seam = u < 0.07 || u > 0.94;
+    const grain = tileNoise(u, v, 16) * 0.16 + tileNoise(u, v, 5) * 0.13;
+    return (seam ? 0.40 : 0.69) + grain;
+  }, 'Standing seam metal');
+  roof.repeat.set(0.83, 0.32);
+  return { siding, roof };
+}
+
+type BuildingSurfaces = ReturnType<typeof createBuildingSurfaces>;
 
 export interface WalkableSurface {
   minX: number;
@@ -20,17 +45,24 @@ export interface LocationResult {
   cameraObstacles: THREE.Object3D[];
 }
 
-function createBoxMesh(width: number, height: number, depth: number, color: number): THREE.Mesh {
+function createBoxMesh(width: number, height: number, depth: number, color: number, map: THREE.Texture | null = null): THREE.Mesh {
   const geom = new THREE.BoxGeometry(width, height, depth);
-  const mat = new THREE.MeshLambertMaterial({ color });
+  const mat = new THREE.MeshLambertMaterial({ color, map });
   const mesh = new THREE.Mesh(geom, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
 }
 
-function makeWall(pos: THREE.Vector3, width: number, height: number, thickness: number, color: number, yaw: number = 0) {
-  const mesh = createBoxMesh(width, height, thickness, color);
+function makeWall(pos: THREE.Vector3, width: number, height: number, thickness: number, color: number, yaw = 0, siding: THREE.Texture | null = null) {
+  const mesh = createBoxMesh(width, height, thickness, color, siding);
+  if (siding) {
+    const uv = mesh.geometry.attributes.uv;
+    // BoxGeometry's front and back faces occupy the final two groups.
+    for (let i = 16; i < uv.count; i += 1) {
+      uv.setX(i, uv.getX(i) * Math.max(1, Math.round(width / 4)));
+    }
+  }
   mesh.position.copy(pos);
   mesh.position.y += height / 2;
   mesh.rotation.y = yaw;
@@ -74,13 +106,17 @@ function makeFloor(pos: THREE.Vector3, sizeX: number, sizeZ: number, thickness: 
   return { mesh, obstacle, walkable };
 }
 
-function makeRoof(pos: THREE.Vector3, sizeX: number, sizeZ: number, thickness: number, color: number) {
-  const mesh = createBoxMesh(sizeX, thickness, sizeZ, color);
+function makeRoof(pos: THREE.Vector3, sizeX: number, sizeZ: number, thickness: number, roofMap: THREE.Texture) {
+  const mesh = createBoxMesh(sizeX, thickness, sizeZ, 0x566472, roofMap);
+  const uv = mesh.geometry.attributes.uv;
+  for (let i = 0; i < uv.count; i += 1) {
+    uv.setXY(i, uv.getX(i) * sizeX, uv.getY(i) * sizeZ);
+  }
   mesh.position.copy(pos);
   return { mesh };
 }
 
-function makePitchedRoof(pos: THREE.Vector3, sizeX: number, sizeZ: number, peakHeight: number, color: number, yaw: number = 0) {
+function makePitchedRoof(pos: THREE.Vector3, sizeX: number, sizeZ: number, peakHeight: number, roofMap: THREE.Texture) {
   const shape = new THREE.Shape();
   shape.moveTo(-sizeX / 2, 0);
   shape.lineTo(sizeX / 2, 0);
@@ -93,16 +129,21 @@ function makePitchedRoof(pos: THREE.Vector3, sizeX: number, sizeZ: number, peakH
   };
   const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
   geom.center();
-  const mat = new THREE.MeshLambertMaterial({ color });
+  // Orient the seams along the slope.
+  const vertices = geom.attributes.position;
+  const uv = geom.attributes.uv;
+  for (let i = 0; i < uv.count; i += 1) {
+    uv.setXY(i, vertices.getZ(i), vertices.getY(i));
+  }
+  const mat = new THREE.MeshLambertMaterial({ color: 0x635b57, map: roofMap });
   const mesh = new THREE.Mesh(geom, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   mesh.position.copy(pos);
-  mesh.rotation.y = yaw;
   return { mesh };
 }
 
-function buildBasicStructure(center: THREE.Vector3, width: number, depth: number, height: number, wallColor: number, hasPitchedRoof: boolean = false): LocationResult {
+function buildBasicStructure(center: THREE.Vector3, width: number, depth: number, height: number, wallColor: number, hasPitchedRoof: boolean, surfaces: BuildingSurfaces): LocationResult {
   const result: LocationResult = {
     meshes: [], obstacles: [], lootSpawnPoints: [], walkableSurfaces: [], raycastTargets: [], cameraObstacles: []
   };
@@ -117,10 +158,10 @@ function buildBasicStructure(center: THREE.Vector3, width: number, depth: number
   result.raycastTargets.push(floor.mesh);
 
   // Walls (North, South, East, West)
-  const nWall = makeWall(new THREE.Vector3(center.x, center.y + thickness, center.z - depth / 2 + thickness / 2), width, height, thickness, wallColor, 0);
-  const sWall = makeWall(new THREE.Vector3(center.x, center.y + thickness, center.z + depth / 2 - thickness / 2), width, height, thickness, wallColor, 0);
-  const eWall = makeWall(new THREE.Vector3(center.x + width / 2 - thickness / 2, center.y + thickness, center.z), depth, height, thickness, wallColor, Math.PI / 2);
-  const wWall = makeWall(new THREE.Vector3(center.x - width / 2 + thickness / 2, center.y + thickness, center.z), depth, height, thickness, wallColor, Math.PI / 2);
+  const nWall = makeWall(new THREE.Vector3(center.x, center.y + thickness, center.z - depth / 2 + thickness / 2), width, height, thickness, wallColor, 0, surfaces.siding);
+  const sWall = makeWall(new THREE.Vector3(center.x, center.y + thickness, center.z + depth / 2 - thickness / 2), width, height, thickness, wallColor, 0, surfaces.siding);
+  const eWall = makeWall(new THREE.Vector3(center.x + width / 2 - thickness / 2, center.y + thickness, center.z), depth, height, thickness, wallColor, Math.PI / 2, surfaces.siding);
+  const wWall = makeWall(new THREE.Vector3(center.x - width / 2 + thickness / 2, center.y + thickness, center.z), depth, height, thickness, wallColor, Math.PI / 2, surfaces.siding);
 
   // Leave gaps for doors manually or just use simple walls for now, simplified for the assignment
   for (const w of [nWall, sWall, eWall, wWall]) {
@@ -132,11 +173,11 @@ function buildBasicStructure(center: THREE.Vector3, width: number, depth: number
 
   // Roof
   if (hasPitchedRoof) {
-    const roof = makePitchedRoof(new THREE.Vector3(center.x, center.y + height + thickness + 1.5, center.z), width + 1, depth + 1, 3, 0x4a4a4a);
+    const roof = makePitchedRoof(new THREE.Vector3(center.x, center.y + height + thickness + 1.5, center.z), width + 1, depth + 1, 3, surfaces.roof);
     result.meshes.push(roof.mesh);
     result.raycastTargets.push(roof.mesh);
   } else {
-    const roof = makeRoof(new THREE.Vector3(center.x, center.y + height + thickness + 0.2, center.z), width + 1, depth + 1, 0.4, 0x4a4a4a);
+    const roof = makeRoof(new THREE.Vector3(center.x, center.y + height + thickness + 0.2, center.z), width + 1, depth + 1, 0.4, surfaces.roof);
     result.meshes.push(roof.mesh);
     result.raycastTargets.push(roof.mesh);
   }
@@ -147,7 +188,7 @@ function buildBasicStructure(center: THREE.Vector3, width: number, depth: number
   return result;
 }
 
-export function createHarborDistrict(center: THREE.Vector3, rng: SeededRandom, heightSampler: (x: number, z: number) => number): LocationResult {
+export function createHarborDistrict(center: THREE.Vector3, rng: SeededRandom, heightSampler: (x: number, z: number) => number, surfaces: BuildingSurfaces): LocationResult {
   const result: LocationResult = {
     meshes: [], obstacles: [], lootSpawnPoints: [], walkableSurfaces: [], raycastTargets: [], cameraObstacles: []
   };
@@ -163,10 +204,10 @@ export function createHarborDistrict(center: THREE.Vector3, rng: SeededRandom, h
 
   // Warehouses
   const y1 = heightSampler(center.x - 15, center.z - 15);
-  merge(buildBasicStructure(new THREE.Vector3(center.x - 15, y1, center.z - 15), 20, 14, 7, 0x7a8a96, false));
+  merge(buildBasicStructure(new THREE.Vector3(center.x - 15, y1, center.z - 15), 20, 14, 7, 0x7a8a96, false, surfaces));
   
   const y2 = heightSampler(center.x + 15, center.z - 15);
-  merge(buildBasicStructure(new THREE.Vector3(center.x + 15, y2, center.z - 15), 20, 14, 7, 0x7a8a96, false));
+  merge(buildBasicStructure(new THREE.Vector3(center.x + 15, y2, center.z - 15), 20, 14, 7, 0x7a8a96, false, surfaces));
 
   // Dock
   const dockY = Math.min(heightSampler(center.x, center.z + 10), -0.5);
@@ -207,15 +248,15 @@ export function createHarborDistrict(center: THREE.Vector3, rng: SeededRandom, h
 
   // Boathouses
   const by1 = heightSampler(center.x - 25, center.z + 5);
-  merge(buildBasicStructure(new THREE.Vector3(center.x - 25, by1, center.z + 5), 8, 6, 4, 0x8c5a30, true));
+  merge(buildBasicStructure(new THREE.Vector3(center.x - 25, by1, center.z + 5), 8, 6, 4, 0x8c5a30, true, surfaces));
 
   const by2 = heightSampler(center.x + 25, center.z + 5);
-  merge(buildBasicStructure(new THREE.Vector3(center.x + 25, by2, center.z + 5), 8, 6, 4, 0x8c5a30, true));
+  merge(buildBasicStructure(new THREE.Vector3(center.x + 25, by2, center.z + 5), 8, 6, 4, 0x8c5a30, true, surfaces));
 
   return result;
 }
 
-export function createHillSettlement(center: THREE.Vector3, rng: SeededRandom, heightSampler: (x: number, z: number) => number): LocationResult {
+export function createHillSettlement(center: THREE.Vector3, rng: SeededRandom, heightSampler: (x: number, z: number) => number, surfaces: BuildingSurfaces): LocationResult {
   const result: LocationResult = {
     meshes: [], obstacles: [], lootSpawnPoints: [], walkableSurfaces: [], raycastTargets: [], cameraObstacles: []
   };
@@ -240,7 +281,7 @@ export function createHillSettlement(center: THREE.Vector3, rng: SeededRandom, h
   for (const offset of offsets) {
     const pos = center.clone().add(offset);
     pos.y = heightSampler(pos.x, pos.z);
-    merge(buildBasicStructure(pos, 8, 7, 5, 0x9a9080, true));
+    merge(buildBasicStructure(pos, 8, 7, 5, 0x9a9080, true, surfaces));
   }
 
   // Stone walls
@@ -275,7 +316,7 @@ export function createHillSettlement(center: THREE.Vector3, rng: SeededRandom, h
   return result;
 }
 
-export function createLighthouseOverlook(center: THREE.Vector3, rng: SeededRandom, heightSampler: (x: number, z: number) => number): LocationResult {
+export function createLighthouseOverlook(center: THREE.Vector3, rng: SeededRandom, heightSampler: (x: number, z: number) => number, surfaces: BuildingSurfaces): LocationResult {
   const result: LocationResult = {
     meshes: [], obstacles: [], lootSpawnPoints: [], walkableSurfaces: [], raycastTargets: [], cameraObstacles: []
   };
@@ -330,7 +371,7 @@ export function createLighthouseOverlook(center: THREE.Vector3, rng: SeededRando
   const houseX = center.x + 12;
   const houseZ = center.z + 5;
   const houseY = heightSampler(houseX, houseZ);
-  merge(buildBasicStructure(new THREE.Vector3(houseX, houseY, houseZ), 10, 8, 4.5, 0xb8a888, true));
+  merge(buildBasicStructure(new THREE.Vector3(houseX, houseY, houseZ), 10, 8, 4.5, 0xb8a888, true, surfaces));
   
   result.lootSpawnPoints.push(new THREE.Vector3(center.x - 4, baseHeight + 1, center.z));
 
@@ -379,7 +420,7 @@ export function createLighthouseOverlook(center: THREE.Vector3, rng: SeededRando
   return result;
 }
 
-export function createSmallOutpost(center: THREE.Vector3, rng: SeededRandom, heightSampler: (x: number, z: number) => number): LocationResult {
+export function createSmallOutpost(center: THREE.Vector3, rng: SeededRandom, heightSampler: (x: number, z: number) => number, surfaces: BuildingSurfaces): LocationResult {
   const result: LocationResult = {
     meshes: [], obstacles: [], lootSpawnPoints: [], walkableSurfaces: [], raycastTargets: [], cameraObstacles: []
   };
@@ -399,7 +440,7 @@ export function createSmallOutpost(center: THREE.Vector3, rng: SeededRandom, hei
     const bx = center.x + (i === 0 ? -5 : 5);
     const bz = center.z + rng.range(-2, 2);
     const by = heightSampler(bx, bz);
-    merge(buildBasicStructure(new THREE.Vector3(bx, by, bz), 8, 6, 4.5, 0x778877, true));
+    merge(buildBasicStructure(new THREE.Vector3(bx, by, bz), 8, 6, 4.5, 0x778877, true, surfaces));
   }
   
   // Low perimeter wall
