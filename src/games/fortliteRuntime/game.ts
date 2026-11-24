@@ -1217,7 +1217,10 @@ export class FortLiteGame {
       const edge = Math.abs(uv.getX(i) * 2 - 1);
       const track = 0.90 - Math.pow(Math.sin(edge * Math.PI), 6) * 0.21;
       colors.set([track, track, track], i * 3);
-      positions.setXYZ(i, x, this.sampleBaseTerrainHeight(x, z) + 0.10, z);
+      // Gameplay clamps low terrain to sea level. Follow the actual seabed
+      // here so the opaque water naturally hides submerged road sections.
+      const height = this.islandTerrain?.sampleHeight(x, z) ?? this.sampleBaseTerrainHeight(x, z);
+      positions.setXYZ(i, x, height + 0.10, z);
     }
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.computeVertexNormals();
