@@ -81,6 +81,7 @@ interface Hooks {
   onScore: (score: number) => void;
   onFps: (fps: number) => void;
   onPause: () => void;
+  onMenu: () => void;
   onFinish: (result: GameResult) => void;
   onError: (message: string) => void;
 }
@@ -195,7 +196,7 @@ export class ApexRuntime {
       this.car.root.position.set(this.state.x, this.state.y, this.state.z);
       this.car.root.rotation.y = this.state.heading;
       updateSun(this.world.sun, x, y, z);
-      this.applySettings(settings);
+      this.applySettings(settings, true);
       this.refreshEnvironment();
       this.camera.position.set(x - 7, y + 3.2, z + 7);
       this.smoothTarget.set(x, y + 0.7, z);
@@ -252,12 +253,21 @@ export class ApexRuntime {
     );
   };
   private keydown = (event: KeyboardEvent) => {
+    if (event.repeat) return;
+    if (event.code === "Escape") {
+      event.preventDefault();
+      this.returnToMenu();
+      return;
+    }
     if (
-      event.repeat ||
       (event.target instanceof HTMLElement &&
         ["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName))
     )
       return;
+    if (event.code === "KeyP" && (this.phase === "race" || this.phase === "countdown")) {
+      event.preventDefault();
+      this.hooks.onPause();
+    }
     if (event.code === "KeyC") {
       event.preventDefault();
       this.changeCamera();
@@ -298,23 +308,20 @@ export class ApexRuntime {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
   };
-  applySettings(settings: ApexSettings): void {
+  applySettings(settings: ApexSettings, initialize = false): void {
     if (this.phase === "menu" && settings.carId !== this.state.car.id) {
       this.replaceCar(getApexCar(settings.carId));
     }
-    const previousShadow = this.settings
-        ? presets[this.settings.quality].shadow
-        : -1,
-      previousReflection = this.settings
-        ? presets[this.settings.quality].reflection
-        : -1;
+    const previousQuality = this.settings.quality;
     this.settings = settings;
+    if (!initialize && previousQuality === settings.quality) return;
+    const previous = presets[previousQuality];
     const cfg = presets[settings.quality];
     this.world.setQuality(settings.quality);
     this.effects.limit = cfg.particles;
     this.renderer.shadowMap.enabled = cfg.shadow > 0;
     this.world.sun.shadow.mapSize.set(cfg.shadow || 512, cfg.shadow || 512);
-    if (previousShadow !== cfg.shadow && this.world.sun.shadow.map) {
+    if (previous.shadow !== cfg.shadow && this.world.sun.shadow.map) {
       this.world.sun.shadow.map.dispose();
       this.world.sun.shadow.map = null;
     }
@@ -322,7 +329,7 @@ export class ApexRuntime {
     this.camera.updateProjectionMatrix();
     this.adaptiveScale = 1;
     this.resize();
-    if (this.environment && previousReflection !== cfg.reflection)
+    if (this.environment && previous.reflection !== cfg.reflection)
       this.refreshEnvironment();
   }
   setPaused(paused: boolean): void {
@@ -358,15 +365,19 @@ export class ApexRuntime {
     this.publish();
   }
 
-  openGarage(): void {
-    this.phase = "menu";
-    this.race = createRace(this.track.length);
-    this.placeCar(0);
-    this.accumulator = 0;
-    this.newBest = false;
-    this.message = "";
-    this.hooks.onScore(0);
-    this.publish();
+  returnToMenu(): void {
+    if (this.phase !== "menu") {
+      this.phase = "menu";
+      this.race = createRace(this.track.length);
+      this.placeCar(0);
+      this.accumulator = 0;
+      this.lastRecoveryPress = null;
+      this.newBest = false;
+      this.message = "";
+      this.hooks.onScore(0);
+      this.publish();
+    }
+    this.hooks.onMenu();
   }
 
   start(): void {
@@ -404,7 +415,6 @@ export class ApexRuntime {
     c.brake = Number(input.isDown("down"));
     c.steer = keyboardSteer(input.isDown("left"), input.isDown("right"));
     c.handbrake = input.isDown("action");
-    if (input.consumePress("pause")) this.hooks.onPause();
     const pads = navigator.getGamepads?.(),
       pad = pads ? Array.from(pads).find((p) => p?.connected) : null;
     if (pad) {
@@ -420,7 +430,7 @@ export class ApexRuntime {
       for (const i of [3, 2, 9]) {
         const down = pad.buttons[i]?.pressed || false;
         if (down && !this.padButtons[i]) {
-          if (i === 9) this.hooks.onPause();
+          if (i === 9 && (this.phase === "race" || this.phase === "countdown")) this.hooks.onPause();
           if (i === 3) this.changeCamera();
           if (i === 2 && this.phase === "race" && !this.paused) this.resetCar();
         }
@@ -693,14 +703,12 @@ export class ApexRuntime {
         this.publish();
       }
     }
-    this.sound.update(
-      this.state,
-      this.controls,
+    const audible =
       !this.paused &&
-        !this.hidden &&
-        this.settings.sound &&
-        (this.phase === "race" || this.phase === "countdown"),
-    );
+      !this.hidden &&
+      this.settings.sound &&
+      (this.phase === "race" || this.phase === "countdown");
+    this.sound.update(this.state, this.controls, audible ? this.settings.volume / 100 : 0);
     this.raf = requestAnimationFrame(this.loop);
   };
   dispose(): void {

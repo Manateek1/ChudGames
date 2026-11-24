@@ -1,5 +1,6 @@
 import { DEFAULT_CAR_ID, getApexCar } from "./vehicles";
 import type { ApexCarId } from "./vehicles";
+import { clamp } from "../../engine/math";
 
 export type Quality = "low" | "medium" | "high" | "ultra";
 export interface ApexSettings {
@@ -7,6 +8,7 @@ export interface ApexSettings {
   carId: ApexCarId;
   assists: boolean;
   sound: boolean;
+  volume: number;
   reducedMotion: boolean;
   ghost: boolean;
 }
@@ -53,6 +55,7 @@ export function loadApexSettings(
     carId: DEFAULT_CAR_ID,
     assists: true,
     sound: true,
+    volume: 100,
     reducedMotion,
     ghost: true,
   };
@@ -63,6 +66,7 @@ export function loadApexSettings(
       carId: getApexCar(s.carId).id,
       assists: typeof s.assists === "boolean" ? s.assists : true,
       sound: typeof s.sound === "boolean" ? s.sound : true,
+      volume: Number.isFinite(s.volume) ? Math.round(clamp(s.volume, 0, 100)) : defaults.volume,
       reducedMotion: reducedMotion || s.reducedMotion === true,
       ghost: s.ghost !== false,
     };

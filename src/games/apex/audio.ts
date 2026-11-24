@@ -83,12 +83,12 @@ export class ApexAudio {
       /* Audio is optional on browsers without an available audio device. */
     }
   }
-  update(s: VehicleState, input: DriveInput, audible: boolean): void {
+  update(s: VehicleState, input: DriveInput, volume: number): void {
     const c = this.context;
     if (!c || !this.master) return;
     const t = c.currentTime;
-    this.master.gain.setTargetAtTime(audible ? 0.6 : 0, t, 0.05);
-    if (!audible) return;
+    this.master.gain.setTargetAtTime(0.6 * volume, t, 0.05);
+    if (volume === 0) return;
     for (let i = 0; i < this.engine.length; i++) {
       this.engine[i].frequency.setTargetAtTime(
         (s.rpm / 60) * s.car.cylinders * (i === 2 ? 1 : 0.5),

@@ -497,6 +497,20 @@
   height: 17px;
   cursor: pointer;
 }
+.apex-volume {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 10px;
+  width: min(200px, 65%);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.apex-volume input {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--apex-accent);
+}
 .apex-setting-note {
   font-size: 10px;
   color: #a2b3ad;
