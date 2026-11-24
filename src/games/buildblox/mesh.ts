@@ -1,5 +1,6 @@
 import { Block, blockOf, definition, stateOf } from "./blocks";
 import type { ChunkPacket, MeshLayer, Realm } from "./protocol";
+import { Tile, voxelTile } from "./tiles";
 import { chunkKey, unpackSection, WORLD_MAX_Y, WORLD_MIN_Y } from "./world";
 
 type Vec = readonly [number, number, number];
@@ -54,7 +55,7 @@ export function decodeMeshChunk(packet: ChunkPacket): MeshChunk {
       if (!code) continue;
       const y = sy * 16 + (index >>> 8);
       const column = index & 255;
-      if (definition(code).opaque && y > sky[column]) sky[column] = y;
+      if ((definition(code).opaque || blockOf(code) === Block.Leaves) && y > sky[column]) sky[column] = y;
       const value = emission(code);
       if (!value) continue;
       const x = index & 15, z = (index >>> 4) & 15;
@@ -139,9 +140,9 @@ function faceColor(hex: number): Vec {
   return color;
 }
 
-interface DraftLayer { positions: number[]; normals: number[]; colors: number[]; indices: number[] }
+interface DraftLayer { positions: number[]; normals: number[]; colors: number[]; indices: number[]; uvs: number[]; tiles: number[] }
 function draft(): DraftLayer {
-  return { positions: [], normals: [], colors: [], indices: [] };
+  return { positions: [], normals: [], colors: [], indices: [], uvs: [], tiles: [] };
 }
 function pack(layer: DraftLayer): MeshLayer {
   return {
@@ -149,7 +150,33 @@ function pack(layer: DraftLayer): MeshLayer {
     normals: Float32Array.from(layer.normals),
     colors: Float32Array.from(layer.colors),
     indices: Uint32Array.from(layer.indices),
+    uvs: Uint8Array.from(layer.uvs),
+    tiles: Uint8Array.from(layer.tiles),
   };
+}
+
+function addGroundCover(layer: DraftLayer, x: number, y: number, z: number, hash: number, light: number): void {
+  const tile = (hash & 31) < 6 ? Tile.Wildflower : Tile.Tuft;
+  const spread = 0.34 + ((hash >>> 13) & 7) * 0.017;
+  const height = (tile === Tile.Wildflower ? 0.51 : 0.36) + ((hash >>> 20) & 7) * 0.036;
+  const px = x + .35 + ((hash >>> 9) & 7) * .04;
+  const pz = z + .35 + ((hash >>> 16) & 7) * .04;
+  const tint = light * (.83 + ((hash >>> 25) & 7) * .035);
+  for (const sign of [-1, 1]) {
+    const start = layer.positions.length / 3;
+    const dx = spread * sign;
+    layer.positions.push(px - dx, y, pz - spread, px + dx, y, pz + spread,
+      px + dx, y + height, pz + spread, px - dx, y + height, pz - spread);
+    for (let i = 0; i < 4; i++) {
+      layer.normals.push(0, 1, 0);
+      const shade = i < 2 ? tint * .57 : tint;
+      layer.colors.push(shade, shade, shade);
+      layer.tiles.push(tile);
+    }
+    layer.uvs.push(0, 0, 255, 0, 255, 255, 0, 255);
+    layer.indices.push(start, start + 1, start + 2, start, start + 2, start + 3,
+      start, start + 2, start + 1, start, start + 3, start + 2);
+  }
 }
 
 function cornerOcclusion(
@@ -197,7 +224,13 @@ export function meshChunk(
         id === Block.Door ? (stateOf(code) > 0 ? doorOpen : doorClosed) : fixtures[id] ?? cube;
       const glow = emission(code) / 15;
       const powered = stateOf(code) > 0;
-      const variation = 0.94 + (((baseX + x) * 73856093 ^ y * 19349663 ^ (baseZ + z) * 83492791) & 7) * 0.018;
+      const hash = Math.imul(baseX + x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(baseZ + z, 83492791);
+      const variety = 0.91 + (hash & 7) * 0.019;
+      if (realm === "surface" && (id === Block.Sod || id === Block.Moss) &&
+        (hash >>> 5 & 31) < 13 && blockOf(get(x, y + 1, z)) === Block.Air &&
+        y + 6 >= chunk.sky[(z << 4) + x]) {
+        addGroundCover(stone, baseX + x, y + 1, baseZ + z, hash, y === chunk.sky[(z << 4) + x] ? 1 : .62);
+      }
 
       for (const { normal, vertices, shade } of faces) {
         const [nx, ny, nz] = normal;
@@ -213,24 +246,26 @@ export function meshChunk(
           if (definition(next).opaque || (other === id && !info.opaque)) continue;
         } else if (ny === -1 && definition(next).opaque) continue;
 
-        const hex = id === Block.Lamp && powered ? 0xffde9b :
+        const tile = voxelTile(code, ny);
+        const hex = tile !== Tile.Neutral ? 0xffffff : id === Block.Lamp && powered ? 0xffde9b :
           id === Block.Wire && powered ? 0xf8a655 :
-          id === Block.Leaves && powered ? (stateOf(code) === 1 ? 0xcda04c : 0xdab166) :
             ny === 1 ? info.top ?? info.color : ny === -1 ? info.bottom ?? info.color : info.color;
         const [red, green, blue] = faceColor(hex);
         const current = target.positions.length / 3;
         const faceSky = at(fx, fz)?.sky[((fz & 15) << 4) + (fx & 15)] ?? WORLD_MIN_Y;
         const daylight = realm !== "underdeep" && fy >= faceSky;
-        const ambient = daylight ? 1 : (realm === "underdeep" ? 0.47 : 0.67);
+        const ambient = daylight ? 1 : (realm === "underdeep" ? 0.42 : 0.58);
         const warm = Math.max(lightAt(fx, fy, fz) / 15, glow);
         const ao: number[] = [];
         for (const vertex of vertices) {
           const [vx, vy, vz] = vertex;
           const occlusion = fluid || bounds !== cube ? 3 : cornerOcclusion(get, fx, fy, fz, normal, vertex);
           ao.push(occlusion);
-          const brightness = Math.max(ambient, glow * 0.88) * shade * (0.68 + occlusion * 0.106) * variation;
+          const brightness = Math.max(ambient, glow * 0.88) * shade * (0.62 + occlusion * 0.126) * variety;
           target.positions.push(baseX + x + bounds[vx * 3], y + bounds[1 + vy * 3], baseZ + z + bounds[2 + vz * 3]);
           target.normals.push(nx, ny, nz);
+          target.uvs.push((nx ? vz : vx) * 255, (ny ? vz : vy) * 255);
+          target.tiles.push(tile);
           target.colors.push(
             red * (brightness + warm * 0.34) + warm * 0.055,
             green * (brightness + warm * 0.25) + warm * 0.026,

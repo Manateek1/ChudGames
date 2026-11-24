@@ -3,13 +3,21 @@ export type { Stack } from "./blocks";
 
 export type Realm = "surface" | "underdeep" | "skyreach";
 export type Mode = "survival" | "creative" | "adventure" | "hardcore";
+export type TerrainRevision = 1 | 2;
 export interface Point { x: number; y: number; z: number }
 export interface Pose extends Point { yaw: number; pitch: number }
 export type BlockPoint = [number, number, number];
 export type BlockEdit = [number, number, number, number];
 export interface SectionPacket { sy: number; palette: Uint16Array; bits: number; words: Uint32Array }
 export interface ChunkPacket { cx: number; cz: number; sections: SectionPacket[] }
-export interface MeshLayer { positions: Float32Array; normals: Float32Array; colors: Float32Array; indices: Uint32Array }
+export interface MeshLayer {
+  positions: Float32Array;
+  normals: Float32Array;
+  colors: Float32Array;
+  indices: Uint32Array;
+  uvs: Uint8Array;
+  tiles: Uint8Array;
+}
 export interface MeshMessage { type: "mesh"; realm: Realm; key: string; solid: MeshLayer; liquid: MeshLayer }
 export type MeshRequest =
   | { type: "reset"; realm: Realm }
@@ -45,6 +53,7 @@ export interface PlayerSave extends Pose {
 export interface MachineSave { realm: Realm; point: BlockPoint; item: number; remaining: number; ready?: boolean }
 export interface SaveData {
   version: 1;
+  terrainRevision?: TerrainRevision;
   seed: string;
   mode: Mode;
   realm: Realm;

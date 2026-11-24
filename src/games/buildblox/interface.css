@@ -1,7 +1,7 @@
 .buildblox {
   --bb-ink: #fff5de;
   --bb-muted: #c4bca8;
-  --bb-accent: #ffbf63;
+  --bb-accent: #ead297;
   --bb-edge: #eee0ad2b;
   color: var(--bb-ink);
   font-family: "Trebuchet MS", system-ui, sans-serif;
@@ -107,12 +107,18 @@
 .bb-location h2, .bb-panel h2 { font-weight: 800; line-height: 1.2; font-size: clamp(1.04rem, 2.7vw, 1.52rem); }
 .bb-location p:last-child { margin-top: .16rem; color: var(--bb-muted); font-size: .72rem; }
 .bb-status { display: grid; gap: .38rem; }
-.bb-vitals { display: grid; gap: .32rem; padding: .55rem .64rem; }
-.bb-meter { display: grid; grid-template-columns: 2.5rem minmax(2rem, 7rem) 1.1rem; align-items: center; gap: .35rem; font-size: .68rem; }
-.bb-meter b { font-variant-numeric: tabular-nums; text-align: right; }
-.bb-meter-track { background: #ffffff25; height: .46rem; overflow: hidden; border-radius: .22rem; }
-.bb-meter-track span { display: block; height: 100%; background: #fe735e; border-radius: inherit; }
-.bb-meter-food .bb-meter-track span { background: #ffbc64; }
+.bb-vitals { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: .45rem; width: min(100%, 27.5rem); padding: .35rem .52rem; }
+.bb-meter { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .3rem; font-size: .65rem; }
+.bb-meter b { font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
+.bb-meter-track {
+  height: .42rem;
+  overflow: hidden;
+  background: #ffffff2e;
+  mask-image: repeating-linear-gradient(90deg, black 0 calc(20% - 2px), transparent calc(20% - 2px) 20%);
+}
+.bb-meter-track span { display: block; height: 100%; background: #ee806e; }
+.bb-meter-food .bb-meter-track span { background: #e4c277; }
+.bb-xp { color: #b8d7ad; font-size: .62rem; font-weight: 800; padding: .06rem .24rem; }
 .bb-hud-actions { display: flex; justify-content: flex-end; gap: .3rem; pointer-events: auto; }
 .bb-hud-actions button, .bb-touch button {
   background: #101b1be8;
@@ -147,7 +153,7 @@
 .bb-hud-bottom { position: absolute; inset: auto .45rem .48rem; display: grid; justify-items: center; gap: .25rem; pointer-events: none; }
 .bb-toast, .bb-held-name { background: #0d1718e7; border-radius: .36rem; padding: .25rem .65rem; font-size: .7rem; text-align: center; }
 .bb-toast { max-width: min(90%, 30rem); color: var(--bb-accent); }
-.bb-hotbar { display: grid; grid-template-columns: repeat(9, minmax(0, 3.05rem)); gap: clamp(2px, .5vw, 5px); max-width: 100%; padding: 4px; border: 1px solid var(--bb-edge); border-radius: .55rem; background: #131c1cea; pointer-events: auto; }
+.bb-hotbar { display: grid; grid-template-columns: repeat(9, minmax(0, 3.05rem)); gap: clamp(2px, .5vw, 5px); max-width: 100%; padding: 4px; border: 1px solid var(--bb-edge); border-radius: .45rem; background: #111b1bec; pointer-events: auto; }
 .bb-slot {
   position: relative;
   display: grid;
@@ -244,7 +250,7 @@
 .bb-message { justify-items: start; gap: .55rem; max-width: 24rem; padding: 1.2rem; }
 .bb-message > p:not(.bb-kicker) { color: var(--bb-muted); }
 @media (pointer: coarse) {
-  .bb-touch { display: flex; position: absolute; justify-content: space-between; inset: auto .65rem 5.1rem; pointer-events: none; }
+  .bb-touch { display: flex; position: absolute; justify-content: space-between; inset: auto .65rem 6.2rem; pointer-events: none; }
   .bb-dpad, .bb-touch-actions { display: grid; grid-template-columns: repeat(3, 2.55rem); align-content: end; gap: .22rem; }
   .bb-dpad button:first-child { grid-column: 2; }
   .bb-dpad button:nth-child(2) { grid-column: 1; }
@@ -258,8 +264,8 @@
   .bb-session { height: min(72dvh, 46rem); }
   .bb-hud-top { inset: .45rem .45rem auto; }
   .bb-hud-actions button { padding: .25rem .36rem; }
-  .bb-vitals { padding: .4rem; }
-  .bb-meter { grid-template-columns: 2rem minmax(1.6rem, 3rem) .9rem; gap: .22rem; font-size: .61rem; }
+  .bb-vitals { padding: .29rem .4rem; gap: .24rem; }
+  .bb-meter { gap: .2rem; font-size: .61rem; min-width: 0; }
   .bb-backpack-body { grid-template-columns: 1fr; gap: .55rem; padding: .6rem; }
   .bb-pack-grid .bb-slot { max-height: 2.65rem; }
   .bb-material-list, .bb-recipe-list { max-height: 9rem; }

@@ -4,7 +4,7 @@ export const Block = {
   Cloudstone: 13, Wood: 14, Glass: 15, Wire: 16, Switch: 17, Lamp: 18,
   Door: 19, Relay: 20, Piston: 21, Plate: 22, Inverter: 23, Sensor: 24,
   Bench: 25, Furnace: 26, RiftGate: 27, SkyGate: 28, Ember: 29, Moss: 30,
-  BerryBush: 31, Brick: 32, Gravel: 33, Sandstone: 34,
+  BerryBush: 31, Brick: 32, Gravel: 33, Sandstone: 34, Snow: 35, Frostglass: 36,
 } as const;
 
 export const Item = {
@@ -65,6 +65,8 @@ const definitions: readonly BlockDefinition[] = [
   block("Kiln brick", 0xb57763, 1.1, Block.Brick),
   block("Gravel", 0x9f8e7d, 0.48, Block.Gravel),
   block("Dune stone", 0xba966b, 1.2, Block.Sandstone),
+  block("Alpine snow", 0xe7edf4, 0.45, Block.Snow),
+  block("Frostglass", 0x83b9d1, 1.2, Block.Frostglass),
 ];
 
 export const blockOf = (code: number): number => code & 255;

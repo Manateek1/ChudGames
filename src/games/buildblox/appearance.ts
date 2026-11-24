@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { Realm } from "./protocol";
+import { createTilePixels, TILE_SIZE } from "./tiles";
 
 const color = (hex: number) => new THREE.Color(hex);
 
@@ -14,8 +15,8 @@ interface Atmosphere {
 
 export const atmospheres: Record<Realm, Atmosphere> = {
   surface: {
-    zenith: color(0x73b8cb), horizon: color(0xdfe8d3), night: color(0x152137),
-    nightHorizon: color(0x374c66), sunlight: color(0xffe5b7), cloud: color(0xfffaf1),
+    zenith: color(0x518fcb), horizon: color(0xc6dfe9), night: color(0x152137),
+    nightHorizon: color(0x374c66), sunlight: color(0xfff0d4), cloud: color(0xfff9f0),
   },
   underdeep: {
     zenith: color(0x292238), horizon: color(0x543a46), night: color(0x292238),
@@ -30,73 +31,87 @@ export const atmospheres: Record<Realm, Atmosphere> = {
 const surfacePosition = `
   varying vec3 vVoxelPosition;
   varying vec3 vVoxelNormal;
-  float grain(vec2 texel) {
-    vec3 p = fract(vec3(texel.xyx) * 0.1031);
-    p += dot(p, p.yzx + 33.33);
-    return fract((p.x + p.y) * p.z);
-  }
 `;
 
 export function createVoxelMaterials() {
   const terrainLight = { value: new THREE.Color(1.65, 1.52, 1.40) };
+  const pixels = createTilePixels();
+  const palette = new THREE.DataArrayTexture(pixels, TILE_SIZE, TILE_SIZE, pixels.length / (4 * TILE_SIZE ** 2));
+  palette.colorSpace = THREE.SRGBColorSpace;
+  palette.magFilter = THREE.NearestFilter;
+  palette.minFilter = THREE.NearestMipmapLinearFilter;
+  palette.generateMipmaps = true;
+  palette.needsUpdate = true;
   const solid = new THREE.MeshBasicMaterial({ vertexColors: true });
-  solid.customProgramCacheKey = () => "buildblox-voxel";
+  solid.customProgramCacheKey = () => "buildblox-pixel-voxel";
   solid.onBeforeCompile = (shader) => {
+    shader.uniforms.voxelTiles = { value: palette };
     shader.uniforms.terrainLight = terrainLight;
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vVoxelPosition;\nvarying vec3 vVoxelNormal;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvVoxelPosition = position;\nvVoxelNormal = normal;");
+      .replace("#include <common>", `#include <common>
+        attribute vec2 tileUv;
+        attribute float tileIndex;
+        varying vec2 vTileUv;
+        varying float vTileIndex;`)
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvTileUv = tileUv;\nvTileIndex = tileIndex;");
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", `#include <common>\n${surfacePosition}\nuniform vec3 terrainLight;`)
+      .replace("#include <common>", `#include <common>
+        uniform highp sampler2DArray voxelTiles;
+        uniform vec3 terrainLight;
+        varying vec2 vTileUv;
+        varying float vTileIndex;`)
       .replace("#include <color_fragment>", `
         #include <color_fragment>
-        vec3 axis = abs(vVoxelNormal);
-        vec2 tile = axis.y > 0.5 ? vVoxelPosition.xz : (axis.x > 0.5 ? vVoxelPosition.zy : vVoxelPosition.xy);
-        vec2 inner = fract(tile);
-        vec2 texel = floor((tile + 0.0001) * 11.0);
-        float fleck = grain(texel);
-        float clump = grain(floor(tile * vec2(3.5, 4.25)));
-        float pattern = 0.88 + fleck * 0.12 + clump * 0.14;
-        float edge = min(min(inner.x, 1.0 - inner.x), min(inner.y, 1.0 - inner.y));
-        float keepDetail = 1.0 - smoothstep(0.10, 0.32, max(fwidth(tile.x), fwidth(tile.y)));
-        float beveled = 1.0 - 0.085 * (1.0 - smoothstep(0.0, 0.045, edge)) * keepDetail;
-        diffuseColor.rgb *= mix(1.0, pattern, keepDetail) * beveled;
-        diffuseColor.rgb = mix(diffuseColor.rgb, sqrt(diffuseColor.rgb), 0.08) * terrainLight;
+        vec4 texel = texture(voxelTiles, vec3(vTileUv, vTileIndex));
+        if (texel.a < 0.43) discard;
+        diffuseColor.rgb *= texel.rgb * terrainLight;
       `);
   };
 
   const waterTime = { value: 0 };
+  const waterSky = { value: new THREE.Color(0x87c6ee) };
+  const waterSun = { value: new THREE.Vector3() };
   const liquid = new THREE.MeshBasicMaterial({
-    vertexColors: true, transparent: true, opacity: 0.78, depthWrite: false, side: THREE.DoubleSide,
+    vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false, side: THREE.DoubleSide,
     forceSinglePass: true,
   });
   liquid.customProgramCacheKey = () => "buildblox-liquid";
   liquid.onBeforeCompile = (shader) => {
     shader.uniforms.voxelTime = waterTime;
+    shader.uniforms.waterSky = waterSky;
+    shader.uniforms.waterSun = waterSun;
     shader.uniforms.terrainLight = terrainLight;
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vVoxelPosition;\nvarying vec3 vVoxelNormal;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvVoxelPosition = position;\nvVoxelNormal = normal;");
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", `#include <common>\n${surfacePosition}\nuniform vec3 terrainLight;\nuniform float voxelTime;`)
+      .replace("#include <common>", `#include <common>\n${surfacePosition}
+        uniform vec3 terrainLight;
+        uniform vec3 waterSky;
+        uniform vec3 waterSun;
+        uniform float voxelTime;`)
       .replace("#include <color_fragment>", `
         #include <color_fragment>
-        vec2 waveCell = floor(vVoxelPosition.xz * 13.0) / 13.0;
-        float ripple = sin(waveCell.x * 2.8 + waveCell.y * 5.4 + voxelTime * 1.45)
-          + sin(waveCell.x * 3.8 - waveCell.y * 1.5 - voxelTime * 0.85);
-        float foam = smoothstep(1.69, 1.96, ripple) * abs(vVoxelNormal.y);
-        float distanceFade = 1.0 - smoothstep(0.08, 0.30, length(fwidth(vVoxelPosition.xz)));
+        vec2 uv = floor(vVoxelPosition.xz * 15.0) / 15.0;
+        float waveA = sin(dot(uv, vec2(2.8, 3.9)) + voxelTime * 1.45);
+        float waveB = cos(dot(uv, vec2(4.7, -2.3)) - voxelTime * 1.27);
+        float ripple = waveA + waveB;
         float isWater = step(diffuseColor.r, diffuseColor.b * 0.28);
         float isEmber = step(diffuseColor.b * 2.0, diffuseColor.r);
-        diffuseColor.rgb *= mix(1.0, 0.91 + ripple * 0.042, isWater);
-        diffuseColor.rgb += vec3(0.24, 0.32, 0.28) * foam * distanceFade * isWater;
         diffuseColor.rgb *= terrainLight;
+        vec3 eye = normalize(cameraPosition - vVoxelPosition);
+        vec3 rippleNormal = normalize(vec3(waveA * 0.12, 1.0, waveB * 0.12));
+        float fresnel = pow(1.0 - max(dot(rippleNormal, eye), 0.0), 4.0);
+        float gleam = pow(max(dot(reflect(-waterSun, rippleNormal), eye), 0.0), 52.0);
+        float top = max(vVoxelNormal.y, 0.0) * isWater;
+        vec3 reflected = mix(diffuseColor.rgb * (0.93 + ripple * 0.06), waterSky, 0.24 + fresnel * 0.64);
+        diffuseColor.rgb = mix(diffuseColor.rgb, reflected + vec3(0.52, 0.42, 0.30) * gleam, top);
         diffuseColor.rgb += vec3(0.38, 0.12, 0.048) * (0.38 + ripple * 0.09) * isEmber;
-        diffuseColor.a *= 0.48 + 0.52 * isWater + 0.70 * isEmber;
+        diffuseColor.a *= 0.48 + (0.21 + fresnel * 0.25) * isWater + 0.70 * isEmber;
       `);
   };
 
-  return { solid, liquid, waterTime, terrainLight };
+  return { solid, liquid, palette, waterTime, waterSky, waterSun, terrainLight };
 }
 
 export function createSky() {

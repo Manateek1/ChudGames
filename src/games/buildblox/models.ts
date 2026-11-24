@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { Item, isPlaceable, itemInfo } from "./blocks";
 import type { MobView } from "./protocol";
+import { Tile, voxelTile } from "./tiles";
 
 type Part = [x: number, y: number, z: number, width: number, height: number, depth: number, color: number];
 
@@ -156,6 +157,8 @@ export class VoxelHand {
   private readonly geometry = shadeBox(new THREE.BoxGeometry(1, 1, 1), 0xffffff);
   private readonly materials: THREE.MeshBasicMaterial[] = [];
   private readonly tint = this.makeMaterial(0xcb9475);
+  private readonly heldTint = this.makeMaterial(0xffffff);
+  private readonly heldTiles = { value: new THREE.Vector3() };
   private readonly carried: THREE.Mesh;
   private readonly haft: THREE.Group;
   private readonly pick: THREE.Group;
@@ -164,12 +167,33 @@ export class VoxelHand {
   private lastMining = 0;
   private followThrough = 0;
 
-  constructor() {
+  constructor(palette: THREE.DataArrayTexture) {
     const { grip, cuff, trim, glove } = handledChunks;
     this.part(this.root, [0.086, -0.215, 0.14, 0.19, 0.22, 0.43, cuff]);
     this.part(this.root, [0.063, -0.139, -0.034, 0.194, 0.20, 0.12, trim]);
     this.part(this.root, [0.021, -0.097, -0.118, 0.135, 0.133, 0.15, glove]);
-    this.carried = this.part(this.root, [-0.035, 0.035, -0.19, 0.23, 0.23, 0.23, 0xffffff], this.tint);
+    this.heldTint.customProgramCacheKey = () => "buildblox-held-block";
+    this.heldTint.onBeforeCompile = (shader) => {
+      shader.uniforms.heldTiles = this.heldTiles;
+      shader.uniforms.voxelTiles = { value: palette };
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", `#include <common>
+          uniform vec3 heldTiles;
+          varying vec2 vTileUv;
+          varying float vTileIndex;`)
+        .replace("#include <begin_vertex>", `#include <begin_vertex>
+          vTileUv = uv;
+          vTileIndex = normal.y > .5 ? heldTiles.x : normal.y < -.5 ? heldTiles.z : heldTiles.y;`);
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", `#include <common>
+          uniform highp sampler2DArray voxelTiles;
+          varying vec2 vTileUv;
+          varying float vTileIndex;`)
+        .replace("#include <color_fragment>", `#include <color_fragment>
+          vec4 texel = texture(voxelTiles, vec3(vTileUv, vTileIndex));
+          diffuseColor.rgb *= texel.rgb;`);
+    };
+    this.carried = this.part(this.root, [-0.035, 0.035, -0.19, 0.23, 0.23, 0.23, 0xffffff], this.heldTint);
     this.carried.rotation.set(0.23, 0.5, -0.16);
     this.haft = new THREE.Group();
     this.haft.position.set(-0.058, -0.09, -0.15);
@@ -220,6 +244,8 @@ export class VoxelHand {
     this.carried.visible = id > 0 && !tool && !blade;
     this.carried.scale.setScalar(isPlaceable(id) ? 0.23 : 0.13);
     this.tint.color.setHex(itemInfo(id).color);
+    this.heldTiles.value.set(voxelTile(id, 1), voxelTile(id, 0), voxelTile(id, -1));
+    this.heldTint.color.setHex(this.heldTiles.value.y === Tile.Neutral ? itemInfo(id).color : 0xffffff);
   }
 
   update(id: number, moving: number, time: number, mining: number, dt: number, hidden: boolean, aspect: number) {

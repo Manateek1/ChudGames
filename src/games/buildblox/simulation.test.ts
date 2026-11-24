@@ -68,6 +68,16 @@ describe("BuildBlox world authority", () => {
     expect(game.maxPackets).toBeLessThanOrEqual(2);
   });
 
+  it("opens legacy saves with their original terrain revision", () => {
+    const fresh = run().save;
+    expect(fresh.terrainRevision).toBe(2);
+    const legacySave = { ...fresh, terrainRevision: undefined, realms: { ...fresh.realms, surface: [[1, 72, -2, Block.Wood]] as SaveData["realms"]["surface"] } };
+    const legacy = run({ saved: legacySave }).save;
+    expect(legacy.terrainRevision).toBe(1);
+    expect(legacy.player).toEqual(fresh.player);
+    expect(legacy.realms).toEqual(legacySave.realms);
+  });
+
   it("uses a gate to load the Underdeep and provides a return gate", () => {
     const initial = run().save;
     initial.realms.surface.push([0, initial.player.y, -2, Block.RiftGate]);
