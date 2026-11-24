@@ -2,12 +2,12 @@
 import { shouldSkipFrame } from "../engine/fps";
 import type { ThumbnailRenderer } from "../types/arcade";
 
-interface GameThumbnailProps {
+interface CanvasThumbnailProps {
   renderer: ThumbnailRenderer;
   reducedMotion: boolean;
 }
 
-export const GameThumbnail = ({ renderer, reducedMotion }: GameThumbnailProps): React.JSX.Element => {
+const CanvasThumbnail = ({ renderer, reducedMotion }: CanvasThumbnailProps): React.JSX.Element => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -57,3 +57,12 @@ export const GameThumbnail = ({ renderer, reducedMotion }: GameThumbnailProps): 
 
   return <canvas ref={canvasRef} className="h-[180px] w-full rounded-[1.2rem] border border-sky-100/14 bg-[rgba(255,255,255,0.05)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]" aria-hidden />;
 };
+
+interface GameThumbnailProps extends Omit<CanvasThumbnailProps, "renderer"> {
+  renderer: ThumbnailRenderer | string;
+}
+
+export const GameThumbnail = ({ renderer, reducedMotion }: GameThumbnailProps): React.JSX.Element =>
+  typeof renderer === "string"
+    ? <img className="game-capture" src={renderer} alt="" decoding="async" />
+    : <CanvasThumbnail renderer={renderer} reducedMotion={reducedMotion} />;

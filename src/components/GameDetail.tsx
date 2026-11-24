@@ -1,5 +1,8 @@
 import { GameThumbnail } from "./GameThumbnail";
+import { apexCourses, getApexCourse } from "../games/apex/courses";
+import { formatTime, loadBest } from "../games/apex/race";
 import type { Difficulty, GameDefinition } from "../types/arcade";
+import "./GameDetail.css";
 
 interface GameDetailProps {
   game: GameDefinition;
@@ -14,117 +17,112 @@ interface GameDetailProps {
   onBack: () => void;
 }
 
-export const GameDetail = ({
-  game,
-  difficulty,
-  mode,
-  bestScore,
-  ebtBucks,
-  reducedMotion,
-  onDifficultyChange,
-  onModeChange,
-  onStart,
-  onBack,
-}: GameDetailProps): React.JSX.Element => {
-  const isFortLite = game.id === "fortlite";
-  const isAvailable = game.isAvailable !== false;
+const apexControls = [
+  ["W / ↑", "Accelerate"],
+  ["S / ↓", "Brake or reverse"],
+  ["A D / ← →", "Steer"],
+  ["Space", "Handbrake"],
+  ["C / R", "Camera / Recover (+3 sec)"],
+  ["Esc / P", "Pause or resume"],
+  ["Gamepad", "Left stick · RT / LT · A handbrake"],
+];
+
+const fortLiteControls = [
+  ["W A S D", "Move or steer your parachute"],
+  ["Mouse", "Look and aim after clicking the arena"],
+  ["Left click", "Shoot or harvest"],
+  ["Hold right click / E", "Aim down sights"],
+  ["Shift / Space", "Sprint / Jump"],
+  ["1 2 3", "Rifle / Shotgun / SMG"],
+  ["Q · Z X C · R", "Build mode · Wall, floor, ramp · Rotate"],
+];
+
+export function GameDetail({
+  game, difficulty, mode, bestScore, ebtBucks, reducedMotion,
+  onDifficultyChange, onModeChange, onStart, onBack,
+}: GameDetailProps): React.JSX.Element {
+  const fortLite = game.id === "fortlite";
+  const course = game.id === "apex-run" ? getApexCourse(mode) : null;
+  const best = course && loadBest(difficulty, course.version);
+  const available = game.isAvailable !== false;
+  const controls = course ? apexControls : fortLite ? fortLiteControls : null;
 
   return (
-    <section className="game-detail grid gap-6 lg:grid-cols-[1.1fr,1fr]">
-      <article className="rounded-[1.9rem] border border-sky-200/24 bg-[rgba(7,18,34,0.82)] p-4 text-slate-50 shadow-[0_28px_60px_-38px_rgba(7,18,34,0.95)]">
-        <GameThumbnail renderer={game.thumbnail} reducedMotion={reducedMotion} />
-        <div className="mt-4 flex items-start justify-between gap-4">
-          <div>
-            <p className="arcade-kicker">{game.genre} cabinet</p>
-            <h2 className="font-display text-3xl text-white">
-              {game.title}{!isAvailable && " (Temporarily unavailable)"}
-            </h2>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {isFortLite && <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-semibold text-slate-950">Main Feature</span>}
-          </div>
-        </div>
-        <p className="mt-3 text-sky-50/80">{game.description}</p>
+    <section className="game-launch" aria-labelledby="game-launch-title">
+      <button type="button" className="game-launch-back" onClick={onBack}>
+        <span aria-hidden="true">←</span> Back to games
+      </button>
 
-        <div className="mt-4 space-y-4 rounded-[1.5rem] border border-sky-100/12 bg-[rgba(255,255,255,0.05)] p-4">
-          {game.difficulties.length > 1 && <div>
-            <p className="arcade-kicker">Difficulty</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {game.difficulties.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => onDifficultyChange(option)}
-                  className={`rounded-lg px-3 py-2 text-sm font-semibold uppercase tracking-[0.2em] ${
-                    option === difficulty
-                      ? "bg-sky-300 text-slate-950"
-                      : "border border-sky-100/18 bg-white/5 text-sky-50"
-                  }`}
-                >
-                  {option}
+      <div className={`game-launch-hero${typeof game.thumbnail === "string" ? "" : " game-launch-hero-compact"}`}>
+        <GameThumbnail renderer={course?.image ?? game.thumbnail} reducedMotion={reducedMotion} />
+        <div className="game-launch-intro">
+          <div>
+            <h1 id="game-launch-title">{game.title}</h1>
+            <p>{game.description}</p>
+          </div>
+          <button type="button" className="arcade-btn-primary game-launch-start" onClick={onStart} disabled={!available}>
+            {available ? (course ? "Start race" : fortLite ? "Start match" : "Start game") : "Temporarily unavailable"}
+            {available && <span aria-hidden="true">→</span>}
+          </button>
+        </div>
+      </div>
+
+      <div className="game-launch-panels">
+        <section className="game-launch-panel" aria-labelledby="game-launch-options">
+          <h2 id="game-launch-options">{course ? "Choose a course" : game.modes?.length ? "Match mode" : "Game setup"}</h2>
+          {course ? (
+            <div className="game-launch-courses" role="group" aria-label="Course">
+              {apexCourses.map((option) => (
+                <button type="button" key={option.id} aria-pressed={option.id === course.id} className="game-launch-option game-launch-course"
+                  onClick={() => onModeChange(option.id)}>
+                  <GameThumbnail renderer={option.image} reducedMotion={reducedMotion} />
+                  <span><strong>{option.label}</strong><small>{option.description}</small></span>
                 </button>
               ))}
             </div>
-          </div>}
+          ) : (
+            <>
+              {game.modes && (
+                <div className="game-launch-modes" role="group" aria-label="Match mode">
+                  {game.modes.map((option) => (
+                    <button type="button" key={option.id} aria-pressed={option.id === mode} className="game-launch-option"
+                      onClick={() => onModeChange(option.id)}>
+                      <strong>{option.label}</strong><small>{option.description}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {game.difficulties.length > 1 && (
+                <div className="game-launch-difficulties" role="group" aria-label="Difficulty">
+                  {game.difficulties.map((option) => (
+                    <button type="button" key={option} aria-pressed={option === difficulty} className="game-launch-option"
+                      onClick={() => onDifficultyChange(option)}>{option}</button>
+                  ))}
+                </div>
+              )}
+              <dl className="game-launch-stats">
+                <div><dt>{fortLite ? "Wins" : "Personal best"}</dt><dd>{bestScore.toLocaleString()}</dd></div>
+                <div><dt>EBT Bucks</dt><dd>{ebtBucks.toLocaleString()}</dd></div>
+              </dl>
+            </>
+          )}
+        </section>
 
-          {game.modes && game.modes.length > 0 && (
-            <div>
-              <p className="arcade-kicker">Mode</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {game.modes.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => onModeChange(option.id)}
-                  aria-label={option.description}
-                  className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-                    option.id === mode
-                      ? "bg-amber-300 text-slate-950"
-                      : "border border-amber-200/24 bg-white/5 text-amber-50"
-                  }`}
-                >
-                  {option.label}
-                  </button>
-                ))}
-              </div>
+        <section className="game-launch-panel game-launch-controls" aria-labelledby="game-launch-controls">
+          <h2 id="game-launch-controls">Controls</h2>
+          {controls ? (
+            <dl>
+              {controls.map(([keys, action]) => <div key={keys}><dt><kbd>{keys}</kbd></dt><dd>{action}</dd></div>)}
+            </dl>
+          ) : <ul>{game.controls.map((item) => <li key={item}>{item}</li>)}</ul>}
+          {course && (
+            <div className="game-launch-record">
+              <h3>Course best</h3>
+              <p><span>{course.label}</span><strong>{best ? formatTime(best.time) : "No lap yet"}</strong></p>
             </div>
           )}
-
-          <div className="rounded-2xl border border-sky-100/14 bg-[rgba(255,255,255,0.06)] p-3">
-            <p className="arcade-kicker">{isFortLite ? "Wins" : "Personal Best"}</p>
-            <p className="font-display text-4xl text-white">{bestScore}</p>
-          </div>
-          <div className="rounded-2xl border border-amber-200/18 bg-[rgba(255,210,108,0.08)] p-3">
-            <p className="arcade-kicker">EBT Bucks</p>
-            <p className="font-display text-4xl text-white">{ebtBucks}</p>
-          </div>
-        </div>
-      </article>
-
-      <article className="rounded-[1.9rem] border border-sky-200/24 bg-[rgba(7,18,34,0.82)] p-5 text-slate-50 shadow-[0_28px_60px_-38px_rgba(7,18,34,0.95)]">
-        <p className="arcade-kicker">Controls</p>
-        <ul className="mt-2 space-y-2">
-          {game.controls.map((item) => (
-            <li key={item} className="rounded-xl border border-sky-100/12 bg-[rgba(255,255,255,0.06)] px-3 py-2 text-sky-50/84">
-              {item}
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-6 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={onStart}
-            className="arcade-btn-primary disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!isAvailable}
-          >
-            {isAvailable ? "Start Game" : "Temporarily unavailable"}
-          </button>
-          <button type="button" onClick={onBack} className="arcade-btn-secondary">
-            Back
-          </button>
-        </div>
-      </article>
+        </section>
+      </div>
     </section>
   );
-};
+}

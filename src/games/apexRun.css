@@ -154,6 +154,28 @@
   line-height: 1.75;
   margin: 0 0 25px;
 }
+
+.apex-menu .apex-course-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 14px;
+  color: #f3ede0;
+  font-size: 0.82rem;
+  pointer-events: auto;
+}
+
+.apex-course-picker select {
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 10px;
+  color: #f3ede0;
+  border: 1px solid #796f5f;
+  border-radius: 5px;
+  background: #252727;
+}
 .apex-game .apex-primary {
   display: flex;
   align-items: center;

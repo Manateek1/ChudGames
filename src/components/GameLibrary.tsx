@@ -93,9 +93,6 @@ export const GameLibrary = ({
                 >
                   {game.isAvailable === false ? `${game.title} (Temporarily unavailable)` : `Play ${game.title}`}
                 </button>
-                <span className="self-center text-sm text-sky-100/70">
-                  {game.id === "apex-run" ? "Mountain time attack." : "Third-person battle royale."}
-                </span>
               </div>
             </div>
           </div>

@@ -17,7 +17,9 @@ import { presets } from "./settings";
 import type { ApexSettings } from "./settings";
 import { ApexAudio } from "./audio";
 import { RoadEffects } from "./effects";
-import { trackPoint, TRACK_LENGTH } from "./track";
+import { trackPoint } from "./track";
+import type { ApexTrack } from "./track";
+import { getApexCourse } from "./courses";
 
 export type Phase = "menu" | "countdown" | "race" | "finish";
 export interface Telemetry {
@@ -85,9 +87,9 @@ export class ApexRuntime {
   private ghost: ReturnType<typeof createCar>;
   private effects: RoadEffects;
   private sound = new ApexAudio();
-  private state = createVehicle();
-  private previous = { x: 0, y: 28, z: 0, heading: this.state.heading };
-  private race = createRace();
+  private state: ReturnType<typeof createVehicle>;
+  private previous: { x: number; y: number; z: number; heading: number };
+  private race: ReturnType<typeof createRace>;
   private best: BestRun | null;
   private recording: GhostFrame[] = [];
   private recordTimer = 0;
@@ -96,6 +98,7 @@ export class ApexRuntime {
   private countdown = 3.2;
   private settings: ApexSettings;
   private hooks: Hooks;
+  private readonly track: ApexTrack;
   private mount: HTMLElement;
   private observer: ResizeObserver;
   private raf = 0;
@@ -128,11 +131,16 @@ export class ApexRuntime {
     steer: 0,
     handbrake: false,
   };
-  constructor(mount: HTMLElement, settings: ApexSettings, hooks: Hooks) {
+  constructor(mount: HTMLElement, settings: ApexSettings, hooks: Hooks, track: ApexTrack) {
     this.mount = mount;
     this.settings = settings;
     this.hooks = hooks;
-    this.best = loadBest(hooks.difficulty);
+    this.track = track;
+    this.state = createVehicle(0, track);
+    const { x, y, z, heading } = this.state;
+    this.previous = { x, y, z, heading };
+    this.race = createRace(track.length);
+    this.best = loadBest(hooks.difficulty, track.version);
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       powerPreference: "high-performance",
@@ -140,14 +148,14 @@ export class ApexRuntime {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.2;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.domElement.setAttribute(
       "aria-label",
-      "Solstice Pass racing view",
+      `${getApexCourse(track.id).label} racing view`,
     );
     mount.appendChild(this.renderer.domElement);
     try {
-      this.world = buildWorld(this.scene, settings.quality);
+      this.world = buildWorld(this.scene, settings.quality, track);
       this.car = createCar(settings.paint);
       this.ghost = createCar("#b7dddd", true);
       this.scene.add(this.car.root, this.ghost.root);
@@ -155,11 +163,11 @@ export class ApexRuntime {
       this.effects = new RoadEffects(this.scene);
       this.car.root.position.set(this.state.x, this.state.y, this.state.z);
       this.car.root.rotation.y = this.state.heading;
-      updateSun(this.world.sun, 0, 28, 0);
+      updateSun(this.world.sun, x, y, z);
       this.applySettings(settings);
       this.refreshEnvironment();
-      this.camera.position.set(-7, 31.2, 7);
-      this.smoothTarget.set(0, 28.7, 0);
+      this.camera.position.set(x - 7, y + 3.2, z + 7);
+      this.smoothTarget.set(x, y + 0.7, z);
       this.observer = new ResizeObserver(this.resize);
       this.observer.observe(mount);
       window.addEventListener("keydown", this.keydown);
@@ -287,14 +295,14 @@ export class ApexRuntime {
   }
   start(): void {
     this.sound.start();
-    this.state = createVehicle();
+    this.state = createVehicle(0, this.track);
     this.previous = {
       x: this.state.x,
       y: this.state.y,
       z: this.state.z,
       heading: this.state.heading,
     };
-    this.race = createRace();
+    this.race = createRace(this.track.length);
     this.recording = [
       [0, this.state.x, this.state.y, this.state.z, this.state.heading],
     ];
@@ -314,7 +322,7 @@ export class ApexRuntime {
   }
   resetCar(): void {
     const p = resetRacePosition(this.race);
-    this.state = createVehicle(p);
+    this.state = createVehicle(p, this.track);
     this.previous = {
       x: this.state.x,
       y: this.state.y,
@@ -361,7 +369,7 @@ export class ApexRuntime {
     this.newBest = !this.best || this.race.time < this.best.time;
     if (this.newBest) {
       this.best = { time: this.race.time, frames: this.recording };
-      this.storageFailed = !saveBest(this.hooks.difficulty, this.best);
+      this.storageFailed = !saveBest(this.hooks.difficulty, this.best, this.track.version);
     }
     const score = Math.max(
       100,
@@ -503,7 +511,8 @@ export class ApexRuntime {
       this.cameraTarget.set(p.x + sin * 9, p.y + 0.9, p.z + cos * 9);
       // A rising road cannot swallow the trailing camera when cresting a hill.
       const behind = trackPoint(
-        s.road.progress - Math.max(0, distance) / TRACK_LENGTH,
+        s.road.progress - Math.max(0, distance) / this.track.length,
+        this.track,
       );
       this.cameraPosition.y = Math.max(this.cameraPosition.y, behind.y + 1.1);
     }
@@ -530,7 +539,7 @@ export class ApexRuntime {
       time: this.race.time,
       best: this.best?.time ?? Infinity,
       sector: this.race.checkpoint,
-      progress: Math.max(0, this.race.distance / TRACK_LENGTH),
+      progress: Math.max(0, this.race.distance / this.track.length),
       x: this.state.x,
       z: this.state.z,
       heading: this.state.heading,

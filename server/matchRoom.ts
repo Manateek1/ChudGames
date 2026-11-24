@@ -32,6 +32,23 @@ import { buildBoundsOverlap, getBuildBounds } from '../src/games/fortliteRuntime
 import { calculateDamageWithFalloff } from '../src/games/fortliteRuntime/combat.ts';
 import { generateBotSkillProfile } from '../src/games/fortliteRuntime/bots.ts';
 import { SeededRandom } from '../src/games/fortliteRuntime/math.ts';
+import { getFieldWeaponPoints } from '../src/games/fortliteRuntime/lootDistribution.ts';
+import type { LootPoint } from '../src/games/fortliteRuntime/lootDistribution.ts';
+import { IslandTerrain } from '../src/games/fortliteRuntime/terrain.ts';
+
+const MULTIPLAYER_MAP_SEED = 1337;
+let fieldWeaponPositions: LootPoint[] | undefined;
+
+function getMultiplayerWeaponPoints(): LootPoint[] {
+  if (fieldWeaponPositions) return fieldWeaponPositions;
+  const terrain = new IslandTerrain(new SeededRandom(MULTIPLAYER_MAP_SEED), MAP_RADIUS, 'low');
+  try {
+    fieldWeaponPositions = getFieldWeaponPoints((x, z) => terrain.sampleHeight(x, z) > 0.55);
+    return fieldWeaponPositions;
+  } finally {
+    terrain.dispose();
+  }
+}
 
 export const TICK_RATE_HZ = 20;
 export const TICK_DELTA_SECONDS = 1 / TICK_RATE_HZ;
@@ -407,7 +424,7 @@ export class MatchRoom {
 
     this.broadcast({
       type: 'match_starting',
-      seed: 1337,
+      seed: MULTIPLAYER_MAP_SEED,
       dropStartPositions: dropStarts
     });
   }
@@ -444,6 +461,16 @@ export class MatchRoom {
         kind: 'weapon',
         position: [weapon.x, 0.5, weapon.z],
         itemId: weapon.id
+      });
+    }
+
+    for (const [index, point] of getMultiplayerWeaponPoints().entries()) {
+      const id = `field_weapon_${index}`;
+      this.loot.set(id, {
+        id,
+        kind: 'weapon',
+        position: [point.x, 0.5, point.z],
+        itemId: WEAPON_DEFINITIONS[index % WEAPON_DEFINITIONS.length].id
       });
     }
   }

@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { findOpenLootPoint, getFieldWeaponPoints } from './lootDistribution';
 import type { GraphicsQuality } from '../../types/arcade';
 import { RollingFps, TARGET_FRAME_DELTA_SECONDS } from '../../engine/fps';
 import {
@@ -2430,6 +2432,8 @@ export class FortLiteGame {
   }
 
   private spawnLoot(): void {
+    if (this.networkClient) return;
+    this.spawnStarterLoadout(this.participantSpawns[0]);
     const priorityWeapons = [WEAPON_DEFINITIONS[0], WEAPON_DEFINITIONS[2], WEAPON_DEFINITIONS[1]];
 
     for (let i = 0; i < this.lootSpawnPoints.length; i += 1) {
@@ -2446,29 +2450,26 @@ export class FortLiteGame {
       }
     }
 
-    if (!this.networkClient) {
-      // Give solo players a visible cache at the map crossroads as well as
-      // the landmark drops around the island.
-      const centerWeapons = [
-        { weapon: WEAPON_DEFINITIONS[1], x: -5, z: 0 },
-        { weapon: WEAPON_DEFINITIONS[2], x: 5, z: 0 },
-        { weapon: WEAPON_DEFINITIONS[0], x: 0, z: 7 }
-      ];
-      for (const drop of centerWeapons) {
-        const position = new THREE.Vector3(drop.x, this.sampleBaseTerrainHeight(drop.x, drop.z), drop.z);
-        this.createWeaponPickup(position, drop.weapon, true);
-      }
+    const points = getFieldWeaponPoints(this.isOpenFieldLoot);
+    for (const [index, point] of points.entries()) {
+      this.createWeaponPickup(new THREE.Vector3(point.x, 0, point.z), priorityWeapons[index % priorityWeapons.length], true);
     }
 
-    // Bots already receive their starter loadout in spawnParticipants. Keeping
-    // physical starter kits for every bot creates 150+ extra pickup meshes and
-    // makes every bot scan a much larger loot list on every simulation step.
-    if (this.participantSpawns[0]) {
-      this.spawnStarterLoadout(this.participantSpawns[0], 0);
+    for (const [index, spot] of [[-5, 0], [5, 0], [0, 7]].entries()) {
+      const point = findOpenLootPoint(spot[0], spot[1], this.isOpenFieldLoot, 34);
+      if (point) this.createWeaponPickup(new THREE.Vector3(point.x, 0, point.z), priorityWeapons[index], true);
     }
 
     this.spawnMedkits();
   }
+
+  private isOpenFieldLoot = (x: number, z: number): boolean => {
+    const point = new THREE.Vector3(x, 0, z);
+    return Math.hypot(x, z) < MAP_RADIUS - 5 &&
+      this.isPointClear(point, 1.3) &&
+      this.resourceNodes.every((node) => horizontalDistance(point, node.position) > 2.3) &&
+      this.loot.every((pickup) => horizontalDistance(point, pickup.position) > 3.2);
+  };
 
   private spawnRandomFloorLoot(position: THREE.Vector3, guaranteedSpawn: boolean): void {
     const roll = this.rng.next();
@@ -2539,6 +2540,14 @@ export class FortLiteGame {
     weaponMesh.rotation.y = guaranteed ? -0.34 : 0.24;
     weaponMesh.rotation.z = guaranteed ? 0.08 : -0.1;
     mesh.add(plate, glow, weaponMesh);
+    if (guaranteed) {
+      const beacon = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.16, 2.6, 6, 1, true),
+        new THREE.MeshBasicMaterial({ color: weapon.color, transparent: true, opacity: 0.58, depthWrite: false })
+      );
+      beacon.position.y = 1.60;
+      mesh.add(beacon);
+    }
 
     const pickup: LootPickup = {
       id: id ?? `loot-weapon-${this.loot.length}`,
@@ -6014,6 +6023,24 @@ export class FortLiteGame {
       muzzleFlash.visible = false;
       muzzleFlash.position.set(0.01, 0.03, -bodyLength * 0.5 - barrelLength * 0.92);
       group.add(muzzleFlash);
+    } else {
+      // Each visible floor weapon costs one model draw, even with dozens
+      // of additional pickups placed around the island.
+      const parts = group.children as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>[];
+      const geometries = parts.map((part) => {
+        part.updateMatrix();
+        const geometry = part.geometry.applyMatrix4(part.matrix);
+        const colors = new Float32Array(geometry.attributes.position.count * 3);
+        for (let i = 0; i < colors.length; i += 3) part.material.color.toArray(colors, i);
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        return geometry;
+      });
+      const model = new THREE.Mesh(mergeGeometries(geometries), new THREE.MeshLambertMaterial({ vertexColors: true }));
+      for (const part of parts) {
+        part.geometry.dispose();
+        part.material.dispose();
+      }
+      group.clear().add(model);
     }
 
     return group;
@@ -6252,7 +6279,7 @@ export class FortLiteGame {
         case 'weapon': {
           const weapon = WEAPON_DEFINITIONS.find((candidate) => candidate.id === snapshot.itemId);
           if (weapon) {
-            this.createWeaponPickup(position, weapon, false, snapshot.id);
+            this.createWeaponPickup(position, weapon, snapshot.id.startsWith('field_weapon_'), snapshot.id);
           }
           break;
         }
@@ -6322,8 +6349,7 @@ export class FortLiteGame {
     return result.normalize();
   }
 
-  private spawnStarterLoadout(spawn: THREE.Vector3, index: number): void {
-    const weapon = WEAPON_DEFINITIONS[index % WEAPON_DEFINITIONS.length];
+  private spawnStarterLoadout(spawn: THREE.Vector3): void {
     const towardCenter = WORLD_CENTER.clone().sub(spawn).setY(0);
     if (towardCenter.lengthSq() < 0.01) {
       towardCenter.set(0, 0, -1);
@@ -6332,17 +6358,15 @@ export class FortLiteGame {
     }
 
     const right = new THREE.Vector3(towardCenter.z, 0, -towardCenter.x);
-    this.createWeaponPickup(spawn.clone().addScaledVector(towardCenter, PLAYER_STARTER_LOOT_OFFSET), weapon, true);
-    this.createAmmoPickup(
-      spawn.clone().addScaledVector(right, PLAYER_STARTER_LOOT_OFFSET * 0.78),
-      weapon.ammoType,
-      weapon.ammoType === 'light' ? 26 : 10
-    );
-    this.createMaterialPickup(
-      spawn.clone().addScaledVector(right, -PLAYER_STARTER_LOOT_OFFSET * 0.78),
-      index % 4 === 0 ? 'stone' : 'wood',
-      index % 4 === 0 ? 24 : 30
-    );
+    for (const [index, side] of [0, -1, 1].entries()) {
+      const target = spawn.clone().addScaledVector(towardCenter, PLAYER_STARTER_LOOT_OFFSET)
+        .addScaledVector(right, side * 5.1);
+      const point = findOpenLootPoint(target.x, target.z, this.isOpenFieldLoot, 12);
+      if (point) this.createWeaponPickup(new THREE.Vector3(point.x, 0, point.z), WEAPON_DEFINITIONS[index], true);
+    }
+    const material = spawn.clone().addScaledVector(right, -PLAYER_STARTER_LOOT_OFFSET * 0.78);
+    const point = findOpenLootPoint(material.x, material.z, this.isOpenFieldLoot, 8);
+    if (point) this.createMaterialPickup(new THREE.Vector3(point.x, 0, point.z), 'stone', 24);
   }
 
   private generateParticipantSpawns(count: number, teamSize: number): THREE.Vector3[] {

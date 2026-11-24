@@ -2,18 +2,23 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { Sky } from "three/addons/objects/Sky.js";
 import { seededRandom } from "../../engine/math";
-import { samples, SAMPLE_COUNT, TRACK_LENGTH, trackPoint } from "./track";
+import { SAMPLE_COUNT, trackPoint } from "./track";
+import type { ApexTrack } from "./track";
+import { getApexCourse } from "./courses";
+import { addCourseObstacles, addCoastPalms } from "./courseScenery";
 import { presets } from "./settings";
 import type { Quality } from "./settings";
 
 const sunDirection = new THREE.Vector3(-0.7, 0.2, 0.52).normalize();
-export function makeSky(): THREE.Mesh {
+function makeSky(track: ApexTrack): THREE.Mesh {
   const sky = new Sky();
   sky.scale.setScalar(10000);
   sky.frustumCulled = false;
   const u = sky.material.uniforms;
-  u.sunPosition.value.copy(sunDirection).multiplyScalar(450000);
-  u.turbidity.value = 7;
+  const daylight = sunDirection.clone();
+  if (track.id !== "solstice") daylight.set(-0.58, 0.51, 0.63).normalize();
+  u.sunPosition.value.copy(daylight).multiplyScalar(450000);
+  u.turbidity.value = track.id === "solstice" ? 7 : 3;
   u.rayleigh.value = 2.2;
   u.mieCoefficient.value = 0.006;
   if (u.cloudCoverage) {
@@ -31,7 +36,7 @@ function noise(x: number, z: number) {
     Math.cos(z * 0.042 - x * 0.038) * 0.035
   );
 }
-function nearest(x: number, z: number) {
+function nearest(samples: ApexTrack["samples"], x: number, z: number) {
   let distance = Infinity,
     closestIndex = 0,
     height = 0;
@@ -67,13 +72,24 @@ function nearest(x: number, z: number) {
   }
   return { distance: Math.sqrt(distance), height };
 }
-function terrainHeight(x: number, z: number) {
-  const r = nearest(x, z),
+function terrainHeight(track: ApexTrack, x: number, z: number) {
+  const r = nearest(track.samples, x, z),
     radius = Math.hypot(x - 40, z + 30);
   const mountains =
     Math.max(0, radius - 380) * 0.18 +
     Math.max(0, noise(x, z) + 0.3) * Math.min(180, radius * 0.25);
-  const base = radius < 240 ? 5 + noise(x, z) * 12 : 13 + mountains;
+  let base = radius < 240 ? 5 + noise(x, z) * 12 : 13 + mountains;
+  if (track.id === "whitecap") {
+    const west = 290 * Math.exp(-((x + 270) ** 2 + (z - 325) ** 2) / 92000);
+    const east = 420 * Math.exp(-((x - 520) ** 2 + (z + 190) ** 2) / 156000);
+    const interior = 248 * Math.exp(-((x - 98) ** 2 + (z - 65) ** 2) / 53000);
+    const ridge = Math.max(west, east, interior);
+    base = 105 + ridge + noise(x * 1.5, z * 1.5) * (36 + ridge * 0.29);
+  } else if (track.id === "breakwater") {
+    const shore = -180 + Math.sin(z * 0.012) * 17;
+    const coastalSlope = x - shore;
+    base = Math.min(31, coastalSlope * 0.17) + noise(x, z) * Math.min(36, Math.max(0, coastalSlope * 0.32));
+  }
   const blend = THREE.MathUtils.smoothstep(r.distance, 24, 120);
   // The coarse terrain must remain below the exact road ribbon, including on
   // crests where interpolating the heightfield can otherwise cover the asphalt.
@@ -110,6 +126,7 @@ function asphaltTexture(): THREE.CanvasTexture {
   return texture;
 }
 function ribbon(
+  track: ApexTrack,
   offset: number,
   width: number,
   height: number,
@@ -119,7 +136,7 @@ function ribbon(
     uv: number[] = [],
     indices: number[] = [];
   for (let i = 0; i <= SAMPLE_COUNT; i++) {
-    const p = samples[i];
+    const p = track.samples[i];
     for (const side of [-1, 1]) {
       v.push(
         p.x + p.nx * (offset + (side * width) / 2),
@@ -128,7 +145,7 @@ function ribbon(
       );
       uv.push(
         side < 0 ? 0 : width / 9,
-        ((i / SAMPLE_COUNT) * TRACK_LENGTH) / 9,
+        ((i / SAMPLE_COUNT) * track.length) / 9,
       );
     }
     if (i < SAMPLE_COUNT && (!dashed || i % 9 < 4)) {
@@ -171,13 +188,20 @@ export interface World {
   gates: THREE.Mesh[];
   setQuality: (q: Quality) => void;
 }
-export function buildWorld(scene: THREE.Scene, quality: Quality): World {
-  const random = seededRandom(45817),
-    sky = makeSky();
+export function buildWorld(scene: THREE.Scene, quality: Quality, track: ApexTrack): World {
+  const snow = track.id === "whitecap";
+  const coast = track.id === "breakwater";
+  const hills = track.id === "solstice";
+  const courseName = getApexCourse(track.id).label.toUpperCase();
+  const { samples, length } = track;
+  const pointAt = (progress: number) => trackPoint(progress, track);
+  const groundAt = (x: number, z: number) => terrainHeight(track, x, z);
+  const random = seededRandom(45817);
+  const sky = makeSky(track);
   scene.add(sky);
-  scene.fog = new THREE.FogExp2(0xb7b5a4, 0.00085);
-  scene.add(new THREE.HemisphereLight(0xc4dce8, 0x746447, 1.3));
-  const sun = new THREE.DirectionalLight(0xffcc93, 3.4);
+  scene.fog = new THREE.FogExp2(snow ? 0xbacbd9 : coast ? 0xaccbd8 : 0xb7b5a4, coast ? 0.00067 : 0.00085);
+  scene.add(new THREE.HemisphereLight(0xc4dce8, snow ? 0x849bae : 0x746447, 1.3));
+  const sun = new THREE.DirectionalLight(snow ? 0xe4efff : coast ? 0xffead0 : 0xffcc93, 3.4);
   sun.castShadow = true;
   sun.shadow.normalBias = 0.035;
   sun.shadow.bias = -0.00012;
@@ -195,13 +219,20 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
   terrainGeo.rotateX(-Math.PI / 2);
   const pos = terrainGeo.getAttribute("position"),
     colors = new Float32Array(pos.count * 3),
-    c = new THREE.Color();
+    c = new THREE.Color(),
+    rockTint = new THREE.Color(0x697884);
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i),
       z = pos.getZ(i),
-      y = terrainHeight(x, z);
+      y = groundAt(x, z);
     pos.setY(i, y);
-    c.set(y > 200 ? 0x92918b : y > 90 ? 0x73796a : 0x74764b);
+    if (snow) {
+      c.set(0xd9eaf1).lerp(rockTint, THREE.MathUtils.smoothstep(-0.12, 0.55, noise(x * 1.9, z * 1.9)) * 0.57);
+    } else if (coast) {
+      c.set(y < 13 ? 0xd8bd8d : y < 25 ? 0xa7a36c : 0x778861);
+    } else {
+      c.set(y > 200 ? 0x92918b : y > 90 ? 0x73796a : 0x74764b);
+    }
     c.multiplyScalar(0.83 + (noise(x * 3, z * 3) + 0.8) * 0.18);
     c.toArray(colors, i * 3);
   }
@@ -220,7 +251,7 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
     map: groundDetail,
     bumpMap: groundDetail,
     bumpScale: 0.35,
-    color: 0xc4c7af,
+    color: snow ? 0xebf7ff : coast ? 0xf2e5cb : 0xc4c7af,
     envMapIntensity: 0.28,
   });
   terrainMaterial.onBeforeCompile = (shader) => {
@@ -244,9 +275,9 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
   terrain.receiveShadow = true;
   scene.add(terrain);
   const roadBench = new THREE.Mesh(
-    ribbon(0, 32, -0.24),
+    ribbon(track, 0, 32, -0.24),
     new THREE.MeshStandardMaterial({
-      color: 0x74764b,
+      color: snow ? 0xc6d9e5 : coast ? 0xb9ac86 : 0x74764b,
       roughness: 1,
       map: groundDetail,
       envMapIntensity: 0.28,
@@ -254,26 +285,35 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
   );
   roadBench.receiveShadow = true;
   scene.add(roadBench);
-  const lake = new THREE.Mesh(
-    new THREE.CircleGeometry(238, 96),
-    new THREE.MeshPhysicalMaterial({
-      color: 0x3c7376,
-      metalness: 0.52,
-      roughness: 0.2,
-      clearcoat: 0.8,
-    }),
-  );
-  lake.rotation.x = -Math.PI / 2;
-  lake.position.set(40, 10, -50);
-  scene.add(lake);
+  if (coast) {
+    const water = new THREE.Mesh(
+      new THREE.PlaneGeometry(4300, 4300),
+      new THREE.MeshPhongMaterial({ color: 0x236e85, specular: 0x263e44, shininess: 20 }),
+    );
+    water.rotation.x = -Math.PI / 2;
+    water.position.y = 0.8;
+    scene.add(water);
+  } else if (!snow) {
+    const lake = new THREE.Mesh(
+      new THREE.CircleGeometry(238, 96),
+      new THREE.MeshPhysicalMaterial({
+        color: 0x3c7376,
+        metalness: 0.52,
+        roughness: 0.2,
+        clearcoat: 0.8,
+      }),
+    );
+    lake.rotation.x = -Math.PI / 2;
+    lake.position.set(40, 10, -50);
+    scene.add(lake);
+  }
   const asphalt = asphaltTexture();
   const road = new THREE.Mesh(
-    ribbon(0, 13, 0.035),
+    ribbon(track, 0, 13, 0.035),
     new THREE.MeshStandardMaterial({
       map: asphalt,
-      roughnessMap: asphalt,
-      roughness: 1,
-      color: 0x505458,
+      roughness: 0.94,
+      color: 0x666867,
       metalness: 0,
       envMapIntensity: 0.04,
     }),
@@ -285,10 +325,10 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
     roughness: 0.85,
   });
   for (const side of [-1, 1]) {
-    const edge = new THREE.Mesh(ribbon(side * 6.07, 0.13, 0.052), marking);
+    const edge = new THREE.Mesh(ribbon(track, side * 6.07, 0.13, 0.052), marking);
     scene.add(edge);
     const shoulder = new THREE.Mesh(
-      ribbon(side * 6.95, 0.88, -0.03),
+      ribbon(track, side * 6.95, 0.88, -0.03),
       new THREE.MeshStandardMaterial({ color: 0x9f9581, roughness: 1 }),
     );
     shoulder.receiveShadow = true;
@@ -296,7 +336,7 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
   }
   scene.add(
     new THREE.Mesh(
-      ribbon(0, 0.13, 0.052, true),
+      ribbon(track, 0, 0.13, 0.052, true),
       new THREE.MeshStandardMaterial({ color: 0xe2c88a, roughness: 0.8 }),
     ),
   );
@@ -307,8 +347,8 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
     roughness: 0.4,
   });
   for (const side of [-1, 1]) {
-    const railGeo = ribbon(side * 7.95, 0.14, 0.88);
-    const rail2 = ribbon(side * 7.95, 0.17, 0.69);
+    const railGeo = ribbon(track, side * 7.95, 0.14, 0.88);
+    const rail2 = ribbon(track, side * 7.95, 0.17, 0.69);
     scene.add(new THREE.Mesh(railGeo, steel), new THREE.Mesh(rail2, steel));
   }
   const matrix = new THREE.Object3D(),
@@ -328,7 +368,7 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
     );
   for (let i = 0; i < 350; i++)
     for (let side = 0; side < 2; side++) {
-      const p = trackPoint(i / 350),
+      const p = pointAt(i / 350),
         offset = side === 0 ? -7.95 : 7.95;
       matrix.position.set(p.x + p.nx * offset, p.y + 0.45, p.z + p.nz * offset);
       matrix.rotation.set(0, p.heading, 0);
@@ -382,33 +422,34 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
   }
   const needleTexture = new THREE.CanvasTexture(needles);
   needleTexture.colorSpace = THREE.SRGBColorSpace;
+  const treeLimit = snow ? 460 : coast ? 240 : 1700;
   const trees = new THREE.InstancedMesh(
     pineGeo,
     new THREE.MeshStandardMaterial({
-      color: 0x769278,
+      color: snow ? 0xc9d9de : 0x769278,
       roughness: 1,
       map: needleTexture,
       alphaTest: 0.35,
       side: THREE.DoubleSide,
       envMapIntensity: 0.18,
     }),
-    1700,
+    treeLimit,
   );
   const trunks = new THREE.InstancedMesh(
     new THREE.CylinderGeometry(0.12, 0.2, 3.3, 5),
     new THREE.MeshStandardMaterial({ color: 0x5d5040, roughness: 1 }),
-    1700,
+    treeLimit,
   );
   let placed = 0;
-  while (placed < 1700) {
+  for (let attempt = 0; placed < treeLimit && attempt < treeLimit * 20; attempt += 1) {
     const roadside = placed % 3 !== 0,
-      p = trackPoint(random()),
+      p = pointAt(random()),
       offset = (random() < 0.5 ? 1 : -1) * (15 + random() * 100);
     const x = roadside ? p.x + p.nx * offset : -660 + random() * 1390,
       z = roadside ? p.z + p.nz * offset : -820 + random() * 1420,
-      near = nearest(x, z),
-      y = terrainHeight(x, z);
-    if (near.distance < 13 || y < 13 || y > 190) continue;
+      near = nearest(samples, x, z),
+      y = groundAt(x, z);
+    if (near.distance < 13 || y < 13 || y > (snow ? 275 : 190)) continue;
     const scale = 0.85 + random() * 1.3;
     matrix.position.set(x, y, z);
     matrix.rotation.set(0, random() * 6.28, 0);
@@ -424,6 +465,7 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
       0.17 + random() * 0.16,
       0.2 + random() * 0.1,
     );
+    if (snow) c.lerp(rockTint.set(0xcddce0), 0.74);
     trees.setColorAt(placed, c);
     matrix.position.y += scale * 1.5;
     matrix.updateMatrix();
@@ -445,7 +487,7 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
   const rocks = new THREE.InstancedMesh(
     rockGeometry,
     new THREE.MeshStandardMaterial({
-      color: 0x77796d,
+      color: snow ? 0x8595a1 : coast ? 0xa1977b : 0x77796d,
       roughness: 0.96,
       map: groundDetail,
       envMapIntensity: 0.2,
@@ -453,11 +495,11 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
     220,
   );
   for (let i = 0; i < 220; i++) {
-    const p = trackPoint(random()),
+    const p = pointAt(random()),
       offset = (random() > 0.5 ? 1 : -1) * (13 + random() * 40),
       x = p.x + p.nx * offset,
       z = p.z + p.nz * offset;
-    matrix.position.set(x, terrainHeight(x, z), z);
+    matrix.position.set(x, groundAt(x, z), z);
     matrix.rotation.set(random(), random() * 6, random());
     matrix.scale.set(1 + random() * 4, 1 + random() * 3, 1 + random() * 4);
     matrix.updateMatrix();
@@ -471,7 +513,7 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
     metalness: 0.4,
   });
   for (let i = 0; i < 8; i++) {
-    const p = trackPoint(i / 8),
+    const p = pointAt(i / 8),
       gate = new THREE.Group();
     gate.position.set(p.x, p.y, p.z);
     gate.rotation.y = p.heading;
@@ -489,8 +531,8 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
         map: textTexture(
           i === 0 ? "APEX RUN" : `SECTOR 0${i}`,
           i === 0
-            ? "SOLSTICE PASS  /  START · FINISH"
-            : "SOLSTICE PASS  /  TIME ATTACK",
+            ? `${courseName}  /  START · FINISH`
+            : `${courseName}  /  TIME ATTACK`,
           true,
         ),
         roughness: 0.7,
@@ -527,12 +569,13 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
       roughness: 0.9,
     }),
     bridgeParts: THREE.BufferGeometry[] = [];
-  for (let i = 230; i < 320; i += 5) {
+  const bridgeStart = coast ? 1000 : 230;
+  for (let i = bridgeStart; !snow && i < bridgeStart + 90; i += 5) {
     const p = samples[i],
       g = new THREE.BoxGeometry(
         15.8,
         1.3,
-        (TRACK_LENGTH / SAMPLE_COUNT) * 5 + 0.5,
+        (length / SAMPLE_COUNT) * 5 + 0.5,
       );
     g.rotateY(p.heading);
     g.translate(p.x, p.y - 0.75, p.z);
@@ -548,11 +591,13 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
         bridgeParts.push(support);
       }
   }
-  const bridge = new THREE.Mesh(mergeGeometries(bridgeParts), concrete);
-  bridgeParts.forEach((g) => g.dispose());
-  scene.add(bridge);
+  if (bridgeParts.length) {
+    scene.add(new THREE.Mesh(mergeGeometries(bridgeParts), concrete));
+    bridgeParts.forEach((geometry) => geometry.dispose());
+  }
   const galleryParts: THREE.BufferGeometry[] = [];
-  for (let i = 810; i < 860; i += 3) {
+  const galleryStart = snow ? 205 : 810;
+  for (let i = galleryStart; !coast && i < galleryStart + 50; i += 3) {
     const p = samples[i];
     for (const side of [-1, 1]) {
       const col = new THREE.BoxGeometry(0.6, 7, 0.65);
@@ -567,23 +612,27 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
     const roof = new THREE.BoxGeometry(
       18,
       0.7,
-      (TRACK_LENGTH / SAMPLE_COUNT) * 3 + 0.3,
+      (length / SAMPLE_COUNT) * 3 + 0.3,
     );
     roof.rotateY(p.heading);
     roof.translate(p.x, p.y + 7.1, p.z);
     galleryParts.push(roof);
   }
-  const gallery = new THREE.Mesh(mergeGeometries(galleryParts), concrete);
-  gallery.castShadow = true;
-  gallery.receiveShadow = true;
-  galleryParts.forEach((g) => g.dispose());
-  scene.add(gallery);
+  if (galleryParts.length) {
+    const gallery = new THREE.Mesh(mergeGeometries(galleryParts), concrete);
+    gallery.castShadow = true;
+    gallery.receiveShadow = true;
+    galleryParts.forEach((geometry) => geometry.dispose());
+    scene.add(gallery);
+  }
+  if (!hills) addCourseObstacles(scene, track);
+  if (coast) addCoastPalms(scene, track, groundAt);
   const signMat = new THREE.MeshStandardMaterial({
     map: textTexture("‹  ‹  ‹", "SLOW / CORNER"),
     roughness: 0.8,
   });
   for (const t of [0.17, 0.31, 0.43, 0.62, 0.82, 0.91]) {
-    const p = trackPoint(t),
+    const p = pointAt(t),
       sign = new THREE.Mesh(new THREE.BoxGeometry(3.5, 1.4, 0.12), signMat);
     sign.position.set(p.x + p.nx * 9, p.y + 2.1, p.z + p.nz * 9);
     sign.rotation.y = p.heading + Math.PI;
@@ -595,7 +644,7 @@ export function buildWorld(scene: THREE.Scene, quality: Quality): World {
     vegetation: [trees, trunks],
     gates,
     setQuality(q) {
-      trees.count = trunks.count = presets[q].trees;
+      trees.count = trunks.count = Math.min(placed, presets[q].trees);
       trees.castShadow = q === "high" || q === "ultra";
     },
   };
