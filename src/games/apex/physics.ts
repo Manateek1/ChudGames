@@ -1,6 +1,6 @@
 import { clamp } from "../../engine/math";
-import { locateRoad, trackPoint } from "./track";
-import type { RoadLocation } from "./track";
+import { getApexTrack, locateRoad, trackPoint, TRACK_LENGTH } from "./track";
+import type { ApexTrack, RoadLocation } from "./track";
 
 export interface DriveInput {
   throttle: number;
@@ -9,6 +9,7 @@ export interface DriveInput {
   handbrake: boolean;
 }
 export interface VehicleState {
+  track: ApexTrack;
   x: number;
   y: number;
   z: number;
@@ -27,9 +28,10 @@ export interface VehicleState {
   road: RoadLocation;
 }
 export const FIXED_STEP = 1 / 120;
-export function createVehicle(progress = 0): VehicleState {
-  const p = trackPoint(progress);
+export function createVehicle(progress = 0, track = getApexTrack("solstice")): VehicleState {
+  const p = trackPoint(progress, track);
   return {
+    track,
     x: p.x,
     y: p.y,
     z: p.z,
@@ -45,7 +47,7 @@ export function createVehicle(progress = 0): VehicleState {
     rpm: 950,
     shift: 0,
     impact: 0,
-    road: locateRoad(p.x, p.z),
+    road: locateRoad(p.x, p.z, -1, track),
   };
 }
 const damp = (a: number, b: number, rate: number, dt: number) =>
@@ -76,7 +78,7 @@ export function stepVehicle(
   const grip =
     (offroad ? 7.5 : 29 + abs * abs * 0.0008) *
     (input.handbrake ? 0.47 : 1) *
-    gripScale;
+    gripScale * (s.track.id === "whitecap" ? 0.85 : 1);
   const desiredYaw = (forward / 2.72) * Math.tan(s.steering);
   const limitedYaw = clamp(
     desiredYaw,
@@ -97,7 +99,7 @@ export function stepVehicle(
   if (input.throttle === 0 && input.brake === 0 && abs < 0.12) forward = 0;
   force -=
     Math.sin(
-      Math.atan2(trackPoint(s.road.progress + 0.002).y - s.road.y, 4.5),
+      Math.atan2(trackPoint(s.road.progress + 0.002, s.track).y - s.road.y, 4.5 * s.track.length / TRACK_LENGTH),
     ) * 9.81;
   s.acceleration = damp(s.acceleration, force, 8, dt);
   forward = clamp(forward + force * dt, -9, 86);
@@ -115,11 +117,24 @@ export function stepVehicle(
   // Inertia opposes the rotation of the chassis into a new direction.
   s.vx += (sin - ns) * forward * 0.18;
   s.vz += (cos - nc) * forward * 0.18;
-  s.x += s.vx * dt;
-  s.z += s.vz * dt;
-  s.road = locateRoad(s.x, s.z, s.road.index);
-  s.y = s.road.y;
+  const nextX = s.x + s.vx * dt;
+  const nextZ = s.z + s.vz * dt;
+  const road = locateRoad(nextX, nextZ, s.road.index, s.track);
   s.impact = Math.max(0, s.impact - dt * 2.5);
+  const obstacle = s.track.obstacles.find(({ progress, lateral, width, depth }) =>
+    Math.abs(road.progress - progress) * s.track.length < depth / 2 + 2.15 &&
+    Math.abs(road.lateral - lateral) < width / 2 + 0.95
+  );
+  if (obstacle) {
+    s.impact = Math.max(s.impact, Math.min(1, Math.abs(forward) / 10));
+    s.vx *= -0.22;
+    s.vz *= -0.22;
+  } else {
+    s.x = nextX;
+    s.z = nextZ;
+    s.road = road;
+    s.y = road.y;
+  }
   if (Math.abs(s.road.lateral) > 7.15) {
     const side = Math.sign(s.road.lateral),
       normalSpeed = (s.vx * s.road.nx + s.vz * s.road.nz) * side;

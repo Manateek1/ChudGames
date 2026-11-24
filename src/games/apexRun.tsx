@@ -4,7 +4,9 @@ import type { ApexRuntime, Telemetry } from "./apex/runtime";
 import { formatTime } from "./apex/race";
 import { loadApexSettings, persistSettings } from "./apex/settings";
 import type { ApexSettings, Quality } from "./apex/settings";
-import { mapPoints, TRACK_LENGTH } from "./apex/track";
+import { getApexTrack } from "./apex/track";
+import { apexCourses, getApexCourse } from "./apex/courses";
+import type { ApexCourseId } from "./apex/courses";
 import "./apexRun.css";
 
 const emptyHud: Telemetry = {
@@ -42,6 +44,9 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
     ),
   );
   const settingsRef = useRef(settings);
+  const [courseId, setCourseId] = useState(() => getApexCourse(props.mode).id);
+  const course = getApexCourse(courseId);
+  const track = getApexTrack(courseId);
   const [debug, setDebug] = useState(false);
   const [notice, setNotice] = useState("");
   const [hud, setHud] = useState(emptyHud),
@@ -87,6 +92,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
               onFinish: (result) => callbacks.current.onGameOver(result),
               onError: setError,
             },
+            track,
           );
           runtime.current.setPaused(current.paused);
           setReady(true);
@@ -104,7 +110,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
       runtime.current?.dispose();
       runtime.current = null;
     };
-  }, [props.input, props.difficulty, epoch]);
+  }, [props.input, props.difficulty, epoch, track]);
   useEffect(() => {
     runtime.current?.setPaused(props.paused);
   }, [props.paused]);
@@ -184,7 +190,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
     <div
       className="apex-game"
       ref={viewport}
-      aria-label="Apex Run mountain time attack"
+      aria-label={`Apex Run · ${course.label}`}
     >
       <div ref={mount} className="apex-canvas" />
       <div className="apex-vignette" />
@@ -194,7 +200,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
             APEX<span>RUN</span>
           </span>
           <div className="apex-load-line" />
-          <p>Preparing Solstice Pass</p>
+          <p>Preparing {course.label}</p>
         </div>
       )}
       {ready && (
@@ -204,7 +210,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
               APEX<span>RUN</span>
             </span>
             <span className="apex-location">
-              SOLSTICE PASS <i /> GOLDEN HOUR
+              {course.label.toUpperCase()} <i /> TIME ATTACK
             </span>
             <div className="apex-tools">
               <button
@@ -234,17 +240,20 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
           </div>
           {hud.phase === "menu" && !panel && (
             <div className="apex-menu">
-              <p className="apex-eyebrow">THE MOUNTAIN IS YOURS.</p>
-              <h1>
-                Find your
-                <br />
-                <em>limit.</em>
-              </h1>
-              <p className="apex-menu-description">
-                One car. One perfect lap.
-                <br />
-                Chase the light through Solstice Pass.
-              </p>
+              <h1>{course.label}</h1>
+              <p className="apex-menu-description">{course.description}</p>
+              <label className="apex-course-picker">
+                Course
+                <select value={courseId} onChange={(event) => {
+                  setReady(false);
+                  setError("");
+                  setHud(emptyHud);
+                  setPanel(null);
+                  setCourseId(event.target.value as ApexCourseId);
+                }}>
+                  {apexCourses.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                </select>
+              </label>
               <button className="apex-primary" onClick={start}>
                 DRIVE NOW <span aria-hidden="true">↗</span>
               </button>
@@ -257,13 +266,10 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
               </nav>
               <div className="apex-route-info">
                 <span>
-                  <strong>{(TRACK_LENGTH / 1000).toFixed(2)}</strong> KM CIRCUIT
+                  <strong>{(track.length / 1000).toFixed(2)}</strong> KM CIRCUIT
                 </span>
                 <span>
                   <strong>08</strong> SECTORS
-                </span>
-                <span>
-                  <strong>01</strong> PERFECT LAP
                 </span>
               </div>
             </div>
@@ -297,20 +303,20 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
               <div className="apex-minimap">
                 <svg viewBox="0 0 150 180" aria-label="Circuit map">
                   <polyline
-                    points={mapPoints}
+                    points={track.mapPoints}
                     fill="none"
                     stroke="rgba(0,0,0,.4)"
                     strokeWidth="6"
                   />
                   <polyline
-                    points={mapPoints}
+                    points={track.mapPoints}
                     fill="none"
                     stroke="#dfdfce"
                     strokeWidth="2"
                   />
-                  <circle cx={280 / 4.5} cy={420 / 4.5} r="3" fill="#eab26f" />
+                  <circle cx={track.mapX(track.samples[0].x)} cy={track.mapY(track.samples[0].z)} r="3" fill="#eab26f" />
                   <g
-                    transform={`translate(${(hud.x + 280) / 4.5} ${(hud.z + 420) / 4.5}) rotate(${(-hud.heading * 180) / Math.PI})`}
+                    transform={`translate(${track.mapX(hud.x)} ${track.mapY(hud.z)}) rotate(${(-hud.heading * 180) / Math.PI})`}
                   >
                     <path
                       d="M 0 5 L -3.5 -4 L 0 -2 L 3.5 -4 Z"
@@ -320,7 +326,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
                     />
                   </g>
                 </svg>
-                <span>SOLSTICE PASS</span>
+                <span>{course.label.toUpperCase()}</span>
               </div>
               <div className="apex-speedometer">
                 <div className="apex-rpm">

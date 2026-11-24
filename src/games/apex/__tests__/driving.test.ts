@@ -9,7 +9,7 @@ import {
   resetRacePosition,
   saveBest,
 } from "../race";
-import { TRACK_LENGTH, trackPoint, locateRoad, TRACK_VERSION } from "../track";
+import { getApexTrack, TRACK_LENGTH, trackPoint, locateRoad, TRACK_VERSION } from "../track";
 
 describe("Solstice Pass racing", () => {
   it("maps A / left input to left steering and D / right input to right steering", () => {
@@ -142,5 +142,48 @@ describe("Solstice Pass racing", () => {
   it("formats race time across minute boundaries", () => {
     expect(formatTime(61.234)).toBe("1:01.234");
     expect(formatTime(Infinity)).toBe("—:——.———");
+  });
+});
+
+describe("Whitecap Summit and Breakwater Coast", () => {
+  it.each(["whitecap", "breakwater"] as const)("uses the %s route for laps, recovery and driveable obstacles", (id) => {
+    const track = getApexTrack(id);
+    const r = createRace(track.length);
+    for (let i = 1; i <= 1401; i += 1) advanceRace(r, (i / 1400) % 1, 0, FIXED_STEP, 30);
+    expect(r.splits).toHaveLength(8);
+    expect(r.distance).toBeCloseTo(track.length, 3);
+    expect(track.mapPoints).not.toBe(getApexTrack("solstice").mapPoints);
+    expect(createVehicle(0, track).y).not.toBe(createVehicle().y);
+
+    const obstacle = track.obstacles[0];
+    const approach = obstacle.progress - 5 / track.length;
+    const drive = (lateral: number) => {
+      const vehicle = createVehicle(approach, track);
+      const p = vehicle.road;
+      vehicle.x += p.nx * lateral;
+      vehicle.z += p.nz * lateral;
+      vehicle.road = locateRoad(vehicle.x, vehicle.z, p.index, track);
+      vehicle.vx = Math.sin(p.heading) * 15;
+      vehicle.vz = Math.cos(p.heading) * 15;
+      let impact = 0;
+      for (let i = 0; i < 70; i += 1) {
+        stepVehicle(vehicle, { throttle: 0.45, brake: 0, steer: 0, handbrake: false }, FIXED_STEP);
+        impact = Math.max(impact, vehicle.impact);
+      }
+      return { vehicle, impact };
+    };
+    expect(drive(obstacle.lateral).impact).toBeGreaterThan(0.4);
+    const clearPath = drive(-Math.sign(obstacle.lateral) * 3.5);
+    expect(clearPath.impact).toBe(0);
+    expect(clearPath.vehicle.road.progress).toBeGreaterThan(obstacle.progress);
+  });
+
+  it("keeps the original best and two new ghosts in separate storage", () => {
+    localStorage.clear();
+    saveBest("normal", { time: 132, frames: [] });
+    saveBest("normal", { time: 122, frames: [] }, getApexTrack("whitecap").version);
+    expect(loadBest("normal")?.time).toBe(132);
+    expect(loadBest("normal", getApexTrack("whitecap").version)?.time).toBe(122);
+    expect(loadBest("normal", getApexTrack("breakwater").version)).toBeNull();
   });
 });

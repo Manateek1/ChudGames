@@ -205,6 +205,12 @@ describe('FortLite Multiplayer Server Suite', () => {
       room.dispose();
     });
 
+    it('seeds dozens of authoritative field weapons with all three weapon classes', () => {
+      const weapons = room.getLoot().filter((pickup) => pickup.id.startsWith('field_weapon_'));
+      expect(weapons.length).toBeGreaterThanOrEqual(45);
+      expect(new Set(weapons.map((pickup) => pickup.itemId))).toEqual(new Set(['ranger-rifle', 'auto-shotgun', 'tactical-smg']));
+    });
+
     it('enforces weapon magazine deduction and rate of fire interval', () => {
       const shooter = room.getActor(hostId)!;
       const initialMag = shooter.inventory.weapons[0].magAmmo;

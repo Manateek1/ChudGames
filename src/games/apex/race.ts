@@ -5,6 +5,7 @@ export interface BestRun {
   frames: GhostFrame[];
 }
 export interface RaceState {
+  length: number;
   time: number;
   distance: number;
   lastProgress: number;
@@ -14,7 +15,8 @@ export interface RaceState {
   topSpeed: number;
   resets: number;
 }
-export const createRace = (): RaceState => ({
+export const createRace = (length = TRACK_LENGTH): RaceState => ({
+  length,
   time: 0,
   distance: 0,
   lastProgress: 0,
@@ -39,9 +41,9 @@ export function advanceRace(
   if (delta > 0.5) delta--;
   r.lastProgress = progress;
   // Reject teleports and require all eight sectors in order, including start/finish.
-  if (Math.abs(delta) < 0.025) r.distance += delta * TRACK_LENGTH;
+  if (Math.abs(delta) < 0.025) r.distance += delta * r.length;
   if (
-    r.distance >= ((r.checkpoint + 1) * TRACK_LENGTH) / 8 &&
+    r.distance >= ((r.checkpoint + 1) * r.length) / 8 &&
     Math.abs(lateral) < 6.8
   ) {
     r.splits.push(r.time);
@@ -55,7 +57,7 @@ export function resetRacePosition(r: RaceState): number {
   const progress = r.checkpoint / 8;
   r.time += 3;
   r.resets++;
-  r.distance = progress * TRACK_LENGTH;
+  r.distance = progress * r.length;
   r.lastProgress = progress;
   return progress;
 }
@@ -64,10 +66,10 @@ export function formatTime(seconds: number): string {
   const ms = Math.floor(Math.max(0, seconds) * 1000);
   return `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}.${String(ms % 1000).padStart(3, "0")}`;
 }
-export function loadBest(difficulty: string): BestRun | null {
+export function loadBest(difficulty: string, version: string = TRACK_VERSION): BestRun | null {
   try {
     const value = JSON.parse(
-      localStorage.getItem(`apex:${TRACK_VERSION}:${difficulty}`) ?? "null",
+      localStorage.getItem(`apex:${version}:${difficulty}`) ?? "null",
     ) as BestRun | null;
     if (
       !value ||
@@ -92,10 +94,10 @@ export function loadBest(difficulty: string): BestRun | null {
     return null;
   }
 }
-export function saveBest(difficulty: string, run: BestRun): boolean {
+export function saveBest(difficulty: string, run: BestRun, version: string = TRACK_VERSION): boolean {
   try {
     localStorage.setItem(
-      `apex:${TRACK_VERSION}:${difficulty}`,
+      `apex:${version}:${difficulty}`,
       JSON.stringify(run),
     );
     return true;

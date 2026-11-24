@@ -66,7 +66,7 @@ export interface GameDefinition {
   isAvailable?: boolean;
   isNew?: boolean;
   usesCanvas: boolean;
-  thumbnail: ThumbnailRenderer;
+  thumbnail: ThumbnailRenderer | string;
   component: ComponentType<GameComponentProps>;
 }
 
