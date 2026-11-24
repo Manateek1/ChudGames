@@ -26,7 +26,8 @@ const apexControls = [
   ["Space", "Handbrake"],
   ["C", "Change camera"],
   ["R", "Recover (+3 sec) · Double-tap to restart"],
-  ["Esc / P", "Pause or resume"],
+  ["Esc", "Return to course menu"],
+  ["P", "Pause or resume"],
   ["Gamepad", "Left stick · RT / LT · A handbrake"],
 ];
 

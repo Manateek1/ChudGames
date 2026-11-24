@@ -22,8 +22,19 @@ describe("Apex garage", () => {
     const settings = loadApexSettings("medium", false);
     expect(settings.carId).toBe(DEFAULT_CAR_ID);
     expect(settings.quality).toBe("high");
+    expect(settings.volume).toBe(100);
     persistSettings({ ...settings, carId: "ridge-rs" });
     expect(loadApexSettings("low", false).carId).toBe("ridge-rs");
+  });
+
+  it("persists volume, including mute, and clamps out-of-range saved values", () => {
+    const settings = loadApexSettings("low", false);
+    persistSettings({ ...settings, volume: 35 });
+    expect(loadApexSettings("low", false).volume).toBe(35);
+    persistSettings({ ...settings, volume: 0 });
+    expect(loadApexSettings("low", false).volume).toBe(0);
+    persistSettings({ ...settings, volume: 150 });
+    expect(loadApexSettings("low", false).volume).toBe(100);
   });
 
   it("gives the V10 the quickest launch and top speed, and the flat-six the best braking and turn-in", () => {

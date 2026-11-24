@@ -168,7 +168,7 @@ export const gameRegistry: GameDefinition[] = [
     id: "apex-run", title: "Apex Run", genre: "action",
     shortDescription: "Three circuits. One car. Chase your best lap.",
     description: "Choose a track car and race through alpine hills, snowy switchbacks, and oceanfront bends. Chase your best lap and race your saved ghost.",
-    controls: ["Accelerate: W / Up", "Brake / Reverse: S / Down", "Steer: A / D or Left / Right", "Handbrake: Space", "Camera: C · Recover: R (+3 sec) · Restart: Tap R twice", "Pause / Resume: Esc / P", "Gamepad: left stick, RT / LT, A handbrake"],
+    controls: ["Accelerate: W / Up", "Brake / Reverse: S / Down", "Steer: A / D or Left / Right", "Handbrake: Space", "Camera: C · Recover: R (+3 sec) · Restart: Tap R twice", "Course menu: Esc · Pause / Resume: P", "Gamepad: left stick, RT / LT, A handbrake"],
     tutorial: ["Brake before corners, steer toward the apex, then ease onto the throttle.", "Pass eight sectors in order to set a lap. Your best run becomes a ghost.", "Press R to recover to the last sector with a three-second penalty. Tap R twice quickly to restart the lap."],
     tags: ["time-attack", "racing", "cars", "3d", "ghost"], difficulties: ["normal"], usesCanvas: true, isNew: true, thumbnail: apexCourses[0].image, modes: [...apexCourses], defaultMode: apexCourses[0].id, component: ApexRun,
   },

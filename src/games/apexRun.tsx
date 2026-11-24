@@ -91,6 +91,10 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
               onScore: (score) => callbacks.current.onScore(score),
               onFps: (fps) => callbacks.current.onFps(fps),
               onPause: () => callbacks.current.onPauseToggle(),
+              onMenu: () => {
+                setPanel(null);
+                if (callbacks.current.paused) callbacks.current.onPauseToggle();
+              },
               onFinish: (result) => callbacks.current.onGameOver(result),
               onError: setError,
             },
@@ -157,10 +161,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
     runtime.current?.start();
   };
   const openGarage = () => {
-    if (hud.phase !== "menu") {
-      runtime.current?.openGarage();
-      if (props.paused) props.onPauseToggle();
-    }
+    if (hud.phase !== "menu") runtime.current?.returnToMenu();
     setPanel("car");
   };
   const controls = (
@@ -190,7 +191,11 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
         <dd>Recover (+3 sec) · Double-tap to restart</dd>
       </div>
       <div>
-        <dt>ESC / P</dt>
+        <dt>ESC</dt>
+        <dd>Return to course menu</dd>
+      </div>
+      <div>
+        <dt>P</dt>
         <dd>Pause / resume</dd>
       </div>
     </dl>
@@ -417,7 +422,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
               <button className="apex-text-button" onClick={openGarage}>Garage</button>
             </div>
           )}
-          {props.paused && hud.phase !== "finish" && !panel && (
+          {props.paused && (hud.phase === "race" || hud.phase === "countdown") && !panel && (
             <div className="apex-overlay">
               <div className="apex-panel">
                 <p className="apex-eyebrow">TAKE A BREATH</p>
@@ -425,8 +430,8 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
                 <button className="apex-primary" onClick={props.onPauseToggle}>
                   RESUME DRIVE
                 </button>
-                <button onClick={start}>Restart time attack</button>
-                {hud.phase !== "menu" && <button onClick={openGarage}>Return to garage</button>}
+                <button onClick={() => runtime.current?.returnToMenu()}>Course menu</button>
+                <button onClick={openGarage}>Return to garage</button>
                 <button onClick={() => setPanel("settings")}>Settings</button>
                 <button onClick={() => setPanel("controls")}>
                   How to play
@@ -473,6 +478,20 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
                     <p className="apex-setting-note">
                       Resolution adapts to keep driving responsive.
                     </p>
+                    <label className="apex-setting">
+                      Volume
+                      <span className="apex-volume">
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={settings.volume}
+                          aria-valuetext={`${settings.volume}%`}
+                          onChange={(e) => changeSetting("volume", e.currentTarget.valueAsNumber)}
+                        />
+                        <span aria-hidden="true">{settings.volume}%</span>
+                      </span>
+                    </label>
                     {(
                       [
                         ["assists", "Stability assist"],
