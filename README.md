@@ -1,10 +1,11 @@
 # ChudGames
 
-ChudGames is a React + Vite + TypeScript game launcher with a neon UI, shared game engine utilities, and 11 playable games including FortLite and Apex Run.
+ChudGames is a React + Vite + TypeScript game launcher with 12 playable games including BuildBlox, FortLite, and Apex Run.
 
 ## Included Games
 
 - Apex Run
+- BuildBlox
 - Neon Dodger
 - Asteroids Pulse
 - Brick Breaker Blitz
@@ -28,6 +29,8 @@ ChudGames is a React + Vite + TypeScript game launcher with a neon UI, shared ga
   - `storage.ts`: localStorage settings, high scores, progress.
   - `achievements.ts`: local achievement unlock rules.
 - `src/components/GamePlayer.tsx`: shared in-game shell (tutorial, pause, restart, quit, FPS, mobile controls).
+
+BuildBlox uses a local 20-tick worker for world simulation and a separate worker for voxel meshes. The seed and mode identify a local save. Player state and binary region edits live in IndexedDB. Reenter the same seed and mode on the same browser to resume. The graphics setting controls chunk distance and pixel density.
 
 ## How to Add a New Game
 

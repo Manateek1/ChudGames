@@ -3,6 +3,7 @@ import type { GameDefinition, ThumbnailRenderer } from "../types/arcade";
 import { AsteroidsPulse } from "./asteroidsPulse";
 import { ApexRun } from "./apexRun";
 import { BrickBreakerBlitz } from "./brickBreakerBlitz";
+import { BuildBlox } from "./buildBlox";
 import { FortLite } from "./fortlite";
 import { Game2048 } from "./game2048";
 import { MemoryMatch } from "./memoryMatch";
@@ -164,6 +165,37 @@ const pongThumb = createThumbnail((ctx, elapsed, width, height) => {
 });
 
 export const gameRegistry: GameDefinition[] = [
+  {
+    id: "buildblox",
+    title: "BuildBlox",
+    genre: "action",
+    shortDescription: "Build, craft, and explore a voxel world of your own.",
+    description: "Explore Juniper Vale, mine for copper, build a workshop, and power a gate to Underdeep or Skyreach. Play for survival or fly and build freely in Creative.",
+    controls: [
+      "Move with WASD, jump with Space, and sprint with Shift",
+      "Mouse to look, left click to mine, right click to place",
+      "E opens the backpack, F uses a block, and Q eats",
+      "Select a slot with 1–9 or scroll. G enables Creative flight",
+    ],
+    tutorial: [
+      "Reuse the same world seed and mode to resume a save on this device.",
+      "Gather timber and craft a pick in your backpack. Put down a workbench to unlock more recipes.",
+      "Use gates to reach the other realms. Touch controls appear on touch-screen devices.",
+    ],
+    tags: ["sandbox", "building", "survival", "voxel"],
+    difficulties: ["normal"],
+    modes: [
+      { id: "survival", label: "Survival", description: "Gather, craft, and stay alive." },
+      { id: "creative", label: "Creative", description: "Fly and build with an unlimited materials catalog." },
+      { id: "adventure", label: "Adventure", description: "Explore with gathering and building restricted." },
+      { id: "hardcore", label: "Hardcore", description: "Survive with one life." },
+    ],
+    defaultMode: "survival",
+    usesCanvas: false,
+    isNew: true,
+    thumbnail: "/game-captures/buildblox.webp",
+    component: BuildBlox,
+  },
   {
     id: "apex-run", title: "Apex Run", genre: "action",
     shortDescription: "Three circuits. One car. Chase your best lap.",

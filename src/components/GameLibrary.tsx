@@ -17,6 +17,7 @@ const filters: Array<{ value: GameGenre | "all"; label: string }> = [
   { value: "reflex", label: "Reflex" },
   { value: "puzzle", label: "Puzzle" },
 ];
+const featuredIds = new Set(["apex-run", "fortlite", "buildblox"]);
 
 export const GameLibrary = ({
   games,
@@ -27,8 +28,8 @@ export const GameLibrary = ({
   onOpen,
   reducedMotion,
 }: GameLibraryProps): React.JSX.Element => {
-  const featuredGames = games.filter((game) => game.id === "apex-run" || game.id === "fortlite");
-  const miniGames = games.filter((game) => game.id !== "apex-run" && game.id !== "fortlite");
+  const featuredGames = games.filter((game) => featuredIds.has(game.id));
+  const miniGames = games.filter((game) => !featuredIds.has(game.id));
 
   return (
     <section className="library-page space-y-6">

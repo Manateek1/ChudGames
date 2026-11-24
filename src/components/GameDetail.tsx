@@ -46,6 +46,7 @@ export function GameDetail({
   onDifficultyChange, onModeChange, onStart, onBack,
 }: GameDetailProps): React.JSX.Element {
   const fortLite = game.id === "fortlite";
+  const sandbox = game.id === "buildblox";
   const course = game.id === "apex-run" ? getApexCourse(mode) : null;
   const car = course ? getApexCar(loadApexSettings("low", false).carId) : null;
   const best = course && loadBest(difficulty, course.version, car?.id);
@@ -74,7 +75,7 @@ export function GameDetail({
 
       <div className="game-launch-panels">
         <section className="game-launch-panel" aria-labelledby="game-launch-options">
-          <h2 id="game-launch-options">{course ? "Choose a course" : game.modes?.length ? "Match mode" : "Game setup"}</h2>
+          <h2 id="game-launch-options">{course ? "Choose a course" : sandbox ? "World mode" : game.modes?.length ? "Match mode" : "Game setup"}</h2>
           {course ? (
             <div className="game-launch-courses" role="group" aria-label="Course">
               {apexCourses.map((option) => (
@@ -88,7 +89,7 @@ export function GameDetail({
           ) : (
             <>
               {game.modes && (
-                <div className="game-launch-modes" role="group" aria-label="Match mode">
+                <div className="game-launch-modes" role="group" aria-label={sandbox ? "World mode" : "Match mode"}>
                   {game.modes.map((option) => (
                     <button type="button" key={option.id} aria-pressed={option.id === mode} className="game-launch-option"
                       onClick={() => onModeChange(option.id)}>
@@ -105,10 +106,10 @@ export function GameDetail({
                   ))}
                 </div>
               )}
-              <dl className="game-launch-stats">
+              {!sandbox && <dl className="game-launch-stats">
                 <div><dt>{fortLite ? "Wins" : "Personal best"}</dt><dd>{bestScore.toLocaleString()}</dd></div>
                 <div><dt>EBT Bucks</dt><dd>{ebtBucks.toLocaleString()}</dd></div>
-              </dl>
+              </dl>}
             </>
           )}
         </section>
