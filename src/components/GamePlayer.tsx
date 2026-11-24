@@ -167,6 +167,7 @@ export const GamePlayer = ({
   const componentKey = `${game.id}-${difficulty}-${mode}-${seed}-${runId}`;
   const GameComponent = game.component;
   const isFortLite = game.id === "fortlite";
+  const isBuildBlox = game.id === "buildblox";
   const placementText = score > 0 ? `#${score}` : "--";
   const finalPlacement = finalResult?.stats?.placement ?? 0;
 
@@ -188,9 +189,9 @@ export const GamePlayer = ({
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] border border-sky-200/24 bg-[rgba(7,18,34,0.82)] px-4 py-3 text-slate-50 shadow-[0_24px_54px_-32px_rgba(7,18,34,0.96)]">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="font-display text-2xl text-white">{game.title}</h2>
-          <span className="rounded-full border border-sky-100/16 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-50/78">
+          {!isBuildBlox && <span className="rounded-full border border-sky-100/16 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-50/78">
             {difficulty}
-          </span>
+          </span>}
           {game.modes && (
             <span className="rounded-full border border-amber-200/18 bg-amber-300/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-amber-50">
               {mode}
@@ -204,7 +205,7 @@ export const GamePlayer = ({
               <span>Placement: <strong className="text-white">{placementText}</strong></span>
               <span>Wins: <strong className="text-white">{bestScore}</strong></span>
             </>
-          ) : (
+          ) : !isBuildBlox && (
             <>
               <span>Score: <strong className="text-white">{score}</strong></span>
               <span>Best: <strong className="text-white">{bestScore}</strong></span>
@@ -217,9 +218,9 @@ export const GamePlayer = ({
           <button type="button" className="arcade-btn-secondary px-4 py-2" onClick={handlePauseToggle}>
             {paused ? "Resume" : "Pause"}
           </button>
-          <button type="button" className="arcade-btn-secondary px-4 py-2" onClick={restart}>
+          {!isBuildBlox && <button type="button" className="arcade-btn-secondary px-4 py-2" onClick={restart}>
             Restart
-          </button>
+          </button>}
           <button type="button" className="arcade-btn-secondary px-4 py-2" onClick={onQuit}>
             Quit
           </button>
