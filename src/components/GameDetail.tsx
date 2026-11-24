@@ -24,7 +24,8 @@ const apexControls = [
   ["S / ↓", "Brake or reverse"],
   ["A D / ← →", "Steer"],
   ["Space", "Handbrake"],
-  ["C / R", "Camera / Recover (+3 sec)"],
+  ["C", "Change camera"],
+  ["R", "Recover (+3 sec) · Double-tap to restart"],
   ["Esc / P", "Pause or resume"],
   ["Gamepad", "Left stick · RT / LT · A handbrake"],
 ];

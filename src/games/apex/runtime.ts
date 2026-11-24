@@ -70,6 +70,10 @@ export const initialTelemetry: Telemetry = {
 };
 export const keyboardSteer = (left: boolean, right: boolean): number =>
   Number(left) - Number(right);
+
+export function isRestartTap(previous: number | null, current: number): boolean {
+  return previous !== null && current >= previous && current - previous <= 450;
+}
 interface Hooks {
   input: InputManager;
   difficulty: Difficulty;
@@ -138,6 +142,7 @@ export class ApexRuntime {
   private adaptiveScale = 1;
   private performanceTime = 0;
   private paused = false;
+  private lastRecoveryPress: number | null = null;
   private hidden = false;
   private cameraMode = 0;
   private cameraPosition = new THREE.Vector3();
@@ -259,7 +264,12 @@ export class ApexRuntime {
     }
     if (event.code === "KeyR" && this.phase === "race" && !this.paused) {
       event.preventDefault();
-      this.resetCar();
+      if (isRestartTap(this.lastRecoveryPress, event.timeStamp)) {
+        this.start();
+      } else {
+        this.lastRecoveryPress = event.timeStamp;
+        this.resetCar();
+      }
     }
     if (event.code === "Enter" && this.phase === "menu" && !this.paused) {
       event.preventDefault();
@@ -316,6 +326,7 @@ export class ApexRuntime {
       this.refreshEnvironment();
   }
   setPaused(paused: boolean): void {
+    this.lastRecoveryPress = null;
     this.paused = paused;
     this.accumulator = 0;
     this.publish();
@@ -359,6 +370,7 @@ export class ApexRuntime {
   }
 
   start(): void {
+    this.lastRecoveryPress = null;
     this.sound.start();
     this.placeCar(0);
     this.race = createRace(this.track.length);

@@ -72,7 +72,7 @@ No server runtime is required.
 
 A 2.64 km mountain time attack in an original procedural Solstice GT. Complete eight sectors in order, then chase a locally saved personal-best ghost. The race has its own menu, paint selector, settings, pause and results presentation within the shared launcher. No account or asset download is required.
 
-- **Drive:** WASD / arrows, Space handbrake, C camera, R recovery (+3 seconds), Escape / P pause or resume. Standard gamepads use left stick, RT / LT, A handbrake, Y camera, X recovery and Menu pause. Touch controls appear on small screens.
+- **Drive:** WASD / arrows, Space handbrake, C camera, R recovery (+3 seconds), double-tap R to restart the lap, and Escape / P to pause or resume. Standard gamepads use left stick, RT / LT, A handbrake, Y camera, X recovery and Menu pause. Touch controls appear on small screens.
 - **Graphics:** Low, Medium, High and Ultra scale pixel density, shadows, vegetation and particles. Rendering is capped at 60 FPS and adapts resolution when sustained frame rate drops. F8 toggles render statistics; they are hidden by default. Fullscreen is available when the browser permits it.
 - **Handling:** automatic six-speed drivetrain, gradual steering, friction-limited lateral forces, drag, road gradient, barrier impulses and a stability assist. Hard difficulty disables stability assist. This is an accessible simcade approximation, not a mechanical tire/suspension simulator.
 - **Audio:** persistent Web Audio combustion harmonics, intake filter, gear cuts, tire slip, wind, road noise and impact layers. Audio begins after interaction and respects both game and launcher mute settings.

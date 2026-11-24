@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { keyboardSteer } from "../runtime";
+import { isRestartTap, keyboardSteer } from "../runtime";
 import { createVehicle, stepVehicle, FIXED_STEP } from "../physics";
 import {
   advanceRace,
@@ -16,6 +16,14 @@ describe("Solstice Pass racing", () => {
     expect(keyboardSteer(true, false)).toBe(1);
     expect(keyboardSteer(false, true)).toBe(-1);
     expect(keyboardSteer(false, false)).toBe(0);
+  });
+
+  it("restarts only on a second R tap within 450 milliseconds", () => {
+    expect(isRestartTap(null, 100)).toBe(false);
+    expect(isRestartTap(100, 200)).toBe(true);
+    expect(isRestartTap(100, 550)).toBe(true);
+    expect(isRestartTap(100, 551)).toBe(false);
+    expect(isRestartTap(100, 99)).toBe(false);
   });
 
   it("projects road elevation and lateral offsets consistently", () => {

@@ -187,7 +187,7 @@ export const ApexRun = (props: GameComponentProps): React.JSX.Element => {
       </div>
       <div>
         <dt>R</dt>
-        <dd>Recover to sector · +3 sec</dd>
+        <dd>Recover (+3 sec) · Double-tap to restart</dd>
       </div>
       <div>
         <dt>ESC / P</dt>
