@@ -1,4 +1,6 @@
 import { TRACK_LENGTH, TRACK_VERSION } from "./track";
+import { DEFAULT_CAR_ID } from "./vehicles";
+import type { ApexCarId } from "./vehicles";
 export type GhostFrame = [number, number, number, number, number];
 export interface BestRun {
   time: number;
@@ -66,10 +68,15 @@ export function formatTime(seconds: number): string {
   const ms = Math.floor(Math.max(0, seconds) * 1000);
   return `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}.${String(ms % 1000).padStart(3, "0")}`;
 }
-export function loadBest(difficulty: string, version: string = TRACK_VERSION): BestRun | null {
+function recordKey(difficulty: string, version: string, carId: ApexCarId): string {
+  const course = `apex:${version}:${difficulty}`;
+  return carId === DEFAULT_CAR_ID ? course : `${course}:${carId}`;
+}
+
+export function loadBest(difficulty: string, version: string = TRACK_VERSION, carId: ApexCarId = DEFAULT_CAR_ID): BestRun | null {
   try {
     const value = JSON.parse(
-      localStorage.getItem(`apex:${version}:${difficulty}`) ?? "null",
+      localStorage.getItem(recordKey(difficulty, version, carId)) ?? "null",
     ) as BestRun | null;
     if (
       !value ||
@@ -94,10 +101,10 @@ export function loadBest(difficulty: string, version: string = TRACK_VERSION): B
     return null;
   }
 }
-export function saveBest(difficulty: string, run: BestRun, version: string = TRACK_VERSION): boolean {
+export function saveBest(difficulty: string, run: BestRun, version: string = TRACK_VERSION, carId: ApexCarId = DEFAULT_CAR_ID): boolean {
   try {
     localStorage.setItem(
-      `apex:${version}:${difficulty}`,
+      recordKey(difficulty, version, carId),
       JSON.stringify(run),
     );
     return true;

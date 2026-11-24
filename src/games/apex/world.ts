@@ -6,6 +6,7 @@ import { SAMPLE_COUNT, trackPoint } from "./track";
 import type { ApexTrack } from "./track";
 import { getApexCourse } from "./courses";
 import { addCourseObstacles, addCoastPalms } from "./courseScenery";
+import { createViaductDeck } from "./trackStructures";
 import { presets } from "./settings";
 import type { Quality } from "./settings";
 
@@ -563,37 +564,34 @@ export function buildWorld(scene: THREE.Scene, quality: Quality, track: ApexTrac
       gate.add(line);
     }
   }
-  // An elevated viaduct and a stone gallery give the circuit distinct landmarks.
+  // Keep the graded deck under the asphalt over the entire viaduct.
   const concrete = new THREE.MeshStandardMaterial({
-      color: 0x9f9b8c,
-      roughness: 0.9,
-    }),
-    bridgeParts: THREE.BufferGeometry[] = [];
-  const bridgeStart = coast ? 1000 : 230;
-  for (let i = bridgeStart; !snow && i < bridgeStart + 90; i += 5) {
-    const p = samples[i],
-      g = new THREE.BoxGeometry(
-        15.8,
-        1.3,
-        (length / SAMPLE_COUNT) * 5 + 0.5,
-      );
-    g.rotateY(p.heading);
-    g.translate(p.x, p.y - 0.75, p.z);
-    bridgeParts.push(g);
-    if (i % 15 === 5)
+    color: 0x9f9b8c,
+    roughness: 0.9,
+  });
+  if (!snow) {
+    const bridgeStart = coast ? 1000 : 230;
+    const bridgeEnd = bridgeStart + 90;
+    const deck = new THREE.Mesh(createViaductDeck(track, bridgeStart, bridgeEnd), concrete);
+    deck.name = "Viaduct deck";
+    deck.receiveShadow = true;
+    scene.add(deck);
+    const supports: THREE.BufferGeometry[] = [];
+    for (let i = bridgeStart + 10; i < bridgeEnd; i += 15) {
+      const p = samples[i];
       for (const side of [-1, 1]) {
         const support = new THREE.BoxGeometry(1.5, 24, 2);
+        support.rotateY(p.heading);
         support.translate(
           p.x + p.nx * side * 5,
-          p.y - 13,
+          p.y - 13.25,
           p.z + p.nz * side * 5,
         );
-        bridgeParts.push(support);
+        supports.push(support);
       }
-  }
-  if (bridgeParts.length) {
-    scene.add(new THREE.Mesh(mergeGeometries(bridgeParts), concrete));
-    bridgeParts.forEach((geometry) => geometry.dispose());
+    }
+    scene.add(new THREE.Mesh(mergeGeometries(supports), concrete));
+    supports.forEach((geometry) => geometry.dispose());
   }
   const galleryParts: THREE.BufferGeometry[] = [];
   const galleryStart = snow ? 205 : 810;

@@ -508,20 +508,79 @@
   line-height: 1.8;
   color: #c2cdc7;
 }
-.apex-paints {
-  display: flex;
-  gap: 14px;
-  padding-top: 20px;
+.apex-garage-overlay {
+  place-items: center start;
+  padding-left: clamp(16px, 5%, 65px);
+  background: linear-gradient(90deg, #0d171beb, #0d171b4d 58%, transparent 78%);
+  backdrop-filter: none;
 }
-.apex-paints button {
-  width: 36px;
-  height: 36px;
+.apex-garage-overlay .apex-panel {
+  width: min(410px, 100%);
+  border-radius: 10px;
+  padding: clamp(15px, 2.4vw, 25px);
+}
+.apex-garage-overlay h2 {
+  margin-bottom: 16px;
+  font-size: clamp(25px, 3vw, 35px);
+}
+.apex-garage-options {
+  display: grid;
+  gap: 8px;
+}
+.apex-garage-options button {
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr) auto;
+  text-align: left;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid #53615d;
+  border-radius: 6px;
+  background: #223135;
+  color: #f8f1e7;
+}
+.apex-garage-options button:hover,
+.apex-garage-options button[aria-pressed="true"] {
+  border-color: var(--apex-accent);
+}
+.apex-garage-options button[aria-pressed="true"] {
+  background: #34332b;
+}
+.apex-garage-options i {
+  width: 13px;
+  height: 13px;
+  border: 1px solid #f8f1e76b;
   border-radius: 50%;
-  border: 3px solid transparent;
-  box-shadow: 0 0 0 1px #ffffff30;
 }
-.apex-paints button[aria-pressed="true"] {
-  border-color: #eee1c6;
+.apex-garage-options strong, .apex-garage-options small {
+  display: block;
+  line-height: 1.25;
+}
+.apex-garage-options small {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #ced8d3;
+}
+.apex-garage-speed {
+  color: var(--apex-accent);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.apex-garage-note {
+  margin-top: 13px;
+  min-height: 2.7em;
+  color: #c2cdc7;
+  font-size: 12px;
+  line-height: 1.45;
+}
+@media (max-width: 640px) {
+  .apex-garage-overlay {
+    place-items: end center;
+    padding: 12px;
+    background: linear-gradient(0deg, #101b1de6, transparent 78%);
+  }
+  .apex-garage-overlay .apex-panel > .apex-primary { margin-top: 10px; }
 }
 .apex-controls-list {
   font-size: 11px;
