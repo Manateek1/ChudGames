@@ -10,11 +10,15 @@ export function createIslandScene(host: HTMLDivElement, gates: readonly Gate[]) 
   renderer.domElement.setAttribute("aria-hidden", "true");
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFShadowMap;
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
   const scene = new T.Scene();
   buildIsland(scene, gates);
   const camera = new T.OrthographicCamera(-70, 70, 50, -50, 0.1, 500);
   const model = createCar({ ...apexCars[0], color: "#ff6042" });
   model.root.scale.setScalar(1.48);
+  // The car has a separate contact shadow. The island's lights and casters are static.
+  model.root.traverse((part) => { part.castShadow = false; });
   scene.add(model.root);
 
   const shadowCanvas = document.createElement("canvas");
@@ -90,7 +94,7 @@ export function createIslandScene(host: HTMLDivElement, gates: readonly Gate[]) 
       // Keep north up. Even the closer view only pans, so steering never turns the island.
       const cx = zoomed ? car.x * 0.8 : 0;
       const cz = zoomed ? car.z * 0.8 : 0;
-      camera.position.set(cx, 126, cz + 87);
+      camera.position.set(cx, 111, cz + 102);
       camera.lookAt(cx, 1, cz);
       renderer.render(scene, camera);
     },
@@ -100,6 +104,7 @@ export function createIslandScene(host: HTMLDivElement, gates: readonly Gate[]) 
         materials = new Set<T.Material>(),
         textures = new Set<T.Texture>();
       scene.traverse((object) => {
+        if (object instanceof T.DirectionalLight) object.shadow.dispose();
         if (!(object instanceof T.Mesh)) return;
         if (object instanceof T.InstancedMesh) object.dispose();
         geometries.add(object.geometry);
