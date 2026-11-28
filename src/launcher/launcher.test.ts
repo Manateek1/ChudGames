@@ -1,7 +1,9 @@
+import { Scene } from "three";
 import { describe, expect, it } from "vitest";
 import { gameRegistry } from "../games/registry";
 import { featuredIds, selectGames } from "./catalog";
-import { crossedGate, drive, makeRoads, makeGates, parkOutside, spawnCar } from "./islandRoads";
+import { addLandscape, creekAt, SEA_LEVEL } from "./islandLandscape";
+import { circuit, crossRoad, crossedGate, drive, groundHeight, makeRoads, makeGates, parkOutside, ROAD_WIDTH, spawnCar } from "./islandRoads";
 
 describe("game shelf", () => {
   it("includes every registered game once and leads with the three featured games", () => {
@@ -21,6 +23,29 @@ describe("game shelf", () => {
 describe("island driving", () => {
   const gates = makeGates(gameRegistry);
   const closestRoad = makeRoads(gates);
+
+  it("keeps terrain below the road deck and the creek bed below the water", () => {
+    const scene = new Scene();
+    const height = addLandscape(scene, closestRoad, () => .5);
+    for (const path of [circuit, crossRoad, ...gates.map(gate => gate.approach)]) {
+      for (const [i, point] of path.slice(1).entries()) {
+        const start = path[i];
+        const dx = point.x - start.x;
+        const dz = point.z - start.z;
+        const length = Math.hypot(dx, dz);
+        for (const offset of [-ROAD_WIDTH / 2, 0, ROAD_WIDTH / 2]) {
+          const x = start.x + dx / 2 + offset * dz / length;
+          const z = start.z + dz / 2 - offset * dx / length;
+          expect(height(x, z)).toBeLessThan(groundHeight(x, z) + .25);
+        }
+      }
+    }
+    for (let z = -10; z < 51; z++) {
+      const creek = creekAt(z);
+      expect(height(creek.x, z)).toBeLessThan(creek.y);
+    }
+    expect(creekAt(51).y).toBeLessThan(SEA_LEVEL);
+  });
 
   it("gives every available game a reachable gate from the circuit", () => {
     expect(gates.map(gate => gate.id).sort()).toEqual(gameRegistry.filter(game => game.isAvailable !== false).map(game => game.id).sort());
