@@ -1,0 +1,154 @@
+/* Launcher styling is scoped so the individual games can keep their own themes. */
+.island-launcher {
+  --ink: #201b1a;
+  --panel: #302826;
+  --cream: #fff3e3;
+  --soft: #c8bcb4;
+  --edge: #53453e;
+  --orange: #ff891f;
+  background: var(--ink);
+  color: var(--cream);
+  color-scheme: dark;
+}
+.island-launcher :is(a,button,input,select,summary,[tabindex]):focus-visible {
+  outline: 3px solid #ffb564;
+  outline-offset: 3px;
+}
+.launcher-header { position: relative; z-index: 3; background: #211b1a; border-bottom: 2px solid #e57416; }
+.launcher-bar { display: flex; align-items: center; gap: clamp(24px,5vw,78px); max-width: 1600px; margin: auto; min-height: 70px; padding: 8px clamp(18px,3.6vw,64px); }
+.launcher-brand { flex-shrink: 0; color: var(--cream); font-size: clamp(27px,3.1vw,46px); font-weight: 780; letter-spacing: -.052em; line-height: 1; }
+.launcher-brand span { color: var(--orange); }
+.launcher-bar nav { display: flex; gap: 4px; align-items: center; }
+.launcher-bar nav a { white-space: nowrap; border-radius: 28px; padding: 8px clamp(12px,1.6vw,25px); font-size: clamp(16px,1.5vw,22px); font-weight: 670; }
+.launcher-bar nav a:hover { background: #3a302a; }
+.launcher-bar nav a[aria-current="page"] { background: var(--orange); color: #25180e; }
+.settings-trigger { margin-left: auto; padding: 10px; color: var(--soft); }
+.settings-trigger:hover { color: var(--orange); }
+.arcade-wrap { max-width: 1500px; margin: auto; padding: clamp(26px,3vw,48px) clamp(18px,3.6vw,64px) 48px; }
+.launcher-main h1,.launcher-main h2 { color: var(--cream); font-weight: 760; letter-spacing: -.045em; line-height: 1.08; }
+.launcher-main h1 { font-size: clamp(32px,4vw,56px); }
+.section-line { display: flex; align-items: end; justify-content: space-between; gap: 15px; margin-bottom: 22px; }
+.section-line > a { display: inline-flex; align-items: center; gap: 8px; color: var(--orange); font-weight: 650; padding: 6px 0; }
+.game-shelf { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: clamp(14px,1.5vw,24px); }
+.game-shelf--home { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.shelf-card { position: relative; min-width: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--edge); border-radius: 13px; display: flex; flex-direction: column; }
+.shelf-card:focus-within,.shelf-card:hover { border-color: var(--orange); }
+.shelf-art { width: 100%; aspect-ratio: 4/3; overflow: hidden; background: #272326; }
+.shelf-art > :is(img,canvas),.stop-art > :is(img,canvas) { display: block; height: 100%; width: 100%; object-fit: cover; border: 0; border-radius: 0; }
+.shelf-meta { display: flex; flex: 1; flex-direction: column; align-items: start; gap: 7px; padding: clamp(15px,1.5vw,25px); }
+.game-type { color: #ffac66; text-transform: uppercase; font-size: 11px; letter-spacing: .13em; font-weight: 720; }
+.shelf-meta h2 { font-size: clamp(23px,2.5vw,39px); }
+.shelf-meta p,.stop-panel p { color: var(--soft); font-size: 15px; line-height: 1.52; }
+.shelf-meta p { margin-bottom: 12px; }
+.shelf-play,.orange-button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 42px; padding: 8px 18px; border-radius: 7px; font-weight: 720; }
+.shelf-play { width: 100%; margin-top: auto; border: 1px solid var(--orange); color: var(--orange); }
+.shelf-play::after { content: ""; position: absolute; inset: 0; }
+.orange-button,.shelf-card:hover .shelf-play,.shelf-play:hover,.shelf-play:focus-visible { color: #201509; background: var(--orange); }
+.orange-button:hover { background: #ffa444; }
+.island-invite { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 16px; isolation: isolate; overflow: hidden; margin-top: 28px; min-height: 164px; border-radius: 13px; border: 1px solid var(--edge); background: #102f32; }
+.island-invite img { position: absolute; inset: 0 0 0 auto; height: 100%; width: 72%; object-fit: cover; object-position: 50% 53%; z-index: -1; mask-image: linear-gradient(to right,transparent,#000 30%); }
+.island-invite-copy { padding: 25px clamp(20px,2.6vw,40px); }
+.island-invite-copy > svg { color: #ffb267; font-size: 24px; margin-bottom: 8px; }
+.island-invite h2,.about-page h1 { font-size: clamp(28px,3.5vw,50px); }
+.island-invite-copy p { margin-top: 6px; color: #f7eddd; text-shadow: 0 1px 5px #101517; }
+.invite-arrow { margin-right: 24px; flex-shrink: 0; width: 42px; height: 42px; padding: 10px; color: #241509; background: var(--orange); border-radius: 50%; }
+.catalog-title { align-items: center; }
+.search-field,.sort-field { display: flex; align-items: center; gap: 9px; color: var(--soft); font-size: 14px; }
+.search-field { padding: 10px 14px; background: var(--panel); border: 1px solid var(--edge); border-radius: 7px; }
+.search-field input { min-width: 0; width: clamp(110px,15vw,230px); color: var(--cream); background: transparent; }
+.catalog-controls { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; margin: 8px 0 24px; padding-bottom: 18px; border-bottom: 1px solid var(--edge); }
+.category-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.category-list button { padding: 8px 14px; font-weight: 650; color: var(--soft); border-radius: 24px; }
+.category-list button[aria-pressed="true"] { background: var(--orange); color: #201509; }
+.sort-field select { border: 1px solid var(--edge); background: var(--panel); color: var(--cream); padding: 8px; border-radius: 6px; }
+.empty-shelf { text-align: center; padding: 60px 12px; }
+.empty-shelf h2 { margin-bottom: 18px; font-size: 24px; }
+.collection-achievements { margin-top: 28px; border-top: 1px solid var(--edge); }
+.collection-achievements summary { cursor: pointer; padding: 16px 0; color: var(--soft); }
+.about-page { display: grid; grid-template-columns: .85fr 1.15fr; align-items: center; gap: clamp(24px,5vw,90px); }
+.about-page p { margin: 18px 0; line-height: 1.62; font-size: clamp(16px,1.4vw,21px); max-width: 42ch; color: var(--soft); }
+.about-page img { width: 100%; border-radius: 14px; }
+.about-page .orange-button { margin-top: 12px; }
+
+.island-view { display: flex; flex-direction: column; background: var(--ink); }
+.island-scene { height: max(340px,calc(100svh - 138px)); position: relative; isolation: isolate; display: flex; justify-content: center; align-items: center; overflow: hidden; background: #07505a center / auto 100% url("/island/ocean.webp"); }
+.island-stage { position: relative; width: min(100%, max(565px,calc((100svh - 138px)*1.75))); aspect-ratio: 1.65; }
+.island-art { width: 100%; height: 100%; display: block; user-select: none; mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent); }
+.island-car { position: absolute; width: clamp(9px,1.5%,20px); pointer-events: none; left: 55.3%; top: 27.2%; transform: translate(-50%,-50%) rotate(-2.42rad); filter: drop-shadow(0 0 1px #fff) drop-shadow(0 2px 2px #111); z-index: 3; }
+.island-pin { white-space: nowrap; position: absolute; z-index: 2; transform: translate(-50%,calc(-100% - 12px)); padding: 4px clamp(7px,1vw,16px); border: 1.5px solid #e7bd8a; border-radius: 7px; background: #2b211e; color: var(--cream); font-weight: 750; font-size: clamp(12px,1.5vw,22px); line-height: 1.2; box-shadow: 0 2px 6px #24170973; }
+.island-pin::after { content: ""; position: absolute; left: 50%; top: 100%; width: 8px; height: 8px; transform: translate(-50%,6px); border-radius: 50%; background: #f68b2f; outline: 2px solid #fff0d7; }
+.island-pin:hover,.island-pin[aria-pressed="true"] { border-color: #ff902a; color: #ffb468; }
+.stop-panel { position: absolute; z-index: 2; top: 20px; right: clamp(12px,1.8vw,28px); width: clamp(190px,20vw,292px); padding: 17px; background: #28201eed; border: 2px solid var(--orange); border-radius: 14px; box-shadow: 0 5px 15px #17232255; }
+.stop-panel h2 { padding-right: 23px; font-size: clamp(21px,2vw,32px); }
+.stop-panel p { margin: 8px 0 12px; font-size: 14px; }
+.panel-close { position: absolute; top: 6px; right: 6px; padding: 8px; color: var(--soft); }
+.stop-key { display: block; text-align: center; margin-top: 11px; color: var(--soft); }
+.stop-key kbd { border: 1px solid var(--edge); border-radius: 3px; padding: 1px 5px; }
+.stop-art { aspect-ratio: 1.6; overflow: hidden; border-radius: 7px; margin-bottom: 10px; }
+.stop-panel .orange-button { width: 100%; }
+.arcade-stops { display: grid; margin-top: 12px; max-height: min(50vh,360px); overflow: auto; }
+.arcade-stops a { min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 2px; border-top: 1px solid var(--edge); font-size: 14px; }
+.arcade-stops a:hover { color: var(--orange); }
+.map-dashboard { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px clamp(14px,3vw,44px); min-height: 66px; border-top: 2px solid var(--orange); }
+.key-hint,.drive-settings,.drive-settings button,.drive-pad { display: flex; align-items: center; gap: 9px; }
+.key-hint { font-size: 14px; color: var(--soft); }
+.key-hint kbd { padding: 3px 8px; border: 1px solid #8c796b; border-radius: 4px; color: var(--cream); }
+.drive-settings { margin-left: auto; }
+.drive-settings button,.drive-pad button { min-height: 42px; padding: 8px 10px; }
+.drive-settings button[aria-pressed="true"] { color: var(--orange); }
+.drive-settings button:disabled { opacity: .55; }
+.drive-pad { display: none; }
+.drive-pad button { min-width: 42px; border-radius: 6px; border: 1px solid var(--edge); touch-action: none; user-select: none; -webkit-touch-callout: none; }
+.drive-pad button:active { background: var(--orange); color: var(--ink); }
+@media (pointer:coarse) {
+  .drive-pad { display: flex; }
+  .key-hint { display: none; }
+}
+@media (max-width: 980px) {
+  .game-shelf--games { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .stop-panel { width: 180px; padding: 12px; }
+}
+@media (max-width: 720px) {
+  .launcher-bar { flex-wrap: wrap; gap: 7px; padding: 12px 16px 8px; }
+  .launcher-brand { font-size: 30px; }
+  .launcher-bar nav { order: 3; width: 100%; justify-content: space-between; }
+  .launcher-bar nav a { padding: 7px 12px; font-size: 14px; }
+  .settings-trigger { padding: 5px; }
+  .game-shelf--home,.game-shelf--games { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .game-shelf--home .shelf-card:first-child { grid-column: 1 / -1; }
+  .game-shelf--home .shelf-card:first-child .shelf-art { aspect-ratio: 2.15; }
+  .shelf-meta { padding: 13px; }
+  .shelf-meta p { font-size: 13px; }
+  .catalog-title { flex-wrap: wrap; }
+  .category-list button { padding: 6px 10px; }
+  .island-invite { min-height: 128px; }
+  .island-invite img { width: 70%; }
+  .island-invite-copy { padding: 16px; max-width: 70%; }
+  .about-page { grid-template-columns: 1fr; }
+  .island-view { display: grid; grid-template-areas: "stage" "controls" "panel"; }
+  .island-scene { display: contents; }
+  .island-art { mask-image: none; }
+  .island-stage { grid-area: stage; width: 100%; aspect-ratio: 3/2; }
+  .island-pin { font-size: 13px; padding: 4px 8px; transform: translate(-50%,calc(-100% - 6px)); }
+  .island-pin::after { width: 5px; height: 5px; transform: translate(-50%,2px); }
+  .stop-panel { grid-area: panel; position: relative; inset: auto; width: auto; margin: 12px; }
+  .stop-art { float: left; width: min(38%,160px); margin: 0 12px 0 0; }
+  .stop-panel .orange-button { width: auto; }
+  .stop-key { display: none; }
+  .stop-panel::after { content: ""; display: block; clear: both; }
+  .map-dashboard { grid-area: controls; padding: 8px; flex-wrap: wrap; gap: 3px; }
+  .key-hint { display: none; }
+  .drive-pad { display: flex; gap: 3px; }
+  .drive-settings { gap: 0; }
+  .drive-settings button { gap: 4px; padding: 6px; font-size: 13px; }
+}
+@media (max-width: 380px) {
+  .game-shelf { grid-template-columns: 1fr; }
+  .launcher-bar nav a { padding: 7px 9px; }
+}
+@media (max-height: 540px) and (min-width: 721px) {
+  .island-scene { height: calc(100svh - 133px); }
+  .island-stage { width: min(100%,calc((100svh - 133px)*1.5)); }
+  .stop-panel { top: 6px; padding: 10px; }
+  .stop-art { display: none; }
+}

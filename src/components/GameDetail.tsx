@@ -17,6 +17,7 @@ interface GameDetailProps {
   onModeChange: (mode: string) => void;
   onStart: () => void;
   onBack: () => void;
+  backLabel: string;
 }
 
 const apexControls = [
@@ -43,7 +44,7 @@ const fortLiteControls = [
 
 export function GameDetail({
   game, difficulty, mode, bestScore, ebtBucks, reducedMotion,
-  onDifficultyChange, onModeChange, onStart, onBack,
+  onDifficultyChange, onModeChange, onStart, onBack, backLabel,
 }: GameDetailProps): React.JSX.Element {
   const fortLite = game.id === "fortlite";
   const sandbox = game.id === "buildblox";
@@ -56,7 +57,7 @@ export function GameDetail({
   return (
     <section className="game-launch" aria-labelledby="game-launch-title">
       <button type="button" className="game-launch-back" onClick={onBack}>
-        <span aria-hidden="true">←</span> Back to games
+        <span aria-hidden="true">←</span> {backLabel}
       </button>
 
       <div className={`game-launch-hero${typeof game.thumbnail === "string" ? "" : " game-launch-hero-compact"}`}>

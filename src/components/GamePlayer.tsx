@@ -15,6 +15,7 @@ interface GamePlayerProps {
   onSettingsChange: (next: AppSettings) => void;
   onTutorialDismiss: () => void;
   onQuit: () => void;
+  backLabel: string;
   onComplete: (result: GameResult) => void;
 }
 
@@ -29,6 +30,7 @@ export const GamePlayer = ({
   onSettingsChange,
   onTutorialDismiss,
   onQuit,
+  backLabel,
   onComplete,
 }: GamePlayerProps): React.JSX.Element => {
   const [input] = useState(() => new InputManager());
@@ -176,7 +178,7 @@ export const GamePlayer = ({
   if (game.id === "apex-run") {
     return <section className="game-player space-y-3">
       <div className="flex items-center justify-between gap-3 px-1 text-xs text-sky-50/75">
-        <button type="button" onClick={onQuit} className="px-2 py-2 hover:text-white">← Back to library</button>
+        <button type="button" onClick={onQuit} className="px-2 py-2 hover:text-white">← {backLabel}</button>
         <span className="uppercase tracking-[.2em]">Time attack</span>
         <button type="button" onClick={restart} className="px-2 py-2 hover:text-white">Restart game</button>
       </div>
@@ -322,7 +324,7 @@ export const GamePlayer = ({
                   </div>
                   <div className="flex justify-center">
                     <button type="button" className="text-sm font-semibold text-sky-100 transition hover:text-white" onClick={onQuit}>
-                      Back to Library
+                      {backLabel}
                     </button>
                   </div>
                 </div>
@@ -332,7 +334,7 @@ export const GamePlayer = ({
                     Play Again
                   </button>
                   <button type="button" className="arcade-btn-secondary" onClick={onQuit}>
-                    Back to Library
+                    {backLabel}
                   </button>
                 </div>
               )}
