@@ -1,7 +1,7 @@
 import type { GameDefinition } from "../types/arcade";
 
-export const featuredIds = ["apex-run", "fortlite", "buildblox"];
-export const categories = ["All", "Racing", "Building", "Action", "Arcade", "Puzzle"] as const;
+export const featuredIds = ["apex-run", "fortlite", "buildblox", "mulberry-pond"];
+export const categories = ["All", "Racing", "Building", "Action", "Arcade", "Puzzle", "Tycoon"] as const;
 export type Category = typeof categories[number];
 export type SortOrder = "featured" | "title";
 
@@ -16,6 +16,7 @@ export function coverFor(game: GameDefinition) {
 }
 
 export function categoryFor(game: GameDefinition): Category {
+  if (game.genre === "tycoon") return "Tycoon";
   if (game.id === "apex-run") return "Racing";
   if (game.id === "buildblox") return "Building";
   if (game.genre === "puzzle") return "Puzzle";

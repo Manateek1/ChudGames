@@ -1,3 +1,4 @@
+import { lazy } from "react";
 import { apexCourses } from "./apex/courses";
 import type { GameDefinition, ThumbnailRenderer } from "../types/arcade";
 import { AsteroidsPulse } from "./asteroidsPulse";
@@ -435,6 +436,26 @@ export const gameRegistry: GameDefinition[] = [
     isNew: true,
     thumbnail: pongThumb,
     component: PongNeon,
+  },
+  {
+    id: "mulberry-pond",
+    title: "Mulberry Pond",
+    islandGateDegrees: 15,
+    genre: "tycoon",
+    shortDescription: "Raise carp, ship harvests and grow a living pond farm.",
+    description: "Run a hillside carp farm from above. Turn bank grass into fish, duck manure into pond food and rich silt into a mulberry harvest.",
+    controls: ["Tap the pond or Scatter grass to boost sales", "Drag to orbit, or use the camera buttons", "Esc or P to pause"],
+    tutorial: [
+      "Your grass carp already earn coins. Spend your first 65 on silver carp to put the algae to work.",
+      "Scatter grass for a sales boost and ship the market crate for extra coins. Farm coins are saved on this device.",
+      "Connect eight stations, dredge silt for silkworms, then enter the harvest fair to start a more profitable season.",
+    ],
+    tags: ["3D", "idle", "tycoon", "fish", "farm", "pond", "carp"],
+    difficulties: ["normal"],
+    usesCanvas: false,
+    isNew: true,
+    thumbnail: "/pond/mulberry-pond.webp",
+    component: lazy(() => import("./pond/MulberryPond")),
   },
 ];
 

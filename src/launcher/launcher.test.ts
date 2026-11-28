@@ -6,9 +6,9 @@ import { addLandscape, creekAt, SEA_LEVEL } from "./islandLandscape";
 import { circuit, crossRoad, crossedGate, drive, groundHeight, makeRoads, makeGates, parkOutside, ROAD_WIDTH, spawnCar } from "./islandRoads";
 
 describe("game shelf", () => {
-  it("includes every registered game once and leads with the three featured games", () => {
+  it("includes every registered game once and leads with the featured games", () => {
     const games = selectGames(gameRegistry, "", "All", "featured");
-    expect(games.map(game => game.id).slice(0, 3)).toEqual(featuredIds);
+    expect(games.map(game => game.id).slice(0, featuredIds.length)).toEqual(featuredIds);
     expect(new Set(games.map(game => game.id)).size).toBe(gameRegistry.length);
   });
 
