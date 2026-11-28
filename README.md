@@ -1,11 +1,12 @@
 # ChudGames
 
-ChudGames is a React + Vite + TypeScript game launcher with 12 playable games including BuildBlox, FortLite, and Apex Run.
+ChudGames is a React + Vite + TypeScript game launcher with 13 playable games including BuildBlox, FortLite, and Apex Run.
 
 ## Included Games
 
 - Apex Run
 - BuildBlox
+- Mulberry Pond (3D idle farm tycoon)
 - Neon Dodger
 - Asteroids Pulse
 - Brick Breaker Blitz
@@ -31,6 +32,8 @@ ChudGames is a React + Vite + TypeScript game launcher with 12 playable games in
 - `src/components/GamePlayer.tsx`: shared in-game shell (tutorial, pause, restart, quit, FPS, mobile controls).
 
 BuildBlox is a single-player voxel sandbox with Survival expeditions and a Building mode. Drive through its gate on the west side of the island, choose New world, and enter an optional unsigned 64-bit seed. The in-game handbook covers crafting, biomes, creatures and devices. Worlds autosave to IndexedDB on this browser. Saved worlds also opens older BuildBlox saves in their original ruleset.
+
+Mulberry Pond is an overhead carp-farming tycoon. Stock four carp species, manage duck manure and nighttime oxygen, and turn silt into silk. Enter the harvest fair for a more profitable new season. Your browser saves the farm and credits up to four hours of income between visits.
 
 ## How to Add a New Game
 

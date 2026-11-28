@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import type { AudioManager } from "../engine/audio";
 import type { InputManager } from "../engine/input";
 
-export type GameGenre = "action" | "reflex" | "puzzle";
+export type GameGenre = "action" | "reflex" | "puzzle" | "tycoon";
 export type Difficulty = "easy" | "normal" | "hard";
 export type GraphicsQuality = "low" | "medium" | "high";
 export type ThemeName = "neon" | "sunset" | "matrix";

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { AudioManager } from "../engine/audio";
 import { InputManager } from "../engine/input";
 import { TouchControls } from "./TouchControls";
@@ -169,6 +169,7 @@ export const GamePlayer = ({
   const componentKey = `${game.id}-${difficulty}-${mode}-${seed}-${runId}`;
   const GameComponent = game.component;
   const isFortLite = game.id === "fortlite";
+  const isPond = game.id === "mulberry-pond";
   const isBuildBlox = game.id === "buildblox";
   const placementText = score > 0 ? `#${score}` : "--";
   const finalPlacement = finalResult?.stats?.placement ?? 0;
@@ -188,7 +189,11 @@ export const GamePlayer = ({
 
   return (
     <section className="game-player space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] border border-sky-200/24 bg-[rgba(7,18,34,0.82)] px-4 py-3 text-slate-50 shadow-[0_24px_54px_-32px_rgba(7,18,34,0.96)]">
+      {isPond ? <div className="flex items-center justify-between text-sm">
+        <button type="button" onClick={onQuit}>← {backLabel}</button>
+        {settings.showFps && <span>{fps.toFixed(0)} FPS</span>}
+        <button type="button" onClick={handlePauseToggle}>{paused ? "Resume" : "Pause"}</button>
+      </div> : <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] border border-sky-200/24 bg-[rgba(7,18,34,0.82)] px-4 py-3 text-slate-50 shadow-[0_24px_54px_-32px_rgba(7,18,34,0.96)]">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="font-display text-2xl text-white">{game.title}</h2>
           {!isBuildBlox && <span className="rounded-full border border-sky-100/16 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-50/78">
@@ -227,10 +232,10 @@ export const GamePlayer = ({
             Quit
           </button>
         </div>
-      </div>
+      </div>}
 
       <div className="relative overflow-hidden rounded-[1.5rem] border border-sky-200/24 bg-[rgba(7,18,34,0.72)] p-3 shadow-[0_26px_60px_-38px_rgba(7,18,34,0.96)]">
-        <GameComponent
+        <Suspense fallback={<p role="status">Opening game…</p>}><GameComponent
           key={componentKey}
           gameId={game.id}
           difficulty={difficulty}
@@ -244,7 +249,7 @@ export const GamePlayer = ({
           onFps={setFps}
           onPauseToggle={handlePauseToggle}
           onGameOver={handleGameOver}
-        />
+        /></Suspense>
 
         {paused && !finalResult && !tutorialOpen && (
           <div className="absolute inset-0 z-10 grid place-items-center bg-[rgba(3,9,20,0.76)]">
@@ -285,7 +290,7 @@ export const GamePlayer = ({
                   Resume
                 </button>
                 <button type="button" className="arcade-btn-secondary" onClick={restart}>
-                  Restart
+                  {isPond ? "Reload farm" : "Restart"}
                 </button>
                 <button type="button" className="arcade-btn-secondary" onClick={onQuit}>
                   Quit to Menu
@@ -356,7 +361,7 @@ export const GamePlayer = ({
               </ul>
               <div className="flex flex-wrap gap-2 pt-2">
                 <button type="button" className="arcade-btn-primary" onClick={() => void dismissTutorial()}>
-                  Start Run
+                  {isPond ? "Open farm" : "Start Run"}
                 </button>
                 <button type="button" className="arcade-btn-secondary" onClick={onQuit}>
                   Back

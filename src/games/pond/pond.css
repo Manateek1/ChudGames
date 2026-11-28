@@ -1,0 +1,479 @@
+.mulberry {
+  --ink: #203d32;
+  --green: #215942;
+  --line: #d6d9c8;
+  color-scheme: light;
+  overflow: hidden;
+  border: 1px solid #d2d7c5;
+  border-radius: 18px;
+  background: #f8f6ea;
+  color: var(--ink);
+  font:
+    500 15px/1.45 Inter,
+    system-ui,
+    sans-serif;
+}
+.mulberry button {
+  font: inherit;
+  cursor: pointer;
+}
+.mulberry button:disabled {
+  opacity: 0.57;
+  cursor: default;
+}
+.mulberry button:focus-visible,
+.mulberry select:focus-visible {
+  outline: 3px solid #b85b13;
+  outline-offset: 2px;
+}
+.mulberry button:enabled:hover {
+  filter: brightness(0.93);
+}
+.mulberry h2,
+.mulberry h3,
+.mulberry h4 {
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.06;
+  font-weight: bold;
+  letter-spacing: -0.04em;
+}
+.pond-head,
+.pond-title,
+.pond-wallet,
+.pond-section-title,
+.pond-line,
+.pond-setting,
+.pond-footer,
+.pond-footer > div,
+.pond-notice {
+  display: flex;
+  align-items: center;
+}
+.pond-head {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 24px;
+  background: #224b3c;
+  color: #fff5d9;
+}
+.pond-title,
+.pond-wallet {
+  gap: 12px;
+}
+.pond-seal {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  border: 1px solid #b9ce9e;
+  color: #d3e2a8;
+  border-radius: 50%;
+}
+.pond-seal svg {
+  font-size: 26px;
+}
+.pond-head small,
+.pond-entry > small {
+  display: block;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  font-weight: 750;
+}
+.pond-head small {
+  color: #d7e2c8;
+}
+.pond-title h2 {
+  font-size: clamp(22px, 3vw, 34px);
+}
+.pond-wallet > svg {
+  font-size: 34px;
+  color: #f3c864;
+}
+.pond-wallet strong {
+  display: block;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.pond-wallet > span {
+  background: #375e48;
+  color: #e3eab1;
+  border-radius: 8px;
+  font-weight: 700;
+  padding: 5px 9px;
+}
+.pond-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 30%);
+}
+.pond-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pond-view {
+  min-height: 420px;
+  flex: 1;
+  position: relative;
+  background: radial-gradient(ellipse at 50% 35%, #eef4d4, #c5d8b5 79%, #b4cba9);
+}
+.pond-view.pond-night {
+  background: radial-gradient(ellipse at 50% 35%, #aebfba, #96b1a8 79%, #829f9a);
+}
+.pond-canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.pond-canvas canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: pan-y;
+  cursor: grab;
+}
+.pond-canvas canvas:active {
+  cursor: grabbing;
+}
+.pond-weather,
+.pond-camera {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  background: #faf9e9ed;
+  border: 1px solid #bfccb0;
+  border-radius: 9px;
+  box-shadow: 0 2px 5px #364c3620;
+}
+.pond-weather {
+  top: 15px;
+  left: 16px;
+  gap: 6px;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.pond-weather svg {
+  font-size: 19px;
+  color: #a57923;
+}
+.pond-weather span {
+  color: #80916c;
+}
+.pond-camera {
+  right: 14px;
+  bottom: 12px;
+}
+.pond-camera button {
+  display: grid;
+  place-items: center;
+  width: 39px;
+  height: 39px;
+}
+.pond-camera button + button {
+  border-left: 1px solid var(--line);
+}
+.pond-camera svg {
+  font-size: 18px;
+}
+.pond-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 15px;
+  gap: 6px;
+  background: center/cover url("/pond/mulberry-pond.webp");
+}
+.pond-fallback span,
+.pond-fallback button {
+  background: #fff9de;
+  border-radius: 5px;
+  padding: 4px 7px;
+  font-size: 12px;
+}
+.pond-dock {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: #edeedc;
+  border-top: 1px solid var(--line);
+}
+.pond-dock button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  text-align: left;
+  font-weight: 730;
+}
+.pond-dock button + button {
+  border-left: 1px solid #c9cebb;
+}
+.pond-dock button > svg {
+  font-size: 29px;
+  color: #417652;
+}
+.pond-dock button + button > svg {
+  color: #987033;
+}
+.pond-dock small,
+.pond-footer small {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #4b6350;
+}
+.pond-ledger {
+  border-left: 1px solid var(--line);
+  padding: 18px;
+}
+.pond-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: #e9eadc;
+  padding: 3px;
+  border-radius: 9px;
+}
+.pond-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 650;
+  border-radius: 7px;
+  padding: 8px 2px;
+  font-size: 13px;
+}
+.pond-tabs button[aria-pressed="true"] {
+  background: var(--green);
+  color: #fff9e6;
+}
+.pond-section-title {
+  justify-content: space-between;
+  margin: 17px 0 12px;
+}
+.pond-section-title h3 {
+  font-size: 24px;
+}
+.pond-section-title > span {
+  color: #5c705b;
+  font-size: 12px;
+  font-weight: 700;
+}
+.pond-stations {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.pond-stations button {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #4a704f;
+  background: #eff0df;
+}
+.pond-stations button.pond-locked {
+  color: #687361;
+  background: #f4f3e8;
+}
+.pond-stations button[aria-pressed="true"] {
+  border: 2px solid #56865d;
+  background: #e3edcf;
+  padding: 3px;
+}
+.pond-stations button > svg {
+  font-size: 20px;
+}
+.pond-stations small {
+  font-size: 10px;
+  min-height: 14px;
+  line-height: 14px;
+}
+.pond-entry {
+  position: relative;
+  border-top: 1px solid var(--line);
+  margin-top: 15px;
+  padding-top: 14px;
+}
+.pond-entry > small {
+  color: #657558;
+}
+.pond-entry h4 {
+  font-size: 23px;
+  padding-right: 36px;
+  margin: 3px 0 5px;
+}
+.pond-entry-icon {
+  position: absolute;
+  right: 0;
+  top: 18px;
+  color: #577e5a;
+  font-size: 29px;
+}
+.pond-entry p,
+.pond-hint {
+  font-size: 13px;
+  line-height: 1.42;
+  color: #4b6050;
+}
+.pond-primary,
+.pond-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 7px;
+}
+.mulberry .pond-primary {
+  background: var(--green);
+  color: #fffbe8;
+  font-weight: 700;
+  margin-top: 12px;
+}
+.pond-primary span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #ffe291;
+}
+.pond-footer {
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  background: #f1f1df;
+}
+.pond-footer > div {
+  gap: 11px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.pond-footer svg {
+  font-size: 25px;
+  flex-shrink: 0;
+}
+.mulberry .pond-footer button {
+  width: auto;
+  margin: 0;
+  font-size: 13px;
+}
+.pond-notice {
+  gap: 7px;
+  padding: 7px 18px;
+  font-size: 13px;
+  background: #e0ebd5;
+}
+.pond-notice button {
+  margin-left: auto;
+  text-decoration: underline;
+}
+.pond-line {
+  border: 1px solid #bccbb3;
+  margin: 9px 0 5px;
+  background: #e9eddc;
+}
+.pond-line span,
+.pond-meter b {
+  font-variant-numeric: tabular-nums;
+}
+.pond-meter span,
+.pond-setting {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.pond-meter progress {
+  width: 100%;
+  height: 8px;
+  accent-color: #397752;
+}
+.pond-hint {
+  margin: 4px 0 7px;
+}
+.pond-setting select {
+  background: #f9faef;
+  border: 1px solid var(--line);
+  padding: 4px;
+  border-radius: 4px;
+}
+@media (max-width: 760px) {
+  .pond-body {
+    grid-template-columns: 1fr;
+  }
+  .pond-view {
+    min-height: clamp(240px, 62vw, 380px);
+  }
+  .pond-ledger {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 14px;
+  }
+  .pond-head {
+    padding: 12px;
+  }
+  .pond-wallet {
+    gap: 6px;
+  }
+  .pond-wallet > svg,
+  .pond-seal {
+    display: none;
+  }
+  .pond-wallet > span {
+    font-size: 11px;
+  }
+  .pond-wallet strong {
+    font-size: 21px;
+  }
+  .pond-dock button {
+    font-size: 13px;
+    gap: 6px;
+  }
+  .pond-footer {
+    flex-wrap: wrap;
+    padding: 13px;
+  }
+  .pond-camera button {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+.pond-stations b {
+  font-size: 11px;
+  line-height: 1.2;
+}
+.pond-stations button {
+  row-gap: 1px;
+  padding: 5px 3px;
+}
+.pond-health {
+  position: absolute;
+  right: 14px;
+  top: 15px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #294d42;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 9px;
+  border: 1px solid #bfccb0;
+  border-radius: 9px;
+  background: #faf9e9ed;
+  pointer-events: none;
+}
+.pond-health-low {
+  color: #873e28;
+  background: #ffe2bb;
+}
