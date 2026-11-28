@@ -64,6 +64,8 @@ export interface GameDefinition {
   modes?: GameMode[];
   defaultMode?: string;
   isAvailable?: boolean;
+  /** Clockwise from north on the island circuit. Omit to use an open approach. */
+  islandGateDegrees?: number;
   isNew?: boolean;
   usesCanvas: boolean;
   thumbnail: ThumbnailRenderer | string;

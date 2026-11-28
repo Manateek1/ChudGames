@@ -87,14 +87,16 @@ function App(): React.JSX.Element {
     ? (progress.stats[selectedGame.id]?.wins ?? 0)
     : getBestScore(progress, selectedGame.id, difficulty);
 
-  const startFromDetail = (): void => {
-    if (selectedGame.isAvailable === false) {
-      setToast(`${selectedGame.title} is temporarily unavailable while Phase 1 is being stabilized.`);
+  const startGame = (id: string): void => {
+    const game = gameMap.get(id);
+    if (!game) return;
+    if (game.isAvailable === false) {
+      setToast(`${game.title} is temporarily unavailable while Phase 1 is being stabilized.`);
       return;
     }
 
     setRunSeed(randomSeed());
-    window.location.hash = gameUrl(route.page, selectedGame.id) + "/play";
+    window.location.hash = gameUrl(route.page, id) + "/play";
   };
 
   const handleRunComplete = (result: { score: number; won?: boolean; stats?: Record<string, number> }): void => {
@@ -149,7 +151,7 @@ function App(): React.JSX.Element {
             category={category} setCategory={setCategory} order={order} setOrder={setOrder} reducedMotion={settings.reducedMotion} />
           <details className="collection-achievements"><summary>Achievements</summary><AchievementPanel unlocked={progress.achievements} /></details>
         </div>}
-        {screen === "map" && <IslandMap readCar={readCar} parkCar={parkCar} paused={showSettings} soundAllowed={settings.sound} reducedMotion={settings.reducedMotion} />}
+        {screen === "map" && <IslandMap readCar={readCar} parkCar={parkCar} onLaunch={startGame} paused={showSettings} soundAllowed={settings.sound} />}
         {screen === "about" && <section className="arcade-wrap about-page">
           <div><h1>About ChudGames</h1>
             <p>ChudGames is a collection of games you can play in your browser.</p>
@@ -169,7 +171,7 @@ function App(): React.JSX.Element {
               reducedMotion={settings.reducedMotion}
               onDifficultyChange={setDifficulty}
               onModeChange={setMode}
-              onStart={startFromDetail}
+              onStart={() => startGame(selectedGame.id)}
               onBack={goBack}
               backLabel={backLabel}
             />
