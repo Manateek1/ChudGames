@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AchievementPanel } from "./components/AchievementPanel";
-import { AnimatedBackground } from "./components/AnimatedBackground";
+import { GearSix, ArrowRight } from "@phosphor-icons/react";
+import { IslandMap } from "./components/IslandMap";
+import { pages, useRoute, gameUrl } from "./launcher/navigation";
+import { selectGames, type Category, type SortOrder } from "./launcher/catalog";
+import { spawnCar, type Car } from "./launcher/islandRoads";
 import { GameDetail } from "./components/GameDetail";
 import { GameLibrary } from "./components/GameLibrary";
 import { GamePlayer } from "./components/GamePlayer";
@@ -8,6 +12,7 @@ import { HomeScreen } from "./components/HomeScreen";
 import { PageTransition } from "./components/PageTransition";
 import { SettingsModal } from "./components/SettingsModal";
 import "./components/ArcadeShell.css";
+import "./components/Launcher.css";
 import { evaluateAchievements } from "./engine/achievements";
 import {
   getBestScore,
@@ -20,9 +25,9 @@ import {
   withUnlockedAchievements,
 } from "./engine/storage";
 import { gameMap, gameRegistry } from "./games/registry";
-import type { Difficulty, GameGenre } from "./types/arcade";
+import type { Difficulty } from "./types/arcade";
 
-type Screen = "home" | "library" | "detail" | "play";
+
 
 const randomSeed = (): number => Math.floor(Math.random() * 2_000_000_000);
 const preferredDifficulty = (difficulties: Difficulty[]): Difficulty =>
@@ -34,17 +39,29 @@ const defaultGameId = gameMap.get("apex-run")?.id ?? gameRegistry[0].id;
 function App(): React.JSX.Element {
   const [settings, setSettings] = useState(loadSettings);
   const [progress, setProgress] = useState(loadProgress);
-  const [screen, setScreen] = useState<Screen>("home");
+  const route = useRoute();
+  const screen = route.game ? (route.playing ? "play" : "detail") : route.page;
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<GameGenre | "all">("all");
-  const [selectedGameId, setSelectedGameId] = useState(defaultGameId);
-  const [difficulty, setDifficulty] = useState<Difficulty>("normal");
-  const [mode, setMode] = useState("single");
+  const [category, setCategory] = useState<Category>("All");
+  const [order, setOrder] = useState<SortOrder>("featured");
+  const [preferredLevel, setDifficulty] = useState<Difficulty>("normal");
+  const [preferredMode, setMode] = useState("single");
+  const carMemory = useRef(spawnCar());
+  const readCar = useCallback(() => ({ ...carMemory.current }), []);
+  const parkCar = useCallback((car: Car) => { carMemory.current = { ...car, speed: 0 }; }, []);
   const [showSettings, setShowSettings] = useState(false);
   const [runSeed, setRunSeed] = useState(randomSeed);
   const [toast, setToast] = useState<string | null>(null);
 
-  const selectedGame = gameMap.get(selectedGameId) ?? gameRegistry[0];
+  const selectedGame = route.game ?? gameMap.get(defaultGameId)!;
+  const difficulty = selectedGame.difficulties.includes(preferredLevel) ? preferredLevel : preferredDifficulty(selectedGame.difficulties);
+  const mode = selectedGame.modes?.some(item => item.id === preferredMode) ? preferredMode : defaultModeForGame(selectedGame);
+  const backLabel = `Back to ${pages[route.page]}`;
+  const goBack = () => { window.location.hash = `#/${route.page}`; };
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    document.title = `${route.game?.title ?? pages[route.page]} | ChudGames`;
+  }, [screen, route.page, route.game]);
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
@@ -66,44 +83,9 @@ function App(): React.JSX.Element {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const filteredGames = useMemo(() => {
-    const query = search.toLowerCase().trim();
-    return gameRegistry
-      .filter((game) => {
-        const genreMatch = filter === "all" ? true : game.genre === filter;
-        const searchMatch =
-          query.length === 0 ||
-          game.title.toLowerCase().includes(query) ||
-          game.description.toLowerCase().includes(query) ||
-          game.tags.some((tag) => tag.includes(query));
-        return genreMatch && searchMatch;
-      })
-      .sort((a, b) => {
-        if (a.id === "fortlite") {
-          return 1;
-        }
-        if (b.id === "fortlite") {
-          return -1;
-        }
-        return a.title.localeCompare(b.title);
-      });
-  }, [search, filter]);
-
   const bestScore = selectedGame.id === "fortlite"
     ? (progress.stats[selectedGame.id]?.wins ?? 0)
     : getBestScore(progress, selectedGame.id, difficulty);
-
-  const openGame = (gameId: string): void => {
-    const targetGame = gameMap.get(gameId) ?? gameRegistry[0];
-    setSelectedGameId(targetGame.id);
-    setDifficulty((current) =>
-      targetGame.difficulties.includes(current) ? current : preferredDifficulty(targetGame.difficulties),
-    );
-    setMode((current) =>
-      targetGame.modes?.some((item) => item.id === current) ? current : defaultModeForGame(targetGame),
-    );
-    setScreen("detail");
-  };
 
   const startFromDetail = (): void => {
     if (selectedGame.isAvailable === false) {
@@ -112,7 +94,7 @@ function App(): React.JSX.Element {
     }
 
     setRunSeed(randomSeed());
-    setScreen("play");
+    window.location.hash = gameUrl(route.page, selectedGame.id) + "/play";
   };
 
   const handleRunComplete = (result: { score: number; won?: boolean; stats?: Record<string, number> }): void => {
@@ -148,55 +130,34 @@ function App(): React.JSX.Element {
     setProgress((prev) => markTutorialSeen(prev, selectedGame.id));
   };
 
-  const sharedHeader = (
-    <header className="site-header">
-      <div>
-        <button
-          type="button"
-          onClick={() => setScreen("home")}
-          className="font-display text-2xl tracking-[0.16em] text-white"
-        >
-          chudgames
-        </button>
-
-        <nav>
-          <button type="button" className="arcade-btn-secondary" onClick={() => setScreen("home")}>Home</button>
-          <button type="button" className="arcade-btn-secondary" onClick={() => setScreen("library")}>Games</button>
-          <button type="button" className="arcade-btn-secondary" onClick={() => setShowSettings(true)}>Settings</button>
-        </nav>
-      </div>
-    </header>
-  );
-
   return (
-    <div className="app-shell">
-      <AnimatedBackground settings={settings} />
-      <main className={screen === "home" ? "relative w-full" : "relative mx-auto w-full max-w-[1260px] px-4 pb-16 pt-6 md:px-8"}>
-        {screen !== "home" && sharedHeader}
-
-        {screen === "home" && (
-          <PageTransition reducedMotion={settings.reducedMotion}>
-            <HomeScreen games={gameRegistry} reducedMotion={settings.reducedMotion} onBrowse={() => setScreen("library")} onOpen={openGame} />
-          </PageTransition>
-        )}
-
-        {screen === "library" && (
-          <PageTransition reducedMotion={settings.reducedMotion}>
-            <div className="grid gap-6 xl:grid-cols-[1.25fr,0.75fr]">
-              <GameLibrary
-                games={filteredGames}
-                search={search}
-                setSearch={setSearch}
-                filter={filter}
-                setFilter={setFilter}
-                onOpen={openGame}
-                reducedMotion={settings.reducedMotion}
-              />
-              <AchievementPanel unlocked={progress.achievements} />
-            </div>
-          </PageTransition>
-        )}
-
+    <div className="app-shell island-launcher">
+      <header className="launcher-header">
+        <div className="launcher-bar">
+          <a className="launcher-brand" href="#/home" aria-label="ChudGames home">Chud<span>Games</span></a>
+          <nav aria-label="Main navigation">
+            {Object.entries(pages).map(([id, title]) =>
+              <a key={id} href={`#/${id}`} aria-current={route.page === id ? "page" : undefined}>{title}</a>)}
+          </nav>
+          <button className="settings-trigger" aria-label="Settings" onClick={() => setShowSettings(true)}><GearSix size={22} /></button>
+        </div>
+      </header>
+      <main className={route.game ? "relative mx-auto w-full max-w-[1260px] px-4 pb-16 pt-6 md:px-8" : "launcher-main"}>
+        {screen === "home" && <HomeScreen reducedMotion={settings.reducedMotion} />}
+        {screen === "games" && <div className="arcade-wrap">
+          <GameLibrary games={selectGames(gameRegistry, search, category, order)} search={search} setSearch={setSearch}
+            category={category} setCategory={setCategory} order={order} setOrder={setOrder} reducedMotion={settings.reducedMotion} />
+          <details className="collection-achievements"><summary>Achievements</summary><AchievementPanel unlocked={progress.achievements} /></details>
+        </div>}
+        {screen === "map" && <IslandMap readCar={readCar} parkCar={parkCar} paused={showSettings} soundAllowed={settings.sound} reducedMotion={settings.reducedMotion} />}
+        {screen === "about" && <section className="arcade-wrap about-page">
+          <div><h1>About ChudGames</h1>
+            <p>ChudGames is a collection of games you can play in your browser.</p>
+            <p>I made it to give the games I build a home and make it easy to jump into something fun.</p>
+            <a className="orange-button" href="#/games">Browse games <ArrowRight /></a>
+          </div>
+          <img src="/island/island.webp" alt="The ChudGames island with its mountain circuit and harbor arcade" />
+        </section>}
         {screen === "detail" && (
           <PageTransition reducedMotion={settings.reducedMotion}>
             <GameDetail
@@ -209,7 +170,8 @@ function App(): React.JSX.Element {
               onDifficultyChange={setDifficulty}
               onModeChange={setMode}
               onStart={startFromDetail}
-              onBack={() => setScreen("library")}
+              onBack={goBack}
+              backLabel={backLabel}
             />
           </PageTransition>
         )}
@@ -217,6 +179,7 @@ function App(): React.JSX.Element {
         {screen === "play" && (
           <PageTransition reducedMotion={settings.reducedMotion}>
             <GamePlayer
+              key={selectedGame.id}
               game={selectedGame}
               difficulty={difficulty}
               mode={mode}
@@ -226,7 +189,8 @@ function App(): React.JSX.Element {
               tutorialOpenByDefault={!progress.tutorialsSeen[selectedGame.id]}
               onSettingsChange={setSettings}
               onTutorialDismiss={dismissTutorial}
-              onQuit={() => setScreen("library")}
+              onQuit={goBack}
+              backLabel={backLabel}
               onComplete={handleRunComplete}
             />
           </PageTransition>
