@@ -43,6 +43,7 @@ The frontend and FortLite multiplayer server are separate processes in deploymen
 | `src/games/registry.ts` | Central game registry and lookup map. Add a launcher-visible game here. |
 | `src/games/*.tsx` | Game adapters/components that satisfy the shared game interface. |
 | `src/games/*.css` | Targeted game and HUD styles. |
+| `src/games/tideworld/` | BuildBlox runtime, seeded terrain and renderer (`world/`), crafting and ecology (`systems/`), and local persistence (`session/`). Older worlds open through `src/games/buildblox/LegacyBuildBlox.tsx`. |
 | `src/games/apex/` | Modular Apex Run runtime and its Three.js systems. |
 | `src/games/fortlite.tsx` | FortLite React adapter, lobby, network setup, runtime mount, and cleanup. |
 | `src/games/fortlite.css` | FortLite lobby, canvas, HUD, and responsive styling. |

@@ -30,7 +30,7 @@ ChudGames is a React + Vite + TypeScript game launcher with 12 playable games in
   - `achievements.ts`: local achievement unlock rules.
 - `src/components/GamePlayer.tsx`: shared in-game shell (tutorial, pause, restart, quit, FPS, mobile controls).
 
-BuildBlox uses a local 20-tick worker for world simulation and a separate worker for voxel meshes. The seed and mode identify a local save. Player state and binary region edits live in IndexedDB. Reenter the same seed and mode on the same browser to resume. The graphics setting controls chunk distance and pixel density.
+BuildBlox is a single-player voxel sandbox with Survival expeditions and a Building mode. Drive through its gate on the west side of the island, choose New world, and enter an optional unsigned 64-bit seed. The in-game handbook covers crafting, biomes, creatures and devices. Worlds autosave to IndexedDB on this browser. Saved worlds also opens older BuildBlox saves in their original ruleset.
 
 ## How to Add a New Game
 

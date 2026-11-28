@@ -99,3 +99,12 @@ export function writeWorld(key: string, world: SaveData): Promise<void> {
   void write.then(clear, clear);
   return write;
 }
+
+export async function legacyWorldKeys(): Promise<string[]> {
+  const db = await openDatabase();
+  return new Promise((resolve,reject)=>{
+    const request=db.transaction("worlds").objectStore("worlds").getAllKeys();
+    request.onsuccess=()=>resolve(request.result.filter((key):key is string=>typeof key==="string"));
+    request.onerror=()=>reject(request.error);
+  });
+}
