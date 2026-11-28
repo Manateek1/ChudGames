@@ -1,0 +1,873 @@
+14  PLAYER HANDBOOK
+===================
+14.1  START A WORLD
+
+From the title screen, choose New World, enter a name, and select Survival
+or Building. The seed is an unsigned integer of up to 64 bits. Leave the
+seed blank to let the app generate one and show it on the world information
+screen. Survival starts with an empty belt and pack. Building starts with
+the material palette available.
+
+The spawn setup guarantees these resources within 64 blocks: six loose
+slate rubble, four alder logs accessible at ground level, at least four
+brush fiber, two reed fiber, one dry sheltered site, and a patch of loam.
+It also guarantees an accessible cave entrance or quarry within 160
+blocks. A starter quarry includes at least eight obtainable basalt
+rubble and deposits of tin and copper. This guarantees the tool and
+workshop route on any supported seed. The generator checks a fixed,
+coordinate-sorted ring of walkable starting sites around the origin.
+If none meet these constraints, stamp a starter clearing and quarry
+route with a reserved feature priority before decorative features.
+Columns that intersect it replay the same stamped geometry from its
+global anchor. Landmarks outside the starter region are selected
+through the regular generator.
+
+14.2  YOUR FIRST SHELTER AND TOOLS
+
+1. Walk through loose slate rubble to collect it. Break a brush and a reed
+   to collect both types of fiber. Hand-break alder logs, which have a
+   lower harvest requirement than structural rock.
+2. Open the pack with Tab. In Quick Assembly, make cord, then a stone
+   hammer. Select that hammer and hold the mining input on slate. The
+   progress arc tracks continuous effort on the selected face. Clear
+   enough rubble and logs for a workbench and building materials.
+3. Place the workbench on dry ground. Convert a log to three dry planks,
+   and use more planks to make timber panels. Place floor and wall panels
+   from the visible face of a supporting block. Use a doorway and a
+   roof. Leave two blocks of vertical clearance on walking routes.
+4. Craft a camp cot for rest and a storage drawer for stock. Place the
+   cot with one clear exit tile on either side and enough ceiling space.
+   Shelter is evaluated at the cot from rain exposure, ground support,
+   clearance and nearby damaging fluids. Rest refills stamina and warmth
+   in valid shelter. The primary respawn mechanism is the marker stand.
+5. Make a field hoe. Till loam, plant grain seed, and aim a water flask
+   at the bed if it is dry. Level 2 hydration and light 8 are sufficient.
+   Harvest mature grain and keep the seed source in the field.
+
+Starter shelter example. Find a flat five-by-five footprint. Use its
+center for the floor coordinate origin. Place 25 floor panels, then
+two wall courses around the 16-cell perimeter. Omit two vertically
+aligned wall panels at the midpoint of one side for the entrance.
+Cap the room with 25 roof panels at Y=3 relative to the floor.
+The floor, walls and roof use 80 panels, which take 80 dry planks
+or 27 logs with one plank left over. Keep the center clear to walk
+between the cot, workbench and drawer. Put the stove on a fire-safe
+masonry cell and leave its front accessible.
+
+14.3  OPEN A WORKSHOP
+
+Use the stone hammer to recover tin and copper in a cave or quarry. Gather
+red clay with a trowel or by hand. Go to the workbench and create a kiln.
+Use four clay lumps to fire two clay units, and gather four basalt bricks
+from the workbench to make a smelter. For the first charcoal job, put an
+extra raw log in the kiln's fuel slot and a separate log in its input.
+Collect the charcoal and move part of it to the smelter. Tin enables basic
+mechanisms, copper enables the metal hammer and wiring, and iron and quartz
+extend the route into deeper construction. Make extra fuel before entering
+the thermal hollows, where useful equipment and weather protection matter.
+
+For a first powered build, place one switch, place adjacent wire on
+supported surfaces, and place a lamp with its input terminal facing
+the end of the wire. Toggle the switch with Use. Open the device inspector
+to see the high input arrive. Add a relay if the path must move up a wall.
+Add a timer after the switch to make a lamp flash while the switch is on.
+Fit a water wheel to a channel with circulating or replenished flow when
+the build calls for a steady signal from moving water.
+
+14.4  EXPLORE, TRAVEL, AND RECOVER
+
+Surface weather and depth drive equipment choices. Equip a rain cape for
+long wetland trips, a coat for high peaks, a lamp for caves, a flask for
+watering or stocking fish, and some cooked food for healing. Cold areas
+drain warmth gradually, and wind ridges have steep falls even in clear
+weather. Refill a flask from a full source with a scoop. Place a rope line
+from a supported anchor to reach lower passages. A hand glider requires
+the equipment slot and open air before activation. A skiff requires enough
+water under its hull and an unobstructed dismount space beside it.
+
+Set a marker stand next to the workshop and choose Set Recovery Point.
+The marker panel shows its bearing, distance, access settings, and
+whether a safe respawn tile is available. On recovery, the belt, worn
+clothing, and equipped tool return with the player. The loose pack goes
+into the owner crate. Follow its temporary compass marker and select
+Recover to transfer as many stacks as will fit. The failure screen
+provides the last cause of damage, return location, and crate position.
+If the registered marker becomes unusable, spawn at the next valid
+owner marker, then at the world origin camp.
+
+14.5  BUILDING MODE AND PROJECT TOOLS
+
+The build palette groups structural materials, decorations, plants, and
+devices. Scroll to cycle palettes and use Alt to pick a material or
+variant. Flight uses Jump to ascend and Crouch to descend. Paint applies
+a supported cosmetic variant to the selected material. Fill starts with
+two corner selections, displays its bounds and cell count, and commits
+as one transaction. Use the same selection for replacement fills.
+
+The build preview colors invalid cells and names the blocking condition.
+A denied bulk edit modifies zero cells. The inspector reports the block ID,
+facing, connection mask, and block and fluid levels. If a lamp stays off,
+check the source, terminal facing, wire connectivity, and
+whether the intended segment is loaded. If a pump stays idle, check fluid
+at its intake, capacity at its output, and power at its input.
+
+15  BLOCK AND ITEM ENCYCLOPEDIA
+=============================
+The identifiers in this chapter are searchable in the inventory or build
+palette where that form exists. The numeric mining work and tier table is
+in Chapter 06. A generated-only state is created by terrain generation,
+simulation, or another action. For crafted blocks, recipes are in 07.
+Station drop entries assume the station is idle and empty.
+
+15.1  EVERY BLOCK
+
+BLOCK air
+  Found in open space. Carries up to eight fluid units and lets light
+  pass. Clearing a regular cell changes the solid layer to air. The
+  selection ray continues through empty cells.
+BLOCK foundation
+  The bottom two layers at Y=-96 and -95. The world cannot be excavated
+  below this layer. Foundation is excluded from the Survival item list
+  and normal editing commands.
+BLOCK loam
+  Common meadow and woodland topsoil. Place as a full cube, or use a
+  field hoe on its upper face to convert it into a plant_bed. Break by
+  hand, hammer, or trowel to recover loam.
+BLOCK peat
+  Wetland and cold-forest soil. Extends the hydration timer of planting
+  beds within one block of its upper surface by 30 seconds. Place as a
+  full cube. Recover with a trowel or by hand.
+BLOCK sand
+  Coastal dunes and basins. Falls when unsupported, becoming a falling
+  block entity until landing on a valid surface. Harvest with a trowel
+  and use in the kiln to make glass_sheet.
+BLOCK gravel
+  Bay floors and stony terrain. Falls under gravity like sand. Safe
+  excavation uses short supported rows. Loose starter rubble can appear
+  separately on the surface without mining the gravel.
+BLOCK red_clay
+  Wetland banks and dry scrub patches. Break to collect one clay_lump.
+  A trowel shortens harvest. Place a clay_lump against a valid supporting
+  face to restore a red_clay block, or reserve it for the kiln.
+BLOCK snow_crust
+  A thin layer formed by local snowfall and cold surfaces. Gives an
+  audible crunch and provides full footing on the surface underneath.
+  Warmth can melt the layer into available fluid capacity. Harvest or
+  palette placement uses the thin layer as a block item.
+BLOCK salt_crust
+  Thin deposit on exposed qualifying brine margins in bays and basins.
+  Harvest drops one salt_flake. A scraped surface can regrow crust
+  after one tide transition if still suitable and unoccupied.
+BLOCK slate
+  Structural native rock at middle and upper elevations. A qualifying
+  stone hammer yields slate_rubble. Slate brick is its placeable
+  survival building counterpart. Building palette can place native slate.
+BLOCK basalt
+  Dark native rock in deep terrain and exposed hot shelves. A qualifying
+  stone hammer yields basalt_rubble for durable construction and the kiln.
+  The plain block is a building-palette material.
+BLOCK ore_tin
+  Light speckles in the qualifying altitude band. Mine with a stone
+  hammer or better to collect one raw_tin. Foundational ore for the
+  trowel, hand saw, and bearing recipes.
+BLOCK ore_copper
+  Rust and teal markings in eligible rock. Mine with a stone hammer or
+  better for one raw_copper. Smelt for the metal hammer and wiring.
+BLOCK ore_iron
+  Pale bands in deeper eligible rock. A metal hammer or better drops
+  one raw_iron. Carry a verified T2 tool before opening a visible vein.
+BLOCK quartz_cluster
+  A luminous growth on exposed rock in a crystal fault. Supported by
+  its attached face. A T2 or T3 hammer gives one glow_quartz. Removing
+  the support detaches it and produces the same drop if the support
+  removal had a qualifying tool tier.
+BLOCK alder_log
+  Alder trunk. Places with axis following the selected face. An exposed
+  natural trunk can be tapped with a brush knife once per day for one
+  amber_resin. The item supplies dry planks and early recipes.
+BLOCK pine_log
+  Tall conifer trunk. Axis follows placement face. Use a saw for quick
+  harvesting. The dry planks preserve the pine palette and grain.
+BLOCK foliage
+  Thin cutout canopy, tagged as alder or pine. Harvest gives a matching
+  seed on 18% of adult foliage rolls. A disconnected crown begins decay
+  after 30 active seconds and rolls the same deterministic seed chance.
+BLOCK brush
+  Low scrub and tall dry stems in suitable light. Harvest gives one
+  brush_fiber. Using a brush knife clips it to a regrowing base; ordinary
+  breaking removes the whole plant.
+BLOCK reed
+  Wetland stalk. Harvest the upper section with a brush knife for one
+  reed_fiber and preserve the base. Plant a fiber in damp clay or peat
+  beside shallow water to start another stalk.
+BLOCK kelp
+  Underwater plant on gravel or sand with fill ≥6. Harvest fronds from
+  the top and leave the base. Plant one frond on submerged gravel or
+  sand to start new kelp.
+BLOCK fungus
+  Found on moist cave surfaces. A cap can be planted on peat or clay
+  at light 2–7. A brush knife harvests a cap and leaves the growth base.
+  Ordinary breaking yields a cap and clears the spot.
+BLOCK grain_crop
+  Formed by planting grain_seed on a plant_bed. Mature at age 4.
+  An ordinary mature harvest gives two grain and one seed. A tool
+  harvest gives two grain and regrows the plant from age 1.
+BLOCK plant_bed
+  Created by hoeing loam. Stores hydration and the last growth update.
+  Placement is through tilling. An ordinary block break drops loam.
+BLOCK timber_panel
+  Full construction block, with alder or pine variant selected by the
+  planks used. Cutaway angles and orientations are cosmetic. Recover
+  a panel intact with a saw or hammer.
+BLOCK slate_brick
+  Full grey masonry cube. Place as a wall, support, floor, or finished
+  material. Convert to matching stairs or half steps at a workbench.
+BLOCK basalt_brick
+  Full dark masonry cube with higher mining work. Its heat-resistant
+  surfaces suit workshop and vent builds. Convert to matching stairs
+  or half steps at a workbench.
+BLOCK clay_tile
+  Full fired building block. Bake a salt-and-colorant glaze to change
+  the visual style. Inspect the item to see its glaze before placement.
+BLOCK glass_panel
+  Thin transparent barrier with directional facing and a solid plane.
+  Receives and transmits light. A hammer recovers the panel at the
+  listed mining work. Unbroken panels support neighboring frames.
+BLOCK half_step
+  Lower or upper half cube chosen by the aimed face height. Places as
+  slate or basalt masonry. Opposite compatible half steps combine into
+  a full matching brick block.
+BLOCK stair_step
+  Two joined collision cuboids for elevation changes. Stores facing and
+  upright or inverted placement. A side connection affects appearance.
+  The simulation's step assist handles its half-block increments.
+BLOCK fence_section
+  Narrow barrier that connects to compatible adjacent blocks. Its four
+  horizontal connection bits update when a neighbor changes. Physics
+  collision extends above the rendered rail to 1.35 blocks.
+BLOCK gate
+  Hinged opening in a path or fence. Use toggles it manually. A high
+  signal on its rear terminal requests an open state and a low signal
+  releases the override. It waits to close if occupied.
+BLOCK ladder
+  A wall-attached thin climbable volume. Place on a solid face and
+  stack vertically to extend it. A removed support causes the ladder
+  to drop as an item.
+BLOCK anchor
+  An attachment point for rope and boat tethering. Requires a supporting
+  solid face. Valid placement reserves one rope or skiff connection.
+  Removing the anchor releases its attachments, with the rope dropping
+  at its home cell.
+BLOCK marker_stand
+  Created from a survey kit or found at landmarks. Name it, choose
+  visibility, and register it as a recovery point when the surrounding
+  standing space is valid. Built stands can be moved after clearing
+  their registered player marker entries.
+BLOCK camp_cot
+  A two-cell rest item with facing. The supported foot and head cells
+  must both be clear at placement. Rest restores warmth and stamina
+  in shelter. Either half breaks the pair and returns one cot.
+BLOCK workbench
+  Opens assembly recipes. Pulls checked amounts from the acting
+  player's belt and pack. Output requires free space. The bench itself
+  is stateless between transactions.
+BLOCK kiln
+  Heat station for clay, glass, quicklime, charcoal and glaze. Put fuel
+  and the required inputs in their assigned slots and queue a recipe.
+  An incomplete active job can be cancelled to recover its reserved inputs.
+BLOCK smelter
+  Converts individual raw metal units to ingots. Accepts charcoal.
+  If output is full, a finished job waits until collected.
+BLOCK stove
+  Cooks food and provides heat once fueled. Burns charcoal or oil.
+  Workshop status displays remaining heat and current recipe progress.
+BLOCK storage_drawer
+  A 24-slot placeable inventory. Use Interact to open the drawer.
+  Empty it before breaking to recover its block item.
+BLOCK recovery_crate
+  Created by a player's defeat. The owner can recover items until expiry
+  or until empty. A crate occupying a blocked space is relocated to a
+  valid nearby tile by the recovery system.
+BLOCK lamp
+  A quartz-based light with its rear input marked. At high input it
+  emits RGB levels (15,13,8). At low input it emits zero. Changing the
+  setting queues a local light rebuild.
+BLOCK switch
+  Wall or floor control. Use toggles its fixed output and visibly updates
+  the control plate. Wire joins the terminal side rather than the handle.
+BLOCK wire
+  A supported signal connection. Orient to adjoining wires and device
+  terminals. Paint marks separate visual circuits; only a physical break
+  or relay isolates them.
+BLOCK relay
+  Accepts input on the back and drives the front. Moves signals between
+  levels when wall-mounted. Inspection configures delay and inversion.
+BLOCK timer
+  On an enabled input, advances its tick counter and emits one-tick
+  pulses at the chosen interval. An off input resets the timer.
+BLOCK sensor
+  Reads the cell or volume in front, and reports a predicate on its
+  output side. Available readings include fluid depth, local light,
+  occupied space, and container fullness.
+BLOCK pump
+  Pulls fluid from one face and transfers up to two units to the opposite
+  face each active fluid step. Stops at saturation, no fluid, denied
+  space, or absent power. An ordinary hammer recovers the empty device.
+BLOCK water_wheel
+  Set its driven face alongside moving fluid. Its output stays high
+  once flow meets the threshold for three fluid steps. Check that the
+  output terminal is outside the water channel.
+BLOCK sluice
+  A directional fluid gate. When closed it blocks transfer through its
+  controlled faces. When open it passes flow without creating volume.
+  Use its rear terminal or local control to change state.
+BLOCK lift_platform
+  A moving standing surface constrained to a vertical guide of anchors
+  and wall faces. A high input requests upper docking. A low input
+  requests lower docking. The platform pauses if the path becomes blocked.
+BLOCK geothermal_grate
+  Rare fixed landmark in thermal terrain. Periodically vents heat and
+  warns nearby creatures and players with particles and sound. With
+  T3 mining, it returns two basalt_rubble and one glow_quartz.
+
+15.2  EVERY NON-BLOCK INVENTORY TYPE
+
+Stack limits. Harvested ingredients stack to 64. Processed ingredients,
+projectiles, and placeable building items stack to 48, except unique
+device configurations and storage with payload, which each take one slot.
+Food stacks to 16. Tools, worn equipment, the skiff, and flasks containing
+fluids or fish take one slot. Empty flasks stack to 16. Split a stack to
+consume one item when an interaction creates a single new payload item.
+
+ITEM slate_rubble
+  Pick up on starter ground or mine slate with T1. Make a starter
+  hammer, pellets, workbench parts and slate bricks.
+ITEM basalt_rubble
+  Mine basalt with T1 or recover from a starter quarry. Craft dark
+  masonry or burn it in a kiln to make quicklime.
+ITEM clay_lump
+  Dig red clay. Replace as red_clay, fire into clay material, or use
+  as a colorant for ochre and red glazes.
+ITEM brush_fiber
+  Clip or break brush. Also shed by a dune runner. Ingredient in cord.
+ITEM reed_fiber
+  Harvest wetland stalks. Use as a cord and insulation ingredient, or
+  plant in a suitable wetland cell to regrow a stalk.
+ITEM kelp_frond
+  Clip underwater kelp. Replant on suitable submerged bed, cook as
+  stew, or process into oil and colorants.
+ITEM fungus_cap
+  Harvest on moist cave ground or plant on suitable peat or clay.
+  Roast in a stove, combine in kelp stew, or use for plum glaze.
+ITEM salt_flake
+  Scrape salt crust at the coast or in a basin. Use in glazing, oil,
+  stew and salted eggs.
+ITEM grain
+  Harvest mature crops. Use in flatbread, feeding, and creature
+  bonding. It is separate from the planted seed item.
+ITEM grain_seed
+  Find on wild mature grain or recover from cultivated crops. Use on
+  the exposed surface of a plant bed.
+ITEM alder_seed
+  Collect from mature alder foliage or dropped by an alder glider.
+  Plant in moist, clear loam to grow alder wood and resin sources.
+ITEM pine_seed
+  Collect from adult pine foliage. Plant in cold or elevated terrain
+  with clear vertical growth space.
+ITEM raw_tin
+  Obtain from properly mined tin ore and smelt into tin_ingot.
+ITEM raw_copper
+  Obtain from properly mined copper ore and smelt into copper_ingot.
+ITEM raw_iron
+  Obtain with T2 mining or by a rare slate stalker drop. Smelt into
+  iron_ingot.
+ITEM glow_quartz
+  Harvest quartz clusters with T2 mining. Required for lamps, sensors,
+  and survey kits.
+ITEM amber_resin
+  Tap a suitable natural alder trunk with a brush knife or defeat
+  husk beetles. Used for insulation glue, wiring, flasks, glaze and skiffs.
+ITEM hide
+  Salvage natural cliff grazer shedding, or receive as creature loot.
+  Fit clothing or a glider at a workbench.
+ITEM egg
+  Collect from bonded marsh hens' nests. Cook with salt for healing.
+ITEM tide_shell
+  Obtain from shed or harvested shellbacks. Use directly on a finished
+  timber panel for shell inlay, consuming one per panel.
+ITEM cord
+  Quick-assemble from brush and reed fiber. Used in ropes, tools,
+  transport, construction and clothing.
+ITEM charcoal
+  Fire a log in a kiln. Fuel for kiln, smelter and stove. Also a
+  pigment input. Fuel burn time is 20 simulated seconds per unit.
+ITEM fired_clay
+  Fire clay lumps at a kiln. Used in tile, melting equipment, scoops,
+  and empty flasks.
+ITEM quicklime
+  Process basalt rubble in a kiln. Used in glass and light glazes.
+ITEM tin_ingot
+  Smelt raw tin. Used in saws, trowels and bearing assemblies.
+ITEM copper_ingot
+  Smelt raw copper. Used in metal tools, signals, lamps, bearings,
+  survey instruments and selected glazes.
+ITEM iron_ingot
+  Smelt raw iron. Used in reinforced hammers, gears, pumps, lifts,
+  sluices and rope anchors.
+ITEM copper_spool
+  Assemble copper with resin. Make wire segments or use it as an
+  input for device assemblies.
+ITEM gear
+  Assemble iron and a bearing. Transfers motion in devices and is an
+  ingredient in timers, pumps, sluices, wheels and lifts.
+ITEM bearing
+  Combine tin and copper. Component of a gear, switched devices,
+  pumps, relays and gates.
+ITEM glass_sheet
+  Fire sand and quicklime in a kiln. Cut into panels or assemble
+  into an enclosed quartz lamp.
+ITEM dry_plank
+  Cut wood into usable construction material. Variants keep their
+  source species. Used for structures, stations, machines and the skiff.
+ITEM oil
+  Process kelp and salt. Supplies 25 seconds of stove fuel.
+ITEM survey_kit
+  Craft with copper, quartz and one dry plank. Install in a marker
+  stand to place a named navigation and recovery point.
+ITEM sling_pellet
+  Quick-assemble four from one slate rubble. Consumed on an accepted
+  shot even when the projectile misses.
+ITEM flatbread
+  Cook two grain. Eat to restore up to 12 health.
+ITEM kelp_stew
+  Cook kelp, fungus and salt. Eat to restore up to 25 health.
+ITEM roasted_fungus
+  Cook one cap. Eat to restore up to eight health.
+ITEM salted_egg
+  Cook one egg and one salt flake. Eat to restore up to 15 health.
+ITEM stone_hammer
+  Starter T1 tool for slate, basalt, tin and copper. Has 100 durability
+  and mining speed 1.6. Also handles basic construction recovery.
+ITEM metal_hammer
+  T2 copper tool with 230 durability and mining speed 2.4. Unlocks
+  iron ore and quartz clusters.
+ITEM reinforced_hammer
+  T3 iron-and-basalt tool with 450 durability and mining speed 3.2.
+  Unlocks full salvage from geothermal grates.
+ITEM hand_saw
+  Tin blade with 160 durability and 2.7 mining speed on wood. Recovers
+  compatible panels and logs while preserving species.
+ITEM trowel
+  Tin tool with 140 durability and 2.4 mining speed on soft soil.
+  Used to collect clay, sand, loam and peat.
+ITEM brush_knife
+  Starter cutter with 100 durability. Clips plants without destroying
+  the rooted cell and taps productive natural alder trunks.
+ITEM field_hoe
+  Starter cultivating tool with 120 durability. Converts loam into a
+  plant bed and can restore planting state after clearing a crop.
+ITEM scoop
+  Clay-lined tool with 120 durability. Transfers fluid to or from a
+  flask. A successful eight-unit transfer consumes one durability.
+ITEM sling
+  Ranged tool with 160 durability. Consume one pellet and one tool
+  use per accepted shot. Useful against moving cave threats.
+ITEM rain_cape
+  Worn clothing item. Halves rain exposure warmth loss. Select in the
+  clothing slot before long coastal or fen travel.
+ITEM insulated_coat
+  Worn clothing item. Halves cold exposure warmth loss. Use in frostwood
+  or high snowy terrain. Only one clothing item is active at a time.
+ITEM rope_line
+  One portable line up to 12 blocks long. Use against an anchored
+  exposed face with open air below. Remove through the anchor or top cell.
+ITEM hand_glider
+  Equipped item for a controlled descent in open air. Start with
+  300 durability and spend one point per second of sustained glide.
+ITEM empty_flask
+  Make from fired clay and resin. With a scoop selected, hold at least
+  one flask in belt or pack, then collect eight units of water or brine.
+ITEM water_flask
+  Starts with eight fresh-water units. Use with a scoop to deposit its
+  remaining amount in available capacity, or water four dry plant beds
+  with two units each. The stack state tracks any remaining units.
+ITEM brine_flask
+  Carries up to eight brine units. Deposit into a basin or move to
+  an eligible channel. Crops respond to fresh water.
+ITEM fish_flask
+  Created by using an eligible water flask on a shoal darter. Holds
+  one fish. Release into a submerged valid cell and receive empty_flask.
+ITEM skiff
+  A wooden two-seat vehicle with 12 slots of cargo. Deploy with
+  sufficient fill and hull clearance. Clean out cargo and release tethers
+  before recovering it as an inventory item.
+
+16  WORLD AND CREATURE ENCYCLOPEDIA
+==================================
+16.1  BIOME GUIDE
+
+The surface predicates and cave selection order are in 03. Each entry
+below adds identifying terrain, functional resources, and local hazards.
+Use the current biome in Map or the developer cell inspector to find out
+which biome owns a border cell.
+
+BIOME brine_bay
+  Deep shoreline water over gravel and kelp. Follow the high-water line
+  for salt crust and shellbacks. Shoal darters use full water near gravel
+  cover. Mark tidal reservoir cells for mills and plan hull clearance
+  across the full tide cycle. Release fish where their body fits in
+  water and adjoining cells have eight fluid units of spare capacity.
+BIOME storm_coast
+  Sandy beaches, marsh rushes, dune slopes and tidal channels. Find
+  brush fiber, reeds, dune runners and shellbacks. Tide mills can use
+  a flowing coast channel. Engineer deep foundations under sand so
+  unsupported excavations stay stable. Sheltered coves favor skiffs.
+BIOME frost_crown
+  High cold peaks with open slate and snow crust. Cliff grazers shelter
+  on broad terraces. Snow crust and freezing precipitation make
+  insulation valuable. Summit paths need flat landings and guardrails.
+  A high marker stand provides a visible return bearing.
+BIOME cinder_shelf
+  Raised dark basalt terraces with hot fissures and low moisture.
+  Exposed basalt provides an early supply of durable masonry when
+  available nearby. Trace compact fissures to collapsed quarry routes.
+  Deeper vents generate close-range heat damage during eruptions.
+BIOME wind_ridge
+  Elevated slate crests with sparse pine and wide views. Search ledges
+  for pine material, cliff grazers and survey landmarks. Carry climbing
+  gear or bring the glider to make a controlled return down long slopes.
+BIOME lantern_fen
+  Low wetland with clay banks, teal peat, pools and golden reeds.
+  Marsh hens and lantern moths use the vegetation edges. Clay and fiber
+  make this a useful first workshop region. Fog occurs frequently.
+  Use raised paths, shallow channels and a marked home approach.
+BIOME frostwood
+  Cold pine stands above dark peat and patches of snow. Pine seed and
+  logs are useful building supplies. Look for sheltered routes between
+  stands and for grazers on open edges. Cold exposure remains active
+  under clear skies at night.
+BIOME salt_basin
+  Low-moisture flats, salt crust and shallow occasional brine. The wide
+  floor is easy to survey for construction. Source steady fresh water
+  before planting. Use basin salt for glazing, food and lamp-workshop
+  decoration materials.
+BIOME red_scrub
+  Warm dry brush on rust clay and sand. Good source of brush fiber,
+  clay and amber resin from beetles. Stay near water on long trips.
+  Husk beetles guard resin areas and signal a charge with a pause and
+  wing rattle.
+BIOME rainwood
+  Dense alder groves, leafy cutout canopies, moist loam and fungus.
+  Tap mature natural trunks for renewable resin. Alder gliders move
+  between canopies. Root vaults can occur below the trees. Bring a lamp
+  to investigate shadowed hollows and navigation landmarks.
+BIOME silt_meadow
+  Open loam flats and low hills with grain, brush and scattered alder.
+  Easy access to agriculture and building ground. Gather wild grain seed
+  and find nearby stone for starter construction. Suitable open clearings
+  can contain survey stations.
+BIOME thermal_hollows
+  Deep caves with hot basalt, steam and vents. Ember crawlers gather
+  near a heated route. A steam surge applies heat in a visible column.
+  Move across a vent during its quiet phase, or bridge around it.
+  Bring a reinforced hammer for grate salvage.
+BIOME crystal_fault
+  Inset cavities and illuminated seams containing glow quartz clusters.
+  Use a metal hammer for full harvest. Follow lit faces to spot chambers
+  and possible observatories. Some adjoining dark tunnels support
+  slate stalkers. Portable light makes the transition easier to read.
+BIOME root_vault
+  Shallow chambers below wetland or woodland with hanging roots,
+  fungus and seep water. Cave slugs and dusk moths can occupy its
+  margins. A suitable cap and a lamp with controlled placement can
+  turn one chamber into a reliable harvest route.
+BIOME slate_galleries
+  General underground tunnels between specialized cave types.
+  Look for raw tin and copper in their height bands and iron deeper
+  down. Low-light branches can contain slate stalkers. Mark route
+  junctions, raise the floor above water, and close abandoned shafts.
+
+16.2  LANDMARKS, STOCK, AND REWARDS
+
+Landmark definitions declare allowed biomes, a bounding box, stock table,
+and access tests. The seed chooses positions, facing and stock. Use the
+following default families and one deterministic optional stock roll each.
+Generated stocks are written into the world when their door or drawer
+first opens. Reopening or reloading uses the stored inventory.
+
+LANDMARK survey_station
+  Biomes silt_meadow, wind_ridge, frostwood, rainwood or red_scrub.
+  A 7×7 roofed crossing with a stand and one 24-slot drawer. Default
+  stock is two cord and two dry planks. Optional route cache chooses
+  one of six slate rubble, one water flask, or one survey kit with
+  respective relative weights 5, 3 and 1.
+LANDMARK tide_mill
+  Biomes storm_coast or lantern_fen, adjoining active water. A 9×7
+  workshop with a wheel flume and a stable dry entry. Drawer contains
+  two dry planks and four wire. Optional stock chooses one bearing,
+  two fired clay, or one copper spool with weights 3, 4 and 2.
+LANDMARK collapsed_quarry
+  Biomes wind_ridge, cinder_shelf or silt_meadow. A 9×11 stepped basalt
+  excavation with one trade-free starter stock box and an exposed vein.
+  Default stock is eight basalt rubble. Optional stock chooses two raw
+  tin, two raw copper, or one iron ingot with weights 4, 4 and 1.
+LANDMARK crystal_observatory
+  Biomes crystal_fault or deep slate_galleries within 24 blocks of
+  crystal terrain. A 9×9 chamber with a dark device alcove, one mounted
+  lamp and a cache holding two glow quartz. Optional stock chooses one
+  sensor, one relay, or one iron ingot with weights 2, 3 and 4.
+
+Map records preserve the landmark type, level and whether a marker has
+been discovered by the player. Stock state is per drawer. When stocking
+landmarks by seed, use a dedicated table salt, world ID and integer
+anchor, and persist once. The starter quarry uses the same realization
+format as the other examples, with guaranteed accessible basalt and
+visible tin/copper veins in valid rock.
+
+16.3  CREATURE STATS, SPAWN SETTINGS, AND ACTIONS
+
+Health is in points. Speed is ordinary walk, crawl, glide or swim
+speed in units per second. Group counts may reduce to fit capacity.
+Resolve each optional reward with its own deterministic spawn/event
+seed keyed to entity ID and drop event index. Rewards are emitted once
+from an accepted harvest, shed, or health transition.
+
+MOB dune_runner
+  18 health, speed 3.8, group 2–4. Spawn at light ≥8 on dry coastal
+  sand with room to flee. Scatters when a player sprints within five
+  blocks. Stops to eat dropped grain within three blocks. While
+  resting, may shed one brush_fiber every 240 active seconds.
+MOB marsh_hen
+  20 health, speed 2.1, group 2–3. Spawn near reed in lantern_fen.
+  Offer grain three times to bond. Two bonded adults can breed after
+  both receive one further grain and meet the shared cooldown. A
+  bonded adult lays one egg after 180 active seconds when it can reach
+  dry peat or loam under cover. Each bird has one pending egg at a time.
+MOB cliff_grazer
+  60 health, speed 2.6, group 2–4. Spawn on broad ridge or frost terrain
+  during daylight. Approaching its side calmly keeps it grazing. An
+  adjacent attacker or sustained cornering triggers a telegraphed
+  charge for 18 physical damage. Adults shed one hide after 480 active
+  seconds on a dry standing tile. Defeat yields one hide.
+MOB alder_glider
+  22 health, speed 4.6 when gliding, group 1–2. Spawn in rainwood near
+  two canopy perches within sight. It chooses landing clearance before
+  leaving a branch. Hold grain to draw it to a reachable lower perch.
+  An eligible feeding can make it scatter one alder_seed after a
+  90-active-second cooldown.
+MOB lantern_moth
+  8 health, speed 1.8 in flight, group 2–5. Appears at dusk in fern
+  cover in Lantern Fen and in root vaults with light ≤7. Visits a moist
+  resting face and occasionally places fungus when its valid growth
+  rule succeeds. If light rises above 11, it searches for shade.
+MOB shellback
+  26 health, speed 1.5, group 1–3. Spawn on beach or gravel beside
+  brine at fill 2–6. Approaching within two blocks makes it retract
+  and reduces physical damage received by 50% for up to six seconds.
+  A healthy adult periodically leaves a tide_shell at the last
+  suitable rest site after 360 active seconds. Defeat also yields one shell.
+MOB shoal_darter
+  12 health, speed 3.1 in water, group 3–6. Spawn in brine bays or deep
+  pools at fill 7–8. Steering keeps at least half a block of spacing
+  inside the shoal. A water_flask with eight units captures one within
+  2.2 blocks. Persist the fish species and vitality. A release restores
+  the fish and the eight fluid units into adjacent capacity, returning
+  one empty_flask once both can be accepted.
+MOB cave_slug
+  16 health, speed 0.7, group 1–3. Spawn in root vaults at light 2–8
+  on damp surfaces. Seek planted fungus. One dropped cap for each of
+  two adults qualifies them for breeding under the usual rules.
+  Decorative light traces fade after two seconds and use particles.
+MOB husk_beetle
+  36 health, speed 2.4, group 1–2. Spawn in red_scrub resin pockets
+  and related low cave entrances. Detects threats from six blocks.
+  Rattle for 0.6 seconds before charging for 15 damage, then pause
+  for 1.5 seconds. Defeat yields one amber_resin.
+MOB slate_stalker
+  48 health, speed 3.6, group 1. Spawn in slate galleries and crystal
+  fault passages at light ≤5. Investigates noise within 12 blocks.
+  Once in range, paws for 22 damage with 0.7 seconds of recovery.
+  Retreats for four seconds after a qualifying bright flash above
+  light 11. Defeat gives one hide and a 12% chance of one raw_iron.
+MOB ember_crawler
+  44 health, speed 2.9, group 1–2. Spawn in thermal_hollows within
+  six blocks of a heat source. Its leap deals 16 physical damage and
+  it pauses for one second before choosing another target. Direct
+  contact briefly raises local visible steam. Its retreat can reveal
+  a nearby existing vent through a particle direction cue.
+
+Use these adult collision and swimming bounds in blocks. Height is
+measured from the feet on land or the bottom of the body in water.
+Juvenile width and height are 65% of adult values. An accepted growth
+event tests adult clearance before changing the collider.
+
+  Creature           Width    Height
+  dune_runner        0.54     0.52
+  marsh_hen          0.47     0.62
+  cliff_grazer       0.95     1.38
+  alder_glider       0.63     0.43
+  lantern_moth       0.31     0.23
+  shellback          0.66     0.38
+  shoal_darter       0.34     0.21
+  cave_slug          0.42     0.29
+  husk_beetle        0.72     0.48
+  slate_stalker      0.77     1.25
+  ember_crawler      0.82     0.57
+
+Creature action order per decision tick is escape an immediate hazard,
+defend if threatened, handle feeding or breeding, follow a player or
+group where eligible, then forage, rest, and idle. Group wake-up is
+staggered by entity ID. Environment checks adjust each candidate spawn.
+Exclude player's protected build zones within eight blocks of a rest
+marker from natural hostile spawns. Abandoning a terrain cell unloads
+unowned ambient creatures after 90 active seconds without a nearby
+player. Persist bonded, named, and breeding creatures regardless of
+distance. A cap check reserves slots before an accepted group spawn.
+
+18  MECHANICS REFERENCE AND TROUBLESHOOTING
+==========================================
+18.1  INTERACTION AND ITEM RULES
+
+  Player intent                 Server result
+  Pick up a loose stack         Merge eligible stacks, then fill free slots
+  Shift-move between panels     Transfer the maximum that fits
+  Split a stack                 Move half rounded down into the free slot
+  Drop from the inventory       Create one pickup owned for 45 ticks
+  Place a block                 Spend one item after accepting all cell edits
+  Mine a block                  Break at threshold and issue eligible loot
+  Paint a material              Confirm variant eligibility, then update state
+  Open a station                 Open its inventory and recipe queue
+  Start a station job            Reserve input and queue behind active work
+  Cancel a job                  Return reserved materials and account for heat used
+  Use food                      Apply healing up to max and start shared cooldown
+  Equip clothes or glider       Move payload to the matching equipment slot
+  Retrieve a skiff              Require safe dismount, released tether and empty hold
+  Register a marker             Save its owner, safe location and entry visibility
+
+Items on ordinary terrain despawn after 36,000 active ticks. Recovery
+crates have their own longer lifetime in 05. A failed pickup keeps its
+item entity. Ownership delays exclude parties without access for the
+specified ticks, then the stack can be collected by any player allowed
+to pick up items there. A broken tool is consumed after its final use,
+and the completing action still produces its normal output.
+
+With a mining work value expressed in seconds, work per accepted held
+tick is tool_speed / 30. Bare hands have speed 1.0 on permitted starter
+materials, and 0.45 on standard rock. Preserve fractional progress on
+consecutive packets for the same active target. Reset it after switching
+tools or selecting another target. Tool speeds apply within their
+preferred material families.
+
+18.2  TIME, HEALTH, AND ENVIRONMENT
+
+  Condition                     Trigger and change
+  Sprint                         Spend 12 stamina each second
+  Climb rope                     Spend 8 stamina each second
+  Stamina recovery               After one second without spend, recover 14/sec
+  Out of breath                  After 18 submerged seconds, suffer 8 damage/sec
+  Wet cold                       Rain drains 1 warmth/sec, freezing rain drains 3/sec
+  Dry cold                       Below temperature 0.28, drain 0.5 warmth/sec
+  Cold distress                  Warmth below 10 causes 4 damage/sec
+  Stove warmth                   Gain 4 warmth/sec within six blocks of lit stove
+  Vent surge                     Active hot face deals 6 heat damage/sec in reach
+  Fall                           Damage begins above five blocks, plus 8 per excess block
+  Eat                            Heal as listed in 15, subject to shared cooldown
+  Defeat                         Transfer unsecured pack to crate and respawn
+
+Use the highest applicable warmth drain and apply its equipment
+modifier. Warm, dry conditions restore 0.6 warmth/sec. Shelter blocks
+outside precipitation exposure and contributes the dry rate. A stove's
+bonus adds to passive recovery. Fully depleted warmth leaves the ice
+indicator visible until warmth recovers above 10.
+
+The vent cycle is six seconds quiet, one second of visible warning,
+and two seconds active. During its active phase, the first two cells
+above an open vent are a heat hazard. Worn protection modifies warmth
+loss from its relevant condition. The vent deals heat damage directly.
+Check its movement clearance separately from the displayed steam.
+
+At 30 Hz, one 24-minute day is 43,200 ticks. For the first release, use
+day fractions 0.00–0.10 for sunrise, 0.10–0.55 for full daylight,
+0.55–0.65 for sunset, and 0.65–1.00 for night. Interpolate the sky
+factor between 0.20 and 1.00 on sunrise and sunset. A gameplay light
+query returns the larger of scaled sky light rounded down and the
+brightest artificial channel. This feeds both crop checks and the
+brightness conditions of creatures. A lamp can keep a grain bed
+eligible through night if its propagated light is sufficient.
+
+Plant growth occurs on a usable bed even when a player is away, as
+long as the relevant simulation area is active. Save the next scheduled
+growth tick and pause progress for inactive columns. Reloading takes
+the saved age and active time. Run subsequent rolls on the active
+schedule beginning from the restored state. Weather and tide use world
+time, so exposed water and terrain reconcile toward the current phase
+when loaded.
+
+18.3  STATION AND TRANSPORT SETTINGS
+
+A kiln, smelter and stove each have four input slots, one fuel slot,
+two output slots, and a maximum of four queued jobs, including the
+active job. A reservation records required inputs and owner. At
+execution, fuel ignition spends one unit. Every simulated tick removes
+one burn tick while cooking or heating. A completed job enters an
+output-waiting state until its stack can be transferred. Break is
+allowed after queued inputs, fuel, and output have been cleared.
+
+The skiff targets 5.2 units/sec forward and 2.0 in reverse, with
+2.5 units/sec² of acceleration. It turns up to 75 degrees/sec while
+moving. Movement stalls when the four hull samples average under four
+fluid units. The glider accelerates toward forward speed 8 units/sec
+while active and limits falling speed to 2.5 units/sec in level air.
+Steering rotates the pitch and yaw gradually. It closes on ground
+contact or when the player runs out of durability. A sling pellet
+launches from the hand toward the validated aim at 23 units/sec,
+follows gravity, and resolves the first hit along each swept step.
+
+18.4  DEVICE BUILD EXAMPLES
+
+Switched wall lamp. Put a switch on a supported surface. Connect its
+marked output to wire and then to the lamp's rear terminal. Set input
+and output faces in the inspector if the route turns through a wall.
+Toggle once. The lamp should light within two simulation ticks of the
+signal reaching its wire network.
+
+Demand-controlled watering. Place a pump between a fresh-water supply
+and a channel next to planted beds. Put a sensor facing the destination
+cell, set it to depth at least 6, and pass its output into an inverting
+relay. Relay high when the channel is shallow. Set it to a 3-tick delay
+and route its output to the pump. One ordinary fluid step fills up to
+two requested units. Test the channel at empty and full.
+
+Water-powered landing. Route a steady coastal channel across the driven
+face of a wheel. At least one accepted unit along the driven face
+counts as flow during that fluid step. Keep the terminal on dry ground. Wire the wheel
+output to the landing lamps and place an anchor within reach of the
+skiff. At low tide, verify at least four average fluid units under the
+hull. Use a ramp or marked steps from the landing back toward the road.
+
+Guided lift. Pick two stops on a vertical wall. Mount anchors in a
+continuous eight-block-or-shorter guide, place the platform at the lower
+stop, and wire a toggle to its input. The platform takes one block per
+second along clear guide cells, carrying grounded passengers along.
+If support is removed or a new block occupies its route, the platform
+pauses and waits for a clear path or owner reset.
+
+18.5  DIAGNOSTIC TABLE
+
+  Symptom                         Check first
+  Block will not place            Face, support, inventory,
+                                  fluid disposal, clearance and loaded area
+  Ore dropped nothing             Harvest tier in 06 and 15
+  Plant is stationary             Day phase, light ≥8, hydration ≥2, timer
+  Kiln has fuel and stays idle    Correct material set and empty output room
+  Smelter yield is missing        Finished job status and owner access
+  Lamp fails to light             Rear terminal orientation and connected source
+  Lamp flickers                   Short output pulse or unstable wheel flow
+  Pump has power and stays idle   Intake volume and capacity at its outlet
+  Wheel never powers              Driven face, fluid support and steady flow
+  Wall sees water crossing        Seal each controlled face, including steps
+  Skiff will not move             Tethered anchor or low average fill depth
+  Creature walks in circles       Support, collision gap and its chosen target
+  Chunks show an exposed seam     Neighbor arrival and mesh revision dependency
+  Terrain differs by worker count Generator randomness, feature order or overlays
+  Save repeatedly loses progress  Journal sync, commit watermark and recovery log

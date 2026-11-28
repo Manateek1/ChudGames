@@ -57,7 +57,7 @@ export const GamePlayer = ({
   }, [settings.sound, settings.music, audio]);
 
   useEffect(() => {
-    if (!settings.music || game.id === "apex-run") {
+    if (!settings.music || game.id === "apex-run" || game.id === "buildblox") {
       audio.stopMusic();
       return;
     }
