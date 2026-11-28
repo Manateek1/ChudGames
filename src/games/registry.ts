@@ -167,6 +167,7 @@ const pongThumb = createThumbnail((ctx, elapsed, width, height) => {
 export const gameRegistry: GameDefinition[] = [
   {
     id: "buildblox",
+    islandGateDegrees: 270,
     title: "BuildBlox",
     genre: "action",
     shortDescription: "Build, craft, and explore a voxel world of your own.",
@@ -197,7 +198,9 @@ export const gameRegistry: GameDefinition[] = [
     component: BuildBlox,
   },
   {
-    id: "apex-run", title: "Apex Run", genre: "action",
+    id: "apex-run",
+    islandGateDegrees: 0,
+    title: "Apex Run", genre: "action",
     shortDescription: "Three circuits. One car. Chase your best lap.",
     description: "Choose a track car and race through alpine hills, snowy switchbacks, and oceanfront bends. Chase your best lap and race your saved ghost.",
     controls: ["Accelerate: W / Up", "Brake / Reverse: S / Down", "Steer: A / D or Left / Right", "Handbrake: Space", "Camera: C · Recover: R (+3 sec) · Restart: Tap R twice", "Course menu: Esc · Pause / Resume: P", "Gamepad: left stick, RT / LT, A handbrake"],
@@ -206,6 +209,7 @@ export const gameRegistry: GameDefinition[] = [
   },
   {
     id: "neon-dodger",
+    islandGateDegrees: 30,
     title: "Neon Dodger",
     genre: "action",
     shortDescription: "Dodge accelerating obstacles in a neon storm.",
@@ -225,6 +229,7 @@ export const gameRegistry: GameDefinition[] = [
   },
   {
     id: "asteroids-pulse",
+    islandGateDegrees: 60,
     title: "Asteroids Pulse",
     genre: "action",
     shortDescription: "Vector ship combat with splits, wraps, and lives.",
@@ -243,6 +248,7 @@ export const gameRegistry: GameDefinition[] = [
   },
   {
     id: "brick-breaker-blitz",
+    islandGateDegrees: 120,
     title: "Brick Breaker Blitz",
     genre: "action",
     shortDescription: "Multi-level brick breaker with powerups.",
@@ -261,6 +267,7 @@ export const gameRegistry: GameDefinition[] = [
   },
   {
     id: "fortlite",
+    islandGateDegrees: 90,
     title: "FortLite",
     genre: "action",
     shortDescription: "Offline battle royale with bots, building, and third-person combat.",
@@ -301,6 +308,7 @@ export const gameRegistry: GameDefinition[] = [
   },
   {
     id: "void-survival",
+    islandGateDegrees: 150,
     title: "Void Survival",
     genre: "action",
     shortDescription: "Top-down wave survival with auto-upgrades.",
@@ -319,6 +327,7 @@ export const gameRegistry: GameDefinition[] = [
   },
   {
     id: "rhythm-tap",
+    islandGateDegrees: 180,
     title: "Rhythm Tap",
     genre: "reflex",
     shortDescription: "Hit notes on-time and build huge combos.",
@@ -337,6 +346,7 @@ export const gameRegistry: GameDefinition[] = [
   },
   {
     id: "precision-runner",
+    islandGateDegrees: 210,
     title: "Precision Runner",
     genre: "reflex",
     shortDescription: "One-button jumps with streak pressure.",
@@ -355,6 +365,7 @@ export const gameRegistry: GameDefinition[] = [
   },
   {
     id: "game-2048",
+    islandGateDegrees: 240,
     title: "Fusion 2048",
     genre: "puzzle",
     shortDescription: "Swipe and merge tiles into huge values.",
@@ -373,6 +384,7 @@ export const gameRegistry: GameDefinition[] = [
   },
   {
     id: "memory-match",
+    islandGateDegrees: 300,
     title: "Memory Match",
     genre: "puzzle",
     shortDescription: "Timed card matching with combo bonus.",
@@ -391,6 +403,7 @@ export const gameRegistry: GameDefinition[] = [
   },
   {
     id: "pong-neon",
+    islandGateDegrees: 330,
     title: "Pong Neon",
     genre: "action",
     shortDescription: "Classic pong with single-player and local versus.",

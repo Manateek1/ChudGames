@@ -1,3 +1,5 @@
+import { TOP_SPEED } from "./islandRoads";
+
 export function startDriveAudio() {
   const context = new AudioContext();
   const gain = context.createGain();
@@ -21,7 +23,7 @@ export function startDriveAudio() {
     update(speed: number) {
       if (previousSpeed === speed) return;
       previousSpeed = speed;
-      const amount = Math.min(1, Math.abs(speed) / 117);
+      const amount = Math.min(1, Math.abs(speed) / TOP_SPEED);
       const now = context.currentTime;
       bass.frequency.setTargetAtTime(48 + 74 * amount, now, 0.09);
       overtone.frequency.setTargetAtTime(120 + 290 * amount, now, 0.14);

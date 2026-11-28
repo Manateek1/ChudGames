@@ -112,7 +112,17 @@ When changing multiplayer behavior, check both the client runtime and server pro
 3. Add the thumbnail, tutorial/input description, category, and metadata needed by the launcher.
 4. Use the shared `GamePlayer` shell and engine helpers unless the game has a documented specialized flow.
 5. Keep game-specific styles and runtime systems in focused files; avoid growing a single component into a new monolith.
-6. Add or update focused tests for changed logic, then run the validation checklist below.
+6. Put the new game on the island minimap and verify drive-through entry using the instructions below.
+7. Add or update focused tests for changed logic, then run the validation checklist below.
+
+### Adding a game to the island minimap
+
+The launcher’s Map tab (`#/map`) is a playable, north-up 3D island viewed from above. Every available game needs a labeled arch and a drivable approach from the main circuit. Crossing the arch starts the game directly. Quitting returns the car to the approach, facing the circuit.
+
+- Register the game once in `src/games/registry.ts` with a unique, stable `id` and the player-facing `title`. The island reads that registry to build the road, arch, sign, destination directory entry and launch target. Entries with `isAvailable: false` stay off the map.
+- For automatic placement, omit `islandGateDegrees`. The layout picks the midpoint of the widest open stretch of circuit. To reserve a permanent or themed location, set `islandGateDegrees` on the game's registry entry, measured clockwise from north. Apex Run uses 0°, FortLite 90° and BuildBlox 270°. Leave clearance for the neighboring signs and their approaches. Append new unpinned games after existing unpinned games to preserve their automatic placements.
+- For custom scenery, use `src/launcher/islandWorld.ts`. Road paths, gate coordinates, crossing detection and return parking live in `src/launcher/islandRoads.ts`. The aerial camera and car model live in `src/launcher/islandScene.ts`. The `IslandMap` component passes the crossed gate ID into the normal launcher play flow.
+- Run `npm test -- src/launcher/launcher.test.ts`. Then open Map from the launcher, locate the new sign and drive through it using WASD or the touch controls. Confirm `#/map/<id>/play` opens the intended game and quitting leaves the car outside the same arch. Check the sign and neighboring gates at desktop and phone sizes. If the circuit becomes crowded, expand the roads and scenery along with the detection geometry.
 
 ## Validation checklist
 

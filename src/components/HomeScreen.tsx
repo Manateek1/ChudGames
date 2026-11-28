@@ -13,7 +13,7 @@ export function HomeScreen({ reducedMotion }: { reducedMotion: boolean }) {
       <div className="island-invite-copy">
         <SteeringWheel aria-hidden />
         <h2>Drive the island</h2>
-        <p>Take the Polestar 5 to your next game.</p>
+        <p>Drive through a game gate to play.</p>
       </div>
       <ArrowRight className="invite-arrow" aria-hidden />
     </a>
